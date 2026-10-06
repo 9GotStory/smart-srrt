@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '4',
+  SCHEMA_VERSION: '5',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -26,6 +26,7 @@ var CONFIG = {
     ATTACHMENTS: 'EventAttachments',
     AUDIT: 'AuditLogs',
     AUDIT_ARCHIVE: 'AuditArchive',
+    REPORTS: 'ReportRegistry',
     VISITS: 'VisitLogs'
   },
   ROLES: {
@@ -35,7 +36,8 @@ var CONFIG = {
     STAFF: 'Staff'
   },
   MAX_LOGO_BYTES: 3 * 1024 * 1024,
-  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024
+  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024,
+  REPORT_PROMPT_VERSION: 'P5-2026.10.06.1'
 };
 
 var MAIN_HEADERS = [
@@ -92,6 +94,7 @@ function onOpen() {
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
       .addItem('อัปเกรด Workflow / Owner', 'migrateP3Workflow')
       .addItem('อัปเกรด Supporting Governance', 'migrateP4Governance')
+      .addItem('อัปเกรด AI Report Governance', 'migrateP5ReportGovernance')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -138,6 +141,7 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','FileSize','DriveUrl','Description','Status','CreatedAt','CreatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt','ArchivedBy']);
+    ensureSheet_(ss, CONFIG.SHEETS.REPORTS, ['ReportID','EventID','DocumentID','DocumentUrl','GeneratedAt','GeneratedBy','GeminiModel','PromptVersion','ReadinessWarnings','Status']);
     var visitSheet = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','RequestParams']);
     migrateVisitLogHeader_(visitSheet);
 
@@ -622,6 +626,20 @@ function migrateP4Governance() {
       'VisitLogs header renamed: ' + (renamedVisitHeader ? 'YES' : 'NO'),
       'Schema version: 4'
     ].join('\n');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function migrateP5ReportGovernance() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    ensureSheet_(ss, CONFIG.SHEETS.REPORTS, ['ReportID','EventID','DocumentID','DocumentUrl','GeneratedAt','GeneratedBy','GeminiModel','PromptVersion','ReadinessWarnings','Status']);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    setSchemaVersionAtLeast_(settings, 5);
+    return 'อัปเกรด AI Report Governance เรียบร้อยแล้ว\nSchema version: 5';
   } finally {
     lock.releaseLock();
   }
@@ -1813,6 +1831,66 @@ function exportData(sessionToken, format) {
 
 
 
+function getReportReadinessForRow_(rowData) {
+  var warnings = [];
+  function missing(index, label) {
+    if (!String(rowData[index] || '').trim()) warnings.push('ยังไม่มี' + label);
+  }
+  missing(1, 'วันที่รับแจ้ง');
+  missing(5, 'โรค/ภัย/เหตุการณ์');
+  missing(13, 'รายละเอียดเหตุการณ์');
+  missing(14, 'ผลการตรวจสอบเหตุการณ์');
+  missing(16, 'สถานะเข้าเกณฑ์สอบสวนโรค');
+  missing(18, 'ระดับความเสี่ยงที่เจ้าหน้าที่ประเมิน');
+  if (String(rowData[14] || '').trim() === 'รอตรวจสอบ') warnings.push('เหตุการณ์ยังอยู่ระหว่างการตรวจสอบ');
+  if (String(rowData[16] || '').trim() === 'รอดำเนินการ') warnings.push('การพิจารณาเกณฑ์สอบสวนโรคยังรอดำเนินการ');
+  if (String(rowData[16] || '').trim() === 'เข้าเกณฑ์' && !String(rowData[25] || '').trim()) {
+    warnings.push('เข้าเกณฑ์สอบสวนโรคแต่ยังไม่มีวันที่ลงสอบสวน');
+  }
+  if (!String(rowData[20] || '').trim()) warnings.push('ยังไม่มีรายละเอียดมาตรการควบคุมโรคที่ดำเนินการ');
+  return warnings;
+}
+
+function getReportReadiness(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+  var warnings = getReportReadinessForRow_(rowData);
+  return {ready:warnings.length === 0, warnings:warnings, eventId:eventId, promptVersion:CONFIG.REPORT_PROMPT_VERSION};
+}
+
+function listEventReports(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, true);
+  return getSheet_(CONFIG.SHEETS.REPORTS).getDataRange().getValues().slice(1).filter(function(r){
+    return String(r[1]) === String(eventId) && String(r[9] || 'active').toLowerCase() === 'active';
+  }).map(function(r){
+    return {
+      reportId:r[0], eventId:r[1], documentUrl:r[3], generatedAt:r[4], generatedBy:r[5],
+      geminiModel:r[6], promptVersion:r[7], readinessWarnings:r[8] ? JSON.parse(String(r[8])) : []
+    };
+  }).reverse();
+}
+
+function registerGeneratedReport_(eventId, docFile, user, aiResult, warnings) {
+  var reportId = Utilities.getUuid();
+  getSheet_(CONFIG.SHEETS.REPORTS).appendRow([
+    reportId,
+    eventId,
+    docFile.getId(),
+    docFile.getUrl(),
+    new Date(),
+    user.email,
+    aiResult.modelName || '',
+    CONFIG.REPORT_PROMPT_VERSION,
+    JSON.stringify(warnings || []),
+    'active'
+  ]);
+  return reportId;
+}
+
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
@@ -1823,6 +1901,7 @@ function generateReportFromWeb(sessionToken, eventId) {
 
   var rowNumber = findEventRowById_(sheet, eventId, false);
   var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+  var readinessWarnings = getReportReadinessForRow_(rowData);
   var disease = rowData[5] || '..........';
   var place = rowData[7] || '..........';
   var villageName = rowData[28] || '';
@@ -1837,7 +1916,7 @@ function generateReportFromWeb(sessionToken, eventId) {
     villageCode ? '(รหัสหมู่บ้าน ' + villageCode + ')' : ''
   ].filter(function(x){return x;}).join(' ');
   var title = 'รายงานการสอบสวนเบื้องต้น ผู้ป่วยสงสัยโรค' + disease + ' ' + locationInfo;
-  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings);
+  var aiResult = analyzeWithGemini_(rowData, locationInfo, settings);
 
   var newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
   var document = DocumentApp.openById(newDocFile.getId());
@@ -1853,62 +1932,63 @@ function generateReportFromWeb(sessionToken, eventId) {
     '<<วันเริ่มป่วย>>': rowData[8] || '..........',
     '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
     '<<มาตรการ>>': rowData[20] || '..........',
-    '<<ผลวิเคราะห์จากAI>>': aiAnalysis
+    '<<ผลวิเคราะห์จากAI>>': aiResult.text
   };
   Object.keys(replacements).forEach(function(k) {
-  if (k === '<<ผลวิเคราะห์จากAI>>') {
-    replacePlaceholderWithParagraphs_(body, k, replacements[k]);
-  } else {
-    body.replaceText(k, replacements[k]);
-  }
-});
+    if (k === '<<ผลวิเคราะห์จากAI>>') replacePlaceholderWithParagraphs_(body, k, replacements[k]);
+    else body.replaceText(k, replacements[k]);
+  });
+  body.appendParagraph('');
+  body.appendParagraph('หมายเหตุระบบ: เนื้อหาส่วนวิเคราะห์เป็นร่างที่ AI ช่วยเรียบเรียงจากข้อมูลใน Smart SRRT ต้องได้รับการตรวจทานโดยเจ้าหน้าที่ก่อนนำไปใช้อย่างเป็นทางการ')
+    .setItalic(true);
   document.saveAndClose();
-  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, eventId, '', newDocFile.getId());
-  return newDocFile.getUrl();
-}
 
+  var reportId = registerGeneratedReport_(eventId, newDocFile, user, aiResult, readinessWarnings);
+  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.REPORTS, reportId, '', JSON.stringify({
+    eventId:eventId,
+    documentId:newDocFile.getId(),
+    model:aiResult.modelName || '',
+    promptVersion:CONFIG.REPORT_PROMPT_VERSION,
+    readinessWarnings:readinessWarnings
+  }));
+  return {
+    ok:true,
+    reportId:reportId,
+    eventId:eventId,
+    url:newDocFile.getUrl(),
+    model:aiResult.modelName || '',
+    promptVersion:CONFIG.REPORT_PROMPT_VERSION,
+    readinessWarnings:readinessWarnings
+  };
+}
 function analyzeWithGemini_(rowData, locationInfo, settings) {
   settings = settings || getSettingsMap_();
   var apiKey = String(settings.GEMINI_API_KEY || '').trim();
-
-  if (!apiKey) {
-    throw new Error('ยังไม่ได้ตั้งค่า Gemini API Key กรุณาใส่ในหน้า Admin ก่อนสร้างรายงาน AI');
-  }
+  if (!apiKey) throw new Error('ยังไม่ได้ตั้งค่า Gemini API Key กรุณาใส่ในหน้า Admin ก่อนสร้างรายงาน AI');
 
   var modelInfo = resolveGeminiModelInfo_(apiKey, settings, false);
-
   if (!modelInfo || !modelInfo.modelName) {
     throw new Error('ไม่พบโมเดล Gemini ที่รองรับ generateContent สำหรับ API Key นี้ กรุณาตรวจสอบ API Key, Gemini API และ Quota/Billing แล้ว Run testGeminiConnection() อีกครั้ง');
   }
-
-  Logger.log('AI Reporter split mode: start');
-  Logger.log('AI Reporter API Version: ' + modelInfo.apiVersion);
-  Logger.log('AI Reporter Model: ' + modelInfo.modelName);
 
   var promptPart1 = buildReportPromptPart_(rowData, locationInfo, '1-3');
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
   var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3');
-  if (String(part1 || '').indexOf('🚨') === 0) {
-    throw new Error(String(part1).replace(/^🚨\s*/, ''));
-  }
+  if (!part1.ok) throw new Error(part1.error);
 
   Utilities.sleep(500);
 
-  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6');
-  if (String(part2 || '').indexOf('🚨') === 0) {
-    throw new Error(String(part2).replace(/^🚨\s*/, ''));
-  }
+  var part2 = callGeminiForReport_(apiKey, part1.modelInfo || modelInfo, promptPart2, 'หัวข้อ 4-6');
+  if (!part2.ok) throw new Error(part2.error);
 
-  var finalText = String(part1 || '').trim() + '\n\n' + String(part2 || '').trim();
-
-  Logger.log('AI Reporter part1 length: ' + String(part1 || '').length);
-  Logger.log('AI Reporter part2 length: ' + String(part2 || '').length);
-  Logger.log('AI Reporter final length: ' + finalText.length);
-
-  return finalText.replace(/\*/g, '').replace(/```/g, '').trim();
+  var finalText = String(part1.text || '').trim() + '\n\n' + String(part2.text || '').trim();
+  return {
+    text:finalText.replace(/\*/g, '').replace(/```/g, '').trim(),
+    modelName:(part2.modelInfo && part2.modelInfo.modelName) || (part1.modelInfo && part1.modelInfo.modelName) || modelInfo.modelName,
+    apiVersion:(part2.modelInfo && part2.modelInfo.apiVersion) || (part1.modelInfo && part1.modelInfo.apiVersion) || modelInfo.apiVersion
+  };
 }
-
 function resolveGeminiModel_(apiKey, settings) {
   var info = resolveGeminiModelInfo_(apiKey, settings, false);
   return info ? info.modelName : '';
@@ -2273,10 +2353,10 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
             text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
           }
 
-          return text;
+          return {ok:true, text:text, modelInfo:currentModelInfo};
         }
 
-        return '🚨 Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + '): ' + responseText;
+        return {ok:false, error:'Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + '): ' + responseText};
       }
 
       var errorMessage = json && json.error && json.error.message
@@ -2305,8 +2385,8 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
 
       clearGeminiModelCache_();
 
-      return '🚨 พบปัญหาจาก ' + lastErrorText +
-        '\nข้อแนะนำ: ตรวจว่า หน้า Admin > Gemini Model เป็น AUTO แล้ว Run testGeminiConnection() ใหม่';
+      return {ok:false, error:'พบปัญหาจาก ' + lastErrorText +
+        '\nข้อแนะนำ: ตรวจว่า หน้า Admin > Gemini Model เป็น AUTO แล้ว Run testGeminiConnection() ใหม่'};
 
     } catch (error) {
       lastErrorText = 'Apps Script error ขณะเรียก Gemini API (' + label + '): ' + error.toString();
@@ -2316,8 +2396,8 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
     }
   }
 
-  return '🚨 พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText +
-    '\n\nข้อแนะนำ: อาจเป็นช่วงที่ Gemini มีการใช้งานสูง ให้ลอง Run clearGeminiModelCache() แล้วสร้างรายงานใหม่อีกครั้ง หรือกำหนด Gemini Model ในหน้า Admin';
+  return {ok:false, error:'พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText +
+    '\n\nข้อแนะนำ: อาจเป็นช่วงที่ Gemini มีการใช้งานสูง ให้ลอง Run clearGeminiModelCache() แล้วสร้างรายงานใหม่อีกครั้ง หรือกำหนด Gemini Model ในหน้า Admin'};
 }
 
 function buildReportPromptPart_(rowData, locationInfo, sectionRange) {
@@ -2400,6 +2480,7 @@ function buildReportPrompt_(rowData, locationInfo) {
   var location = safePromptValue_(locationInfo);
   var onsetDate = safePromptValue_(rowData[8]);
   var criteria = safePromptValue_(rowData[16]);
+  var recordedRisk = safePromptValue_(rowData[18]);
   var dateInv = safePromptValue_(rowData[25]);
   var details = safePromptValue_(rowData[13]);
   var measures = safePromptValue_(rowData[20]);
@@ -2415,7 +2496,8 @@ function buildReportPrompt_(rowData, locationInfo) {
 - โรค/เหตุการณ์: ${disease}
 - สถานที่เกิดเหตุ: ${location}
 - วันที่เริ่มป่วย (Index case): ${onsetDate}
-- การเข้าเกณฑ์สอบสวนโรค: ${criteria}
+- การเข้าเกณฑ์สอบสวนโรคที่เจ้าหน้าที่บันทึก: ${criteria}
+- ระดับความเสี่ยงที่เจ้าหน้าที่บันทึก: ${recordedRisk}
 - วันที่ลงสอบสวนโรค: ${dateInv}
 - ผลการสอบสวนโรค (รายละเอียด): ${details}
 - กิจกรรมควบคุมโรคที่ทำแล้ว: ${measures}
@@ -2428,6 +2510,9 @@ function buildReportPrompt_(rowData, locationInfo) {
 5. ต้องเขียนให้ครบทุกหัวข้อที่ได้รับมอบหมายในรอบนั้น ห้ามปล่อยหัวข้อใหญ่ใดหัวข้อหนึ่งเป็นเพียง ".........."
 6. หากข้อมูลไม่ครบ ให้เขียนวิเคราะห์จากข้อมูลที่มี และระบุข้อจำกัดว่า "ข้อมูลไม่ปรากฏในข้อมูลดิบ" หรือ "อยู่ระหว่างสอบสวนโรค"
 7. ห้ามแนะนำให้ผู้ใช้กรอกข้อมูลเพิ่ม ให้เขียนรายงานจากข้อมูลที่มีทันที
+8. ค่า "การเข้าเกณฑ์สอบสวนโรค" และ "ระดับความเสี่ยง" เป็นข้อมูลที่เจ้าหน้าที่บันทึกและเป็นข้อมูลอ้างอิงหลัก ห้าม AI เปลี่ยน ตัดสินใหม่ หรือสร้างค่าทดแทน
+9. AI มีหน้าที่ช่วยเรียบเรียงและชี้ข้อจำกัดของข้อมูลเท่านั้น หากข้อมูลไม่พอสำหรับการจัดประเภทเหตุการณ์ ให้ระบุว่า "ยังไม่สามารถสรุปจากข้อมูลที่มี" ห้ามฟันธงแทนเจ้าหน้าที่
+10. ให้แยกข้อเท็จจริงที่ปรากฏในข้อมูลออกจากข้อเสนอเพื่อพิจารณาอย่างชัดเจน และห้ามเขียนข้อเสนอให้ดูเป็นข้อเท็จจริงที่เกิดขึ้นแล้ว
 
 รูปแบบเนื้อหาที่ต้องการ ให้เขียนเรียงลำดับ 1 ถึง 6:
 
@@ -2504,15 +2589,15 @@ function buildReportPrompt_(rowData, locationInfo) {
 ข้อกำหนดสำคัญของหัวข้อ 4:
 - ห้ามตอบเพียง ".........." ทั้งหัวข้อ
 - ให้พรรณนาวิเคราะห์จากข้อมูลที่มี แม้ข้อมูลไม่ครบ
-- หากข้อมูลไม่ชัดเจน ให้ระบุว่า "ข้อมูลไม่ปรากฏในข้อมูลดิบ" หรือ "อยู่ระหว่างสอบสวนโรค" แล้วประเมินในระดับที่สูงกว่าหรือรุนแรงไว้ก่อนตามหลักความปลอดภัย (Precautionary Principle)
-- ต้องสรุปสุดท้ายว่าเหตุการณ์นี้เป็นความเสี่ยงระดับใด ได้แก่ ต่ำมาก, ต่ำ, ปานกลาง, สูง หรือสูงมาก พร้อมเหตุผลสนับสนุน
+- หากข้อมูลไม่ชัดเจน ให้ระบุว่า "ข้อมูลไม่ปรากฏในข้อมูลดิบ" หรือ "อยู่ระหว่างสอบสวนโรค" และอธิบายข้อจำกัดโดยไม่เพิ่มระดับความเสี่ยงเอง
+- ให้อ้างระดับความเสี่ยงตามค่าที่เจ้าหน้าที่บันทึกไว้เท่านั้น คือ ${recordedRisk} หากไม่ปรากฏค่า ให้ระบุว่า "ยังไม่มีการบันทึกระดับความเสี่ยง" ห้าม AI กำหนดระดับใหม่
 - หากพบกลุ่มเสี่ยงพิเศษ เช่น หญิงตั้งครรภ์ เด็กเล็ก ผู้สูงอายุ ผู้ป่วยโรคเรื้อรัง หรือผู้สัมผัสจำนวนมาก ให้สะท้อนในระดับความเสี่ยงและความเร่งด่วน
 
 5. สรุปความสำคัญทางสาธารณสุข และความเร่งด่วน
 เขียนสรุปเป็นความเรียงเชิงบริหาร (Executive Summary) ที่กระชับและตรงประเด็น โดยต้องครอบคลุมเนื้อหาดังนี้:
 - ขนาดของปัญหาและผลกระทบโดยตรงต่อสุขภาพของประชาชนในพื้นที่
-- ระบุและฟันธงให้ชัดเจนว่าเหตุการณ์นี้จัดเป็น "การระบาด", "โรคอุบัติใหม่/อุบัติซ้ำ", "โรคติดต่ออันตราย" หรือ "การสอบสวนเฉพาะราย" หรือไม่
-- ประเมินความเร่งด่วนในการแก้ไขปัญหา โดยต้องนำระดับความเสี่ยงที่วิเคราะห์ได้จากข้อ 4 มาเป็นเหตุผลสนับสนุนความเร่งด่วน
+- หากข้อมูลดิบระบุประเภทเหตุการณ์หรือการจัดประเภทไว้ ให้ถ่ายทอดตามข้อมูลนั้น หากไม่ได้ระบุ ห้าม AI ฟันธงว่าเป็น "การระบาด", "โรคอุบัติใหม่/อุบัติซ้ำ", "โรคติดต่ออันตราย" หรือ "การสอบสวนเฉพาะราย"
+- อธิบายความเร่งด่วนโดยอ้างระดับความเสี่ยงที่เจ้าหน้าที่บันทึกไว้และข้อเท็จจริงที่มี ไม่สร้างระดับความเสี่ยงใหม่
 - ประเมินผลกระทบเชิงวงกว้างด้านเศรษฐกิจ การท่องเที่ยว และสังคม ว่ามีหรือไม่ อยู่ในระดับใด สูง, ปานกลาง, ต่ำ หรือไม่มีผลกระทบ พร้อมอธิบายเหตุผลสั้นๆ
 - ต้องเขียนให้เหมาะกับการเสนอผู้บริหารอำเภอ/จังหวัด
 
