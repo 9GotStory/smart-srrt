@@ -35,7 +35,11 @@ function makeContext(){
     Utilities:{
       DigestAlgorithm:{SHA_256:'SHA_256'},
       Charset:{UTF_8:'UTF_8'},
-      computeDigest:(_alg,text)=>Array.from(Buffer.from(String(text))).slice(0,32).map(x=>x>127?x-256:x),
+      computeDigest:(_alg,text)=>{
+        const out=Array(32).fill(0),bytes=Array.from(Buffer.from(String(text)));
+        bytes.forEach((v,i)=>{out[i%32]=(out[i%32]+v+i)%256});
+        return out.map(v=>v>127?v-256:v);
+      },
       base64Decode:s=>Array.from(Buffer.from(String(s),'base64')),
       base64Encode:b=>Buffer.from(b).toString('base64'),
       getUuid:()=> 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
