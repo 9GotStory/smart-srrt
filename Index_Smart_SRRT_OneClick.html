@@ -160,6 +160,19 @@
       </div>
 
       <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0">
+          <h3><i class="fa-solid fa-list-check"></i> จัดการข้อมูลมาตรฐาน (MasterData)</h3>
+          <button class="btn" onclick="openMasterDataForm()"><i class="fa-solid fa-plus"></i> เพิ่มค่า</button>
+        </div>
+        <div class="help">จัดการได้เฉพาะ Type ที่ระบบรองรับ ค่า criteria และ verify_status เป็นค่าควบคุมของระบบ จึงไม่สามารถเพิ่ม Value ใหม่หรือปิดใช้งานได้</div>
+        <div class="form-grid" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);margin:12px 0">
+          <div class="fg"><label>กรองตาม Type</label><select id="masterTypeFilter" onchange="renderMasterDataAdmin()"><option value="">ทั้งหมด</option></select></div>
+          <div class="fg"><label>ค้นหา</label><input id="masterSearch" placeholder="ค้นหา Value / Label" oninput="renderMasterDataAdmin()"></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>อ้างอิง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterDataBody"></tbody></table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
         <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
         <input class="input" id="areaSearch" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
@@ -253,6 +266,18 @@
   <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" onclick="saveUser()">บันทึกผู้ใช้</button></div>
 </div></div>
 
+<div class="modal" id="masterDataModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-list-check"></i> ข้อมูลมาตรฐาน</div>
+  <input type="hidden" id="mdMode"><input type="hidden" id="mdOriginalType"><input type="hidden" id="mdOriginalValue">
+  <label>Type</label><select class="input" id="mdType" style="width:100%;margin-bottom:8px"></select>
+  <label>Value</label><input class="input" id="mdValue" maxlength="120" style="width:100%;margin-bottom:8px">
+  <label>Label</label><input class="input" id="mdLabel" maxlength="160" style="width:100%;margin-bottom:8px">
+  <label>ลำดับ</label><input class="input" id="mdSort" type="number" min="1" max="9999" step="1" style="width:100%;margin-bottom:8px">
+  <label>สถานะ</label><select class="input" id="mdActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <div id="mdPolicyNote" class="help" style="margin-bottom:8px"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('masterDataModal')">ปิด</button><button class="btn green" onclick="saveMasterDataAdminItem()">บันทึก</button></div>
+</div></div>
+
 <div class="modal" id="areaModal"><div class="modal-box modal-sm">
   <div class="modal-title">ข้อมูลหมู่บ้าน</div><input type="hidden" id="aId">
   <label>จังหวัด</label><input class="input" id="aProvince" style="width:100%;margin-bottom:8px">
@@ -267,7 +292,7 @@
 
 <div class="modal" id="contentModal"><div class="modal-box modal-sm">
   <div class="modal-title">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
-  <label>หมวดหมู่</label><input class="input" id="cCategory" style="width:100%;margin-bottom:8px" placeholder="ประกาศ / คู่มือ / แนวทาง">
+  <label>หมวดหมู่</label><select class="input" id="cCategory" style="width:100%;margin-bottom:8px"></select>
   <label>หัวข้อ</label><input class="input" id="cTitle" style="width:100%;margin-bottom:8px">
   <label>รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
   <label>URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
@@ -279,7 +304,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[],masterAdminCache=[],masterTypePolicies=[];
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -671,7 +696,14 @@
       if(!r.eventId){toast('ข้อมูลเหตุการณ์ยังไม่มี EventID กรุณาให้ผู้ดูแลอัปเกรดโครงสร้างข้อมูลก่อน');return}
       if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไขข้อมูล');return}
       el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);
-      fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})
+      fields.forEach(f=>{
+        const x=el('in'+f[0]);if(!x)return;
+        const v=r['col'+f[0]]||'';
+        if(f[2].startsWith('select:')&&v&&!Array.from(x.options).some(o=>o.value===String(v))){
+          const legacy=document.createElement('option');legacy.value=String(v);legacy.textContent='[เลิกใช้งาน] '+String(v);legacy.dataset.legacy='true';x.appendChild(legacy)
+        }
+        x.value=f[2]==='date'?toIso(v):v
+      })
     }
     refreshRecordAreaOptions();openModal('recordModal')
   }
@@ -711,7 +743,7 @@
   async function loadAdmin(){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
     try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
-    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit(),loadAuditRetentionStatus()])
+    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadMasterDataAdmin(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit(),loadAuditRetentionStatus()])
   }
   async function loadInstallStatus(){
     try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
@@ -771,9 +803,83 @@
   function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
   async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
 
+  function masterPolicyByType(type){return masterTypePolicies.find(p=>p.type===type)||null}
+  async function loadMasterDataAdmin(){
+    try{
+      const result=await gs('getMasterDataAdmin',token);
+      masterAdminCache=result.items||[];masterTypePolicies=result.types||[];
+      const filter=el('masterTypeFilter'),current=filter.value;
+      filter.innerHTML='<option value="">ทั้งหมด</option>'+masterTypePolicies.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
+      filter.value=current;
+      renderMasterDataAdmin()
+    }catch(e){toast(e.message||e)}
+  }
+  function renderMasterDataAdmin(){
+    const type=el('masterTypeFilter').value,q=String(el('masterSearch').value||'').trim().toLowerCase();
+    const rows=masterAdminCache.filter(r=>(!type||r.type===type)&&(!q||String(r.value||'').toLowerCase().includes(q)||String(r.label||'').toLowerCase().includes(q)));
+    el('masterDataBody').innerHTML=rows.map(r=>{
+      const index=masterAdminCache.indexOf(r);
+      const lock=r.semanticLocked?'<span class="status st-mid">System semantic</span>':'';
+      return`<tr><td>${escapeHtml(r.typeLabel)}<div class="mini">${escapeHtml(r.type)}</div></td><td>${escapeHtml(r.value)}</td><td>${escapeHtml(r.label)}</td><td>${Number(r.sortOrder||0)}</td><td>${Number(r.usageCount||0)}</td><td>${r.active?'<span class="status st-low">ใช้งาน</span>':'<span class="status st-high">ปิดใช้งาน</span>'} ${lock}</td><td><button class="btn light" onclick="openMasterDataForm(${index})">แก้ไข</button></td></tr>`
+    }).join('')||'<tr><td colspan="7">ไม่พบข้อมูลมาตรฐาน</td></tr>'
+  }
+  function openMasterDataForm(index){
+    const editing=index!==undefined&&index!==null;
+    const item=editing?masterAdminCache[index]:null;
+    const allowedTypes=editing?masterTypePolicies:masterTypePolicies.filter(p=>p.allowCreate);
+    el('mdType').innerHTML=allowedTypes.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
+    el('mdMode').value=editing?'update':'create';
+    el('mdOriginalType').value=editing?item.type:'';
+    el('mdOriginalValue').value=editing?item.value:'';
+    el('mdType').value=editing?item.type:(allowedTypes[0]?.type||'');
+    el('mdValue').value=editing?item.value:'';
+    el('mdLabel').value=editing?item.label:'';
+    el('mdSort').value=editing?String(item.sortOrder||1):'1';
+    el('mdActive').value=editing&&item.active===false?'false':'true';
+    el('mdType').disabled=editing;
+    el('mdValue').disabled=editing;
+    const policy=masterPolicyByType(el('mdType').value);
+    el('mdActive').disabled=!!(policy&&!policy.allowDeactivate);
+    el('mdPolicyNote').textContent=policy&&policy.semanticLocked
+      ?'Type นี้ผูกกับ business semantics ของระบบ: แก้ Label/ลำดับได้ แต่ห้ามเปลี่ยน Value, เพิ่มค่าใหม่ หรือปิดใช้งาน'
+      :'Value ของรายการเดิมเป็น identity และไม่สามารถ rename ได้; การปิดใช้งานมีผลเฉพาะรายการใหม่ ข้อมูลย้อนหลังยังคงเดิม';
+    openModal('masterDataModal')
+  }
+  async function saveMasterDataAdminItem(){
+    try{
+      const item={
+        mode:el('mdMode').value,
+        originalType:el('mdOriginalType').value,
+        originalValue:el('mdOriginalValue').value,
+        type:el('mdType').value,
+        value:el('mdValue').value,
+        label:el('mdLabel').value,
+        sortOrder:Number(el('mdSort').value||0),
+        active:el('mdActive').value==='true'
+      };
+      toast(await gs('saveMasterDataItem',token,item));
+      closeModal('masterDataModal');
+      const b=await gs('getAppBoot',token);
+      master=b.master||{};
+      currentContent=b.content||currentContent;
+      buildRecordForm();
+      populateContentCategoryOptions('');
+      await Promise.all([loadMasterDataAdmin(),loadContentAdmin()])
+    }catch(e){toast(e.message||e)}
+  }
+  function populateContentCategoryOptions(selected){
+    const select=el('cCategory');
+    const items=master.content_category||[];
+    select.innerHTML='<option value="">-- เลือก --</option>'+items.map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('');
+    if(selected&&!items.some(o=>String(o.value)===String(selected))){
+      const legacy=document.createElement('option');legacy.value=String(selected);legacy.textContent='[เลิกใช้งาน] '+String(selected);legacy.dataset.legacy='true';select.appendChild(legacy)
+    }
+    select.value=selected||''
+  }
+
   async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
-  function openContentForm(){el('cId').value='';el('cCategory').value='';el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
-  function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;el('cCategory').value=r.category;el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
+  function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
+  function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
   async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
   async function loadAuditRetentionStatus(){
     try{
