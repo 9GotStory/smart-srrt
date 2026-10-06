@@ -889,6 +889,46 @@ function deriveEventLifecycle_(event) {
   return {code:'received', label:'รับแจ้งแล้ว'};
 }
 
+function deriveEventConsistencyWarnings_(event) {
+  event = event || {};
+  var recordStatus = String(event.recordStatus || 'active').trim().toLowerCase();
+  if (recordStatus === 'void') return [];
+
+  var verification = String(event.col15 || '').trim();
+  var criteria = String(event.col17 || '').trim();
+  var investigationDecision = String(event.col24 || '').trim();
+  var investigationDate = String(event.col26 || '').trim();
+  var warnings = [];
+
+  function add_(code, message) {
+    warnings.push({code:code, message:message});
+  }
+
+  if (verification === 'ตรวจสอบแล้วไม่จริง' && isInvestigationCriteriaMet_(criteria)) {
+    add_('VERIFY_FALSE_BUT_CRITERIA_MET', 'ตรวจสอบแล้วไม่จริง แต่ระบุว่าเข้าเกณฑ์สอบสวนโรค');
+  }
+  if (verification === 'ตรวจสอบแล้วไม่จริง' && investigationDate) {
+    add_('VERIFY_FALSE_BUT_INVESTIGATED', 'ตรวจสอบแล้วไม่จริง แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (criteria === 'ไม่เข้าเกณฑ์' && investigationDate) {
+    add_('CRITERIA_NOT_MET_BUT_INVESTIGATED', 'ไม่เข้าเกณฑ์สอบสวนโรค แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (criteria === 'รอดำเนินการ' && investigationDate) {
+    add_('CRITERIA_PENDING_BUT_INVESTIGATED', 'ยังรอประเมินเกณฑ์ แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (investigationDecision === 'ไม่ลงสอบสวน' && investigationDate) {
+    add_('NO_INVESTIGATION_BUT_DATE_SET', 'ระบุว่าไม่ลงสอบสวน แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (investigationDecision === 'ลงสอบสวน' && !investigationDate) {
+    add_('INVESTIGATION_MARKED_WITHOUT_DATE', 'ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค');
+  }
+  if (isInvestigationCriteriaMet_(criteria) && investigationDecision === 'ไม่ลงสอบสวน') {
+    add_('CRITERIA_MET_BUT_NO_INVESTIGATION', 'เข้าเกณฑ์สอบสวนโรค แต่ระบุว่าไม่ลงสอบสวน');
+  }
+
+  return warnings;
+}
+
 function rowToObject_(row) {
   var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
@@ -901,6 +941,7 @@ function rowToObject_(row) {
   var lifecycle = deriveEventLifecycle_(obj);
   obj.eventLifecycle = lifecycle.code;
   obj.eventLifecycleLabel = lifecycle.label;
+  obj.eventConsistencyWarnings = deriveEventConsistencyWarnings_(obj);
   return obj;
 }
 
