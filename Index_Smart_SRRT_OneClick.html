@@ -94,14 +94,14 @@
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
         <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
 
     <section id="page-records" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
       <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
-      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
     </section>
 
     <section id="page-reporter" class="section">
@@ -198,6 +198,15 @@
 
 <div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
 
+<div class="modal" id="ownerModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-user-tag"></i> ผู้รับผิดชอบเหตุการณ์</div>
+  <input type="hidden" id="ownerEventId"><input type="hidden" id="ownerRevision">
+  <label>ผู้รับผิดชอบหลัก</label>
+  <select class="input" id="ownerUserId" style="width:100%;margin-top:6px"></select>
+  <div class="mini" style="margin-top:8px">เลือกผู้ใช้ที่ Active และมีสิทธิ์แก้ไขเหตุการณ์ หรือเลือก “ยังไม่กำหนด” เพื่อเคลียร์ผู้รับผิดชอบ</div>
+  <div class="actions"><button class="btn light" onclick="closeModal('ownerModal')">ปิด</button><button class="btn green" id="saveOwnerBtn" onclick="saveEventOwner()">บันทึกผู้รับผิดชอบ</button></div>
+</div></div>
+
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
   <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
@@ -237,7 +246,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[];
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -407,12 +416,39 @@
     const title=warnings.map(w=>w&&w.message?w.message:String(w&&w.code||'ตรวจสอบความสอดคล้อง')).join('\n');
     return` <span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> ${warnings.length}</span>`
   }
+  function ownerLabel(r){
+    if(!r||!r.ownerUserId)return'<span class="mini">ยังไม่กำหนด</span>';
+    if(r.ownerMissing)return'<span class="status st-high">ไม่พบบัญชีผู้ใช้</span>';
+    const name=r.ownerName||r.ownerEmail||r.ownerUserId;
+    const detail=r.ownerOrg?`<div class="mini">${escapeHtml(r.ownerOrg)}</div>`:'';
+    return`<b>${escapeHtml(name)}</b>${detail}`
+  }
+  async function openOwnerModal(i){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับกำหนดผู้รับผิดชอบ');return}
+    const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
+    try{
+      assignableOwnerCache=await gs('listAssignableEventOwners',token);
+      el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
+      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+assignableOwnerCache.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)}`:''}</option>`).join('');
+      el('ownerUserId').value=r.ownerUserId||'';
+      openModal('ownerModal')
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveEventOwner(){
+    const btn=el('saveOwnerBtn');
+    try{
+      btn.disabled=true;
+      const msg=await gs('assignEventOwner',token,el('ownerEventId').value,el('ownerUserId').value,Number(el('ownerRevision').value||0));
+      closeModal('ownerModal');toast(msg);await loadDashboard()
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false}
+  }
 
   function renderTables(){
     if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
     const manage=roleCanRecord();
-    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
-    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">ไม่มีข้อมูล</td></tr>';
+    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${roleCanManage()?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:''}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="9">ไม่มีข้อมูล</td></tr>';
+    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${roleCanManage()?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:''}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
     el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
