@@ -3155,6 +3155,35 @@ function exportData(sessionToken, format) {
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
 
+function appendReportRegistry_(record) {
+  record = record || {};
+  var reportId = String(record.reportId || '').trim();
+  var eventId = String(record.eventId || '').trim();
+  var documentId = String(record.documentId || '').trim();
+
+  if (!isUuid_(reportId)) throw new Error('ReportID ไม่ถูกต้อง');
+  if (!isUuid_(eventId)) throw new Error('EventID ของรายงานไม่ถูกต้อง');
+  if (!documentId) throw new Error('ไม่พบ DocumentID สำหรับทะเบียนรายงาน');
+
+  var ss = getDb_();
+  var registry = ensureReportRegistrySheet_(ss).sheet;
+  registry.appendRow([
+    reportId,
+    eventId,
+    Number(record.sourceRevision || 0),
+    documentId,
+    String(record.documentUrl || ''),
+    record.generatedAt || new Date(),
+    String(record.generatedBy || ''),
+    String(record.geminiModels || ''),
+    String(record.geminiApiVersions || ''),
+    String(record.promptVersion || CONFIG.REPORT_PROMPT_VERSION),
+    String(record.templateDocId || '')
+  ]);
+
+  return reportId;
+}
+
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
@@ -3164,6 +3193,7 @@ function generateReportFromWeb(sessionToken, eventId) {
   if (!templateId || !folderId) throw new Error('กรุณาตั้งค่า Template และโฟลเดอร์รายงานในหน้า Admin ก่อน');
 
   var rowNumber = findEventRowById_(sheet, eventId, false);
+  var sourceRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
   var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
   var disease = rowData[5] || '..........';
   var place = rowData[7] || '..........';
@@ -3179,37 +3209,91 @@ function generateReportFromWeb(sessionToken, eventId) {
     villageCode ? '(รหัสหมู่บ้าน ' + villageCode + ')' : ''
   ].filter(function(x){return x;}).join(' ');
   var title = 'รายงานการสอบสวนเบื้องต้น ผู้ป่วยสงสัยโรค' + disease + ' ' + locationInfo;
-  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings);
+  var reportMeta = {models:[], apiVersions:[]};
+  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings, reportMeta);
 
-  var newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
-  var document = DocumentApp.openById(newDocFile.getId());
-  var body = document.getBody();
-  var replacements = {
-    '<<ชื่อเรื่อง>>': title,
-    '<<วันที่>>': rowData[1] || '..........',
-    '<<ผู้แจ้ง>>': rowData[2] || '..........',
-    '<<โรค>>': disease,
-    '<<สถานที่>>': locationInfo,
-    '<<หมู่บ้าน>>': villageName || '..........',
-    '<<รหัสหมู่บ้าน>>': villageCode || '..........',
-    '<<วันเริ่มป่วย>>': rowData[8] || '..........',
-    '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
-    '<<มาตรการ>>': rowData[20] || '..........',
-    '<<ผลวิเคราะห์จากAI>>': aiAnalysis
-  };
-  Object.keys(replacements).forEach(function(k) {
-  if (k === '<<ผลวิเคราะห์จากAI>>') {
-    replacePlaceholderWithParagraphs_(body, k, replacements[k]);
-  } else {
-    body.replaceText(k, replacements[k]);
+  var reportId = Utilities.getUuid();
+  var newDocFile = null;
+  var registered = false;
+
+  try {
+    newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
+    var document = DocumentApp.openById(newDocFile.getId());
+    var body = document.getBody();
+    var replacements = {
+      '<<ชื่อเรื่อง>>': title,
+      '<<วันที่>>': rowData[1] || '..........',
+      '<<ผู้แจ้ง>>': rowData[2] || '..........',
+      '<<โรค>>': disease,
+      '<<สถานที่>>': locationInfo,
+      '<<หมู่บ้าน>>': villageName || '..........',
+      '<<รหัสหมู่บ้าน>>': villageCode || '..........',
+      '<<วันเริ่มป่วย>>': rowData[8] || '..........',
+      '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
+      '<<มาตรการ>>': rowData[20] || '..........',
+      '<<ผลวิเคราะห์จากAI>>': aiAnalysis
+    };
+
+    Object.keys(replacements).forEach(function(k) {
+      if (k === '<<ผลวิเคราะห์จากAI>>') {
+        replacePlaceholderWithParagraphs_(body, k, replacements[k]);
+      } else {
+        body.replaceText(k, replacements[k]);
+      }
+    });
+    document.saveAndClose();
+
+    var generatedAt = new Date();
+    appendReportRegistry_({
+      reportId:reportId,
+      eventId:eventId,
+      sourceRevision:sourceRevision,
+      documentId:newDocFile.getId(),
+      documentUrl:newDocFile.getUrl(),
+      generatedAt:generatedAt,
+      generatedBy:user.email || '',
+      geminiModels:(reportMeta.models || []).join(' | '),
+      geminiApiVersions:(reportMeta.apiVersions || []).join(' | '),
+      promptVersion:CONFIG.REPORT_PROMPT_VERSION,
+      templateDocId:templateId
+    });
+    registered = true;
+
+    writeAudit_(
+      user,
+      'GENERATE_REPORT',
+      CONFIG.SHEETS.REPORTS,
+      reportId,
+      '',
+      JSON.stringify({
+        eventId:eventId,
+        sourceRevision:sourceRevision,
+        documentId:newDocFile.getId(),
+        promptVersion:CONFIG.REPORT_PROMPT_VERSION
+      })
+    );
+
+    return newDocFile.getUrl();
+  } catch (error) {
+    if (newDocFile && !registered) {
+      try { newDocFile.setTrashed(true); } catch (ignoreTrash) {}
+    }
+    throw error;
   }
-});
-  document.saveAndClose();
-  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, eventId, '', newDocFile.getId());
-  return newDocFile.getUrl();
 }
 
-function analyzeWithGemini_(rowData, locationInfo, settings) {
+function recordSuccessfulGeminiModel_(reportMeta, modelInfo) {
+  if (!reportMeta || !modelInfo) return;
+  if (!reportMeta.models) reportMeta.models = [];
+  if (!reportMeta.apiVersions) reportMeta.apiVersions = [];
+
+  var modelName = String(modelInfo.modelName || '').trim();
+  var apiVersion = String(modelInfo.apiVersion || '').trim();
+  if (modelName && reportMeta.models.indexOf(modelName) < 0) reportMeta.models.push(modelName);
+  if (apiVersion && reportMeta.apiVersions.indexOf(apiVersion) < 0) reportMeta.apiVersions.push(apiVersion);
+}
+
+function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   settings = settings || getSettingsMap_();
   var apiKey = String(settings.GEMINI_API_KEY || '').trim();
 
@@ -3230,14 +3314,14 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
   var promptPart1 = buildReportPromptPart_(rowData, locationInfo, '1-3');
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
-  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3');
+  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
   Utilities.sleep(500);
 
-  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6');
+  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
   if (String(part2 || '').indexOf('🚨') === 0) {
     throw new Error(String(part2).replace(/^🚨\s*/, ''));
   }
@@ -3539,7 +3623,7 @@ function getGeminiRetryModelQueue_(apiKey, primaryModelInfo) {
   return queue;
 }
 
-function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
+function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) {
   var attempts = getGeminiRetryModelQueue_(apiKey, modelInfo);
   var lastErrorText = '';
 
@@ -3610,6 +3694,7 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
 
           CacheService.getScriptCache().put('GEMINI_AVAILABLE_MODEL', currentModelInfo.modelName, 21600);
           CacheService.getScriptCache().put('GEMINI_AVAILABLE_ENDPOINT', currentModelInfo.apiVersion, 21600);
+          recordSuccessfulGeminiModel_(reportMeta, currentModelInfo);
 
           if (finishReason === 'MAX_TOKENS') {
             text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
