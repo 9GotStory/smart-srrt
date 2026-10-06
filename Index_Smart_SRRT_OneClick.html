@@ -193,7 +193,7 @@
   <button class="btn secondary" style="width:100%" onclick="register()">สมัครใช้งาน</button>
 </div></div>
 
-<div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editRow"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
+<div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
 
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
@@ -364,9 +364,9 @@
 
   function renderTables(){
     const manage=roleCanRecord();
-    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick="makeReport(${r.rowNumber},this)">AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
-    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick="deleteEvent(${r.rowNumber})">ลบ</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>';
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick="makeReport(${r.rowNumber},this)">สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
+    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>';
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
@@ -404,22 +404,38 @@
   function openRecordForm(mode,i){
     if(!roleCanRecord()){openLogin();return}
     el('formMode').value=mode;el('recordTitle').textContent=mode==='add'?'เพิ่มข้อมูลเหตุการณ์ใหม่':'แก้ไขข้อมูลเหตุการณ์';
+    el('editEventId').value='';el('editRevision').value='';
     fields.forEach(f=>{const x=el('in'+f[0]);if(x)x.value=''});
-    if(mode==='edit'){const r=allData[i];el('editRow').value=r.rowNumber;fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})}
+    if(mode==='edit'){
+      const r=allData[i];
+      if(!r.eventId){toast('ข้อมูลเหตุการณ์ยังไม่มี EventID กรุณาให้ผู้ดูแลอัปเกรดโครงสร้างข้อมูลก่อน');return}
+      el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);
+      fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})
+    }
     refreshRecordAreaOptions();openModal('recordModal')
   }
   async function saveRecord(){
     const btn=el('saveRecordBtn');try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
       const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
-      const msg=el('formMode').value==='add'?await gs('addRecord',token,data):await gs('updateRecord',token,el('editRow').value,data);
+      const msg=el('formMode').value==='add'
+        ?await gs('addRecord',token,data)
+        :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
       closeModal('recordModal');toast(msg);await loadDashboard()
     }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
   }
-  async function deleteEvent(row){if(!confirm('ยืนยันลบข้อมูลแถวนี้?'))return;try{toast(await gs('deleteRecord',token,row));loadDashboard()}catch(e){toast(e.message||e)}}
-  async function makeReport(row,btn){
+  async function deleteEvent(eventId,revision){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
+    const reason=prompt('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
+    try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+  async function makeReport(eventId,btn){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,row);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
+    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
     catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
   }
 
