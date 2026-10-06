@@ -387,6 +387,87 @@ function ensureSheet_(ss, name, headers) {
   return sheet;
 }
 
+function ensureAuditSchema_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.AUDIT);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.AUDIT);
+    sheet.appendRow(AUDIT_HEADERS);
+    return {sheet:sheet, rows:0, backfilledIds:0};
+  }
+
+  if (sheet.getMaxColumns() < AUDIT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), AUDIT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(AUDIT_HEADERS);
+    return {sheet:sheet, rows:0, backfilledIds:0};
+  }
+
+  var current = sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).getValues()[0];
+  for (var i = 0; i < AUDIT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = AUDIT_HEADERS[i];
+    if (actual && actual !== expected) {
+      throw new Error('ไม่สามารถอัปเกรด AuditLogs ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+    }
+    if (!actual && i < 9 && sheet.getLastRow() > 1) {
+      var legacyValues = sheet.getRange(2, i + 1, sheet.getLastRow() - 1, 1).getValues();
+      for (var lr = 0; lr < legacyValues.length; lr++) {
+        if (String(legacyValues[lr][0] || '').trim() !== '') {
+          throw new Error('ไม่สามารถอัปเกรด AuditLogs ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (lr + 2) + ' แม้หัวข้อจะว่าง');
+        }
+      }
+    }
+  }
+
+  var patched = current.slice();
+  var headerChanged = false;
+  for (var h = 0; h < AUDIT_HEADERS.length; h++) {
+    if (!String(patched[h] || '').trim()) {
+      patched[h] = AUDIT_HEADERS[h];
+      headerChanged = true;
+    }
+  }
+  if (headerChanged) sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).setValues([patched]);
+
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  if (!rowCount) return {sheet:sheet, rows:0, backfilledIds:0};
+
+  var values = sheet.getRange(2, 1, rowCount, AUDIT_HEADERS.length).getValues();
+  var seen = {};
+  var backfilled = 0;
+  var changed = false;
+
+  for (var r = 0; r < values.length; r++) {
+    var hasAuditData = false;
+    for (var c = 0; c < 9; c++) {
+      if (String(values[r][c] || '').trim() !== '') {
+        hasAuditData = true;
+        break;
+      }
+    }
+    if (!hasAuditData) continue;
+
+    var auditId = String(values[r][AUDIT_COL.AUDIT_ID - 1] || '').trim();
+    if (auditId) {
+      if (!isUuid_(auditId)) throw new Error('AuditID ไม่ถูกต้องที่แถว ' + (r + 2));
+      if (seen[auditId]) throw new Error('พบ AuditID ซ้ำที่แถว ' + (r + 2));
+      seen[auditId] = true;
+    } else {
+      auditId = Utilities.getUuid();
+      while (seen[auditId]) auditId = Utilities.getUuid();
+      values[r][AUDIT_COL.AUDIT_ID - 1] = auditId;
+      seen[auditId] = true;
+      backfilled++;
+      changed = true;
+    }
+  }
+
+  if (changed) sheet.getRange(2, 1, rowCount, AUDIT_HEADERS.length).setValues(values);
+  return {sheet:sheet, rows:rowCount, backfilledIds:backfilled};
+}
+
 function ensureEventAttachmentSheet_(ss) {
   var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
   if (!sheet) {
@@ -516,6 +597,45 @@ function migrateG11EventAttachments() {
       'อัปเกรด Event Attachments เรียบร้อยแล้ว',
       'สร้าง/ตรวจสอบชีท: ' + CONFIG.SHEETS.ATTACHMENTS,
       'โฟลเดอร์เอกสารแนบพร้อมใช้งาน',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG21AuditRetention() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var audit = ensureAuditSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    upsertSettingDirect_(settings, 'AUDIT_RETENTION_DAYS', String(CONFIG.DEFAULT_AUDIT_RETENTION_DAYS), 'จำนวนวันที่เก็บ AuditLogs ในฐานข้อมูลหลักก่อน Archive', false);
+    var archive = ensureAuditArchiveSpreadsheet_(ss);
+    upsertSettingDirect_(settings, 'AUDIT_ARCHIVE_SPREADSHEET_ID', archive.getId(), 'Spreadsheet ID สำหรับเก็บ Audit archive', true);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 5);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    PropertiesService.getScriptProperties().setProperty('AUDIT_ARCHIVE_SPREADSHEET_ID', archive.getId());
+
+    var message = [
+      'อัปเกรด Audit Retention เรียบร้อยแล้ว',
+      'Audit rows ที่ตรวจ: ' + audit.rows,
+      'สร้าง AuditID ใหม่: ' + audit.backfilledIds,
+      'Retention เริ่มต้น: ' + getAuditRetentionDays_() + ' วัน',
+      'Archive spreadsheet พร้อมใช้งาน',
       'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
