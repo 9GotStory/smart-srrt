@@ -100,6 +100,65 @@ var AUDIT_COL = {
   AUDIT_ID: 10
 };
 
+var MASTER_DATA_POLICIES = {
+  surveillance: {
+    label:'การเฝ้าระวัง',
+    sourceSheet:'main',
+    sourceColumn:4,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  disease_group: {
+    label:'กลุ่มโรค',
+    sourceSheet:'main',
+    sourceColumn:5,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  event_type: {
+    label:'ประเภทเหตุการณ์',
+    sourceSheet:'main',
+    sourceColumn:7,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  verify_status: {
+    label:'สถานะการตรวจสอบ',
+    sourceSheet:'main',
+    sourceColumn:15,
+    allowCreate:false,
+    allowDeactivate:false,
+    semanticLocked:true
+  },
+  criteria: {
+    label:'เกณฑ์สอบสวนโรค',
+    sourceSheet:'main',
+    sourceColumn:17,
+    allowCreate:false,
+    allowDeactivate:false,
+    semanticLocked:true
+  },
+  risk: {
+    label:'ระดับความเสี่ยง',
+    sourceSheet:'main',
+    sourceColumn:19,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  content_category: {
+    label:'หมวดหมู่ประกาศ/คู่มือ',
+    sourceSheet:'content',
+    sourceColumn:2,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  }
+};
+
 function doGet(e) {
   var title = CONFIG.APP_TITLE;
   try {
@@ -1541,6 +1600,181 @@ function getMasterData() {
   });
   Object.keys(out).forEach(function(k){ out[k].sort(function(a,b){return a.sort-b.sort;}); });
   return out;
+}
+
+function normalizeMasterKey_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getMasterPolicy_(type) {
+  type = String(type || '').trim();
+  var policy = MASTER_DATA_POLICIES[type];
+  if (!policy) throw new Error('MasterData Type ไม่ได้รับอนุญาต: ' + type);
+  return policy;
+}
+
+function countMasterDataUsage_(type, value) {
+  var policy = getMasterPolicy_(type);
+  var wanted = String(value || '').trim();
+  if (!wanted) return 0;
+
+  var sheet;
+  if (policy.sourceSheet === 'main') {
+    sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  } else if (policy.sourceSheet === 'content') {
+    sheet = getSheet_(CONFIG.SHEETS.CONTENT);
+  } else {
+    return 0;
+  }
+
+  var rows = Math.max(sheet.getLastRow() - 1, 0);
+  if (!rows) return 0;
+  var values = sheet.getRange(2, policy.sourceColumn, rows, 1).getValues();
+  var count = 0;
+  values.forEach(function(r) {
+    if (String(r[0] || '').trim() === wanted) count++;
+  });
+  return count;
+}
+
+function getMasterDataAdmin(sessionToken) {
+  requireAuth_(sessionToken, 'master');
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues().slice(1);
+  var items = [];
+
+  rows.forEach(function(r) {
+    var type = String(r[0] || '').trim();
+    var value = String(r[1] || '').trim();
+    if (!type || !value || !MASTER_DATA_POLICIES[type]) return;
+    var policy = MASTER_DATA_POLICIES[type];
+    items.push({
+      type:type,
+      typeLabel:policy.label,
+      value:value,
+      label:String(r[2] || value),
+      sortOrder:Number(r[3] || 999),
+      active:String(r[4]).toLowerCase() !== 'false',
+      usageCount:countMasterDataUsage_(type, value),
+      allowCreate:policy.allowCreate,
+      allowDeactivate:policy.allowDeactivate,
+      semanticLocked:policy.semanticLocked
+    });
+  });
+
+  items.sort(function(a,b) {
+    return String(a.typeLabel).localeCompare(String(b.typeLabel), 'th') ||
+      a.sortOrder - b.sortOrder ||
+      String(a.label).localeCompare(String(b.label), 'th');
+  });
+
+  var types = Object.keys(MASTER_DATA_POLICIES).map(function(type) {
+    var p = MASTER_DATA_POLICIES[type];
+    return {
+      type:type,
+      label:p.label,
+      allowCreate:p.allowCreate,
+      allowDeactivate:p.allowDeactivate,
+      semanticLocked:p.semanticLocked
+    };
+  }).sort(function(a,b){ return String(a.label).localeCompare(String(b.label), 'th'); });
+
+  return {types:types, items:items};
+}
+
+function saveMasterDataItem(sessionToken, item) {
+  var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
+
+  var mode = String(item.mode || '').trim().toLowerCase();
+  if (['create','update'].indexOf(mode) < 0) throw new Error('โหมดการบันทึก MasterData ไม่ถูกต้อง');
+
+  var type = String(item.type || '').trim();
+  var value = String(item.value || '').trim();
+  var label = String(item.label || '').trim();
+  var sortOrder = Number(item.sortOrder);
+  var active = !(item.active === false || String(item.active).toLowerCase() === 'false');
+  var policy = getMasterPolicy_(type);
+
+  if (!value) throw new Error('กรุณาระบุ Value');
+  if (!label) throw new Error('กรุณาระบุ Label');
+  if (value.length > 120) throw new Error('Value ต้องไม่เกิน 120 ตัวอักษร');
+  if (label.length > 160) throw new Error('Label ต้องไม่เกิน 160 ตัวอักษร');
+  if (!isFinite(sortOrder) || Math.floor(sortOrder) !== sortOrder || sortOrder < 1 || sortOrder > 9999) {
+    throw new Error('SortOrder ต้องเป็นจำนวนเต็ม 1-9999');
+  }
+  if (!policy.allowDeactivate && !active) {
+    throw new Error('Type นี้เป็นค่าควบคุมของระบบและไม่อนุญาตให้ปิดใช้งาน');
+  }
+
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  var wantedKey = normalizeMasterKey_(value);
+  var matchRow = 0;
+  var duplicateRow = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var rowType = String(rows[i][0] || '').trim();
+    var rowValue = String(rows[i][1] || '').trim();
+    if (rowType !== type) continue;
+    if (normalizeMasterKey_(rowValue) === wantedKey) {
+      duplicateRow = i + 1;
+      if (rowValue === value) matchRow = i + 1;
+      break;
+    }
+  }
+
+  var now = new Date();
+  if (mode === 'create') {
+    if (!policy.allowCreate) {
+      throw new Error('Type นี้เป็นค่าควบคุมของระบบและไม่อนุญาตให้สร้าง Value ใหม่');
+    }
+    if (duplicateRow) throw new Error('มี MasterData Type/Value นี้อยู่แล้ว');
+    sheet.appendRow([type, value, label, sortOrder, active, now, user.email || '']);
+    writeAudit_(
+      user,
+      'CREATE_MASTER_DATA',
+      CONFIG.SHEETS.MASTER,
+      type + ':' + value,
+      '',
+      JSON.stringify({type:type,value:value,label:label,sortOrder:sortOrder,active:active})
+    );
+    return 'เพิ่ม MasterData เรียบร้อยแล้ว';
+  }
+
+  var originalType = String(item.originalType || '').trim();
+  var originalValue = String(item.originalValue || '').trim();
+  if (!originalType || !originalValue) throw new Error('ไม่พบ identity เดิมของ MasterData');
+  if (originalType !== type || originalValue !== value) {
+    throw new Error('ไม่อนุญาตให้เปลี่ยน Type หรือ Value ของ MasterData เดิม');
+  }
+  if (!matchRow) throw new Error('ไม่พบ MasterData ที่ต้องการแก้ไข');
+
+  var before = sheet.getRange(matchRow, 1, 1, 7).getValues()[0];
+  sheet.getRange(matchRow, 3, 1, 5).setValues([[
+    label,
+    sortOrder,
+    active,
+    now,
+    user.email || ''
+  ]]);
+
+  writeAudit_(
+    user,
+    'UPDATE_MASTER_DATA',
+    CONFIG.SHEETS.MASTER,
+    type + ':' + value,
+    JSON.stringify({
+      type:before[0],
+      value:before[1],
+      label:before[2],
+      sortOrder:before[3],
+      active:String(before[4]).toLowerCase() !== 'false'
+    }),
+    JSON.stringify({type:type,value:value,label:label,sortOrder:sortOrder,active:active})
+  );
+
+  return 'บันทึก MasterData เรียบร้อยแล้ว';
 }
 
 function getPublishedContent() {
