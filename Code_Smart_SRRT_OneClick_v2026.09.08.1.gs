@@ -746,14 +746,16 @@ function getPublishedContent() {
   }).sort(function(a,b){return Number(a.sort)-Number(b.sort);});
 }
 
-function getDashboardData(filter) {
+function getFilteredEventRows_(filter) {
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return [];
-  var rows = data.slice(1);
-  var result = rows.map(function(row) {
+
+  var result = data.slice(1).map(function(row) {
     return rowToObject_(row);
-  }).filter(function(r) { return r.col2 !== '' && String(r.recordStatus || 'active').toLowerCase() !== 'void'; });
+  }).filter(function(r) {
+    return r.col2 !== '' && String(r.recordStatus || 'active').toLowerCase() !== 'void';
+  });
 
   filter = filter || {};
   if (filter.startDate || filter.endDate) {
@@ -769,6 +771,84 @@ function getDashboardData(filter) {
   });
   return result;
 }
+
+function isCriteriaMet_(row) {
+  return String(row && row.col17 || '').trim() === 'เข้าเกณฑ์';
+}
+
+function isInvestigated_(row) {
+  return isCriteriaMet_(row) && String(row && row.col26 || '').trim() !== '';
+}
+
+function aggregateEventRows_(data) {
+  data = data || [];
+  var criteriaRows = data.filter(isCriteriaMet_);
+  var investigatedRows = criteriaRows.filter(isInvestigated_);
+  var criteria = criteriaRows.length;
+  var investigated = investigatedRows.length;
+  var pendingCriteria = criteriaRows.filter(function(r){ return !isInvestigated_(r); }).length;
+
+  return {
+    kpi: {
+      events: data.length,
+      criteria: criteria,
+      investigated: investigated,
+      investigationRate: criteria ? Math.round(investigated / criteria * 100) : 0,
+      pendingCriteria: pendingCriteria
+    },
+    charts: {
+      byVillage: countMap_(data, 'col29'),
+      byMonth: countByMonth_(data),
+      byDiseaseGroup: countMap_(data, 'col5'),
+      byRisk: countMap_(data, 'col19')
+    },
+    insight: {
+      topDisease: topKey_(countMap_(data, 'col6')),
+      topVillage: topKey_(countMap_(data, 'col29')),
+      pendingCriteria: pendingCriteria
+    }
+  };
+}
+
+function countMap_(data, field) {
+  var map = {};
+  (data || []).forEach(function(r) {
+    var key = String(r && r[field] || '').trim() || 'ไม่ระบุ';
+    map[key] = (map[key] || 0) + 1;
+  });
+  return map;
+}
+
+function countByMonth_(data) {
+  var map = {};
+  (data || []).forEach(function(r) {
+    var value = String(r.col2 || '');
+    if (!value) return;
+    var key = value.substring(0, 7);
+    map[key] = (map[key] || 0) + 1;
+  });
+  return map;
+}
+
+function topKey_(map) {
+  var keys = Object.keys(map || {});
+  if (!keys.length) return '';
+  keys.sort(function(a,b){
+    var diff = Number(map[b] || 0) - Number(map[a] || 0);
+    return diff || String(a).localeCompare(String(b), 'th');
+  });
+  return keys[0];
+}
+
+function getPublicDashboardData(filter) {
+  return aggregateEventRows_(getFilteredEventRows_(filter || {}));
+}
+
+function getDashboardData(sessionToken, filter) {
+  requireAuth_(sessionToken, 'view');
+  return getFilteredEventRows_(filter || {});
+}
+
 
 function rowToObject_(row) {
   var obj = {};
@@ -901,29 +981,17 @@ function saveRowData_(sheet, row, data, user) {
 
 function getAnalytics(sessionToken) {
   var user = requireAuth_(sessionToken, 'view');
-  var data = getDashboardData({});
+  var summary = aggregateEventRows_(getFilteredEventRows_({}));
   var users = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
   var logs = getSheet_(CONFIG.SHEETS.AUDIT).getDataRange().getValues().slice(1);
-  var byRisk = countBy_(data, 'col19');
-  var byDisease = countBy_(data, 'col6');
-  var byTambon = countBy_(data, 'col11');
-  var byVillage = countBy_(data, 'col29');
-  return {
-    kpi: {
-      events: data.length,
-      criteria: data.filter(function(r){return String(r.col17).indexOf('เข้าเกณฑ์') >= 0;}).length,
-      investigated: data.filter(function(r){return r.col26 !== '';}).length,
-      users: users.length,
-      activeUsers: users.filter(function(r){return r[5] === 'active';}).length,
-      auditLogs: logs.length
-    },
-    byRisk: byRisk,
-    byDisease: byDisease,
-    byTambon: byTambon,
-    byVillage: byVillage,
-    user: publicUser_(user)
-  };
+
+  summary.kpi.users = users.length;
+  summary.kpi.activeUsers = users.filter(function(r){return r[5] === 'active';}).length;
+  summary.kpi.auditLogs = logs.length;
+  summary.user = publicUser_(user);
+  return summary;
 }
+
 
 function countBy_(arr, field) {
   var map = {};
@@ -1209,7 +1277,7 @@ function logVisit_(e) {
 
 function exportData(sessionToken, format) {
   requireAuth_(sessionToken, 'export');
-  var data = getDashboardData({});
+  var data = getFilteredEventRows_({});
   var ss = SpreadsheetApp.create('SRRT_Export_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmm'));
   var sh = ss.getActiveSheet();
   sh.setName('SRRT_Data');
@@ -1222,6 +1290,8 @@ function exportData(sessionToken, format) {
   sh.autoResizeColumns(1, MAIN_HEADERS.length);
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
+
+
 
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
