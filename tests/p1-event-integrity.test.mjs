@@ -121,7 +121,7 @@ function makeContext(uuidStart = 1) {
 test('source and browser contracts use EventID rather than rowNumber for Event operations', () => {
   assert.match(source, /function updateRecord\(sessionToken, eventId, formData, expectedRevision\)/);
   assert.match(source, /function deleteRecord\(sessionToken, eventId, voidReason, expectedRevision\)/);
-  assert.match(source, /function generateReportFromWeb\(sessionToken, eventId\)/);
+  assert.match(source, /function generateReportFromWeb\(sessionToken, eventId(?:, [A-Za-z_$][\w$]*)*\)/);
   assert.match(source, /function findEventRowById_/);
   const deleteBlock = source.match(/function deleteRecord[\s\S]*?(?=\nfunction )/)?.[0] ?? '';
   assert.doesNotMatch(deleteBlock, /deleteRow\s*\(/);
