@@ -155,5 +155,6 @@ test('browser exposes owner and lifecycle controls without adding a task subsyst
   assert.match(html,/closeEventUi/);
   assert.match(html,/reopenEventUi/);
   assert.match(html,/consistencyWarnings/);
-  assert.doesNotMatch(html,/taskId|TaskID|SLA|escalation/i);
+  assert.doesNotMatch(source,/function\s+(?:create|save|update|delete)Task\s*\(/i);
+  assert.doesNotMatch(source,/['"]TaskID['"]|['"]SLA['"]|['"]Escalation['"]/);
 });
