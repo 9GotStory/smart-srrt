@@ -2096,26 +2096,6 @@ function clearGeminiModelCache() {
   return 'ล้าง Cache โมเดล Gemini เรียบร้อยแล้ว';
 }
 
-function forceGeminiModelAuto() {
-  var ss = getDb_();
-  var sheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
-  if (!sheet) throw new Error('ไม่พบชีท SystemSettings');
-  var values = sheet.getDataRange().getValues();
-  var found = false;
-  for (var i = 1; i < values.length; i++) {
-    if (String(values[i][0] || '').trim() === 'GEMINI_MODEL') {
-      sheet.getRange(i + 1, 2).setValue('AUTO');
-      sheet.getRange(i + 1, 4).setValue(new Date());
-      sheet.getRange(i + 1, 5).setValue('system');
-      found = true;
-      break;
-    }
-  }
-  if (!found) sheet.appendRow(['GEMINI_MODEL', 'AUTO', 'AUTO = เลือกโมเดล Gemini ที่รองรับ generateContent อัตโนมัติ', new Date(), 'system']);
-  clearGeminiModelCache_();
-  Logger.log('ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว');
-  return 'ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว';
-}
 
 function listAvailableGeminiModels() {
   clearGeminiModelCache_();
