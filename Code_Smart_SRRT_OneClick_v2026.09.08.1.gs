@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '2',
+  SCHEMA_VERSION: '3',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -56,6 +56,9 @@ var EVENT_META_COL = {
   VOID_REASON: 38
 };
 
+var EVENT_OWNER_HEADER = 'OwnerUserID';
+var EVENT_OWNER_COL = 39;
+
 function doGet(e) {
   var title = CONFIG.APP_TITLE;
   try {
@@ -80,6 +83,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('Smart SRRT')
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
+      .addItem('อัปเกรด Event Owner', 'migrateG05EventOwner')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -117,6 +121,7 @@ function installSmartSRRTCore_() {
 
     var mainSheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var eventMigration = ensureEventIdentityData_(mainSheet);
+    ensureEventOwnerSchema_(ss);
     ensureSheet_(ss, CONFIG.SHEETS.USERS, ['UserID','ชื่อ-สกุล','Email','PasswordHash','Role','Status','หน่วยงาน','ตำบล','อำเภอ','จังหวัด','วันที่ลงทะเบียน','อนุมัติโดย','วันที่อนุมัติ','LastLogin']);
     ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
@@ -311,6 +316,56 @@ function ensureSheet_(ss, name, headers) {
     if (changed || current.join('') === '') sheet.getRange(1, 1, 1, headers.length).setValues([patched]);
   }
   return sheet;
+}
+
+function ensureEventOwnerSchema_(ss) {
+  var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+  if (sheet.getMaxColumns() < EVENT_OWNER_COL) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), EVENT_OWNER_COL - sheet.getMaxColumns());
+  }
+
+  var header = String(sheet.getRange(1, EVENT_OWNER_COL).getValue() || '').trim();
+  if (header && header !== EVENT_OWNER_HEADER) {
+    throw new Error('ไม่สามารถเพิ่ม Event Owner ได้: คอลัมน์ ' + EVENT_OWNER_COL + ' ถูกใช้งานด้วยหัวข้อ "' + header + '"');
+  }
+
+  if (!header && sheet.getLastRow() > 1) {
+    var values = sheet.getRange(2, EVENT_OWNER_COL, sheet.getLastRow() - 1, 1).getValues();
+    var occupiedRow = 0;
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][0] || '').trim() !== '') {
+        occupiedRow = i + 2;
+        break;
+      }
+    }
+    if (occupiedRow) {
+      throw new Error('ไม่สามารถเพิ่ม Event Owner ได้: คอลัมน์ ' + EVENT_OWNER_COL + ' มีข้อมูลเดิมที่แถว ' + occupiedRow + ' แม้หัวข้อจะว่าง');
+    }
+  }
+
+  if (!header) sheet.getRange(1, EVENT_OWNER_COL).setValue(EVENT_OWNER_HEADER);
+  return sheet;
+}
+
+function migrateG05EventOwner() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    ensureEventOwnerSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var message = [
+      'อัปเกรด Event Owner เรียบร้อยแล้ว',
+      'เพิ่มคอลัมน์: ' + EVENT_OWNER_HEADER,
+      'คอลัมน์: ' + EVENT_OWNER_COL,
+      'Schema version: ' + CONFIG.SCHEMA_VERSION
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function isUuid_(value) {
