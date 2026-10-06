@@ -91,8 +91,11 @@
           <div class="card"><b>สัดส่วนตามระดับความเสี่ยง</b><div id="pieRisk" class="chart"></div></div>
         </div>
       </div>
-      <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
-      <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+      <div id="dashboardPublicOnlyNote" class="help" style="margin-top:18px">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปรวม กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์และส่งออกข้อมูลระดับเหตุการณ์</div>
+      <div id="dashboardPrivateEvents" style="display:none">
+        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
+        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+      </div>
     </section>
 
     <section id="page-records" class="section">
@@ -234,7 +237,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],currentContent=[],usersCache=[],areaAdminCache=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[];
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -293,8 +296,10 @@
     if(currentUser){
       box.innerHTML=`<b>${escapeHtml(currentUser.name)}</b><span>${escapeHtml(currentUser.role)} | ${escapeHtml(currentUser.email)}</span><button onclick="doLogout()">ออกจากระบบ</button>`
     }else{
-      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard ได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
+      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard สรุปได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
     }
+    if(el('dashboardPrivateEvents'))el('dashboardPrivateEvents').style.display=currentUser?'block':'none';
+    if(el('dashboardPublicOnlyNote'))el('dashboardPublicOnlyNote').style.display=currentUser?'none':'block';
   }
 
   function openLogin(){openModal('loginModal')}
@@ -332,34 +337,38 @@
   async function loadDashboard(){
     try{
       const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
-      allData=await gs('getDashboardData',filter);updateDashboard();renderTables();if(!areas.length)setupDashboardFilters()
+      dashboardSummary=await gs('getDashboardData',filter);
+      allData=currentUser?await gs('getEventData',token,filter):[];
+      updateDashboard();renderTables();if(!areas.length)setupDashboardFilters()
     }catch(e){toast(e.message||e)}
   }
   function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
   function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
   function locationLabel(r){return `${villageLabel(r)} ต.${r.col11||'-'} อ.${r.col12||'-'} จ.${r.col13||'-'}`}
   function updateDashboard(){
-    const total=allData.length,criteria=allData.filter(r=>(r.col17||'').includes('เข้าเกณฑ์')).length,investigated=allData.filter(r=>r.col26).length;
-    const rate=criteria?Math.round(investigated/criteria*100):(total?Math.round(investigated/total*100):0);
-    el('kpiTotal').textContent=total;el('kpiCriteria').textContent=criteria;el('kpiInvestigated').textContent=investigated;el('kpiRate').textContent=rate+'%';
-    el('smartInsight').innerHTML=makeInsight(total);drawCharts()
+    const summary=dashboardSummary||{kpi:{},charts:{},insight:{}},kpi=summary.kpi||{};
+    el('kpiTotal').textContent=Number(kpi.events||0);
+    el('kpiCriteria').textContent=Number(kpi.criteria||0);
+    el('kpiInvestigated').textContent=Number(kpi.investigated||0);
+    el('kpiRate').textContent=Number(kpi.investigationRate||0)+'%';
+    el('smartInsight').innerHTML=makeInsight(summary);drawCharts(summary)
   }
-  function makeInsight(total){
+  function makeInsight(summary){
+    const kpi=(summary&&summary.kpi)||{},insight=(summary&&summary.insight)||{};
+    const total=Number(kpi.events||0),pending=Number(insight.pendingInvestigation||0);
     if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
-    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>(r.col17||'').includes('เข้าเกณฑ์')&&!r.col26).length;
-    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(topDisease)}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(topVillage)}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(insight.topDisease||'ไม่ระบุ')}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(insight.topVillage||'ไม่ระบุ')}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
   }
-  function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
-  function countMap(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.entries(m)}
-  function drawCharts(){
+  function chartRows(items){return(items||[]).map(x=>[x.name,Number(x.value||0)])}
+  function drawCharts(summary){
     if(!google.visualization)return;
-    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
-    draw('lineChart','LineChart',monthRows(),{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
-    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
-    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
+    const charts=(summary&&summary.charts)||{};
+    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...chartRows(charts.byVillage)],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+    draw('lineChart','LineChart',[['เดือน','จำนวน'],...chartRows(charts.byMonth)],{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...chartRows(charts.byDiseaseGroup)],{pieHole:.42});
+    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...chartRows(charts.byRisk)],{pieHole:.42})
   }
   function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
-  function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
   function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
 
   function renderTables(){
@@ -440,10 +449,11 @@
   }
 
   function exportClientExcel(){
+    if(!currentUser){openLogin();return}
     const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
   }
-  async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
+  async function exportServerFile(format){if(!currentUser){openLogin();return}try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
   function captureDashboard(){html2canvas(el('captureArea'),{scale:2,backgroundColor:'#eef4f7',useCORS:true}).then(canvas=>{const a=document.createElement('a');a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';a.href=canvas.toDataURL('image/png');a.click()}).catch(e=>toast(e.message))}
 
   async function loadAdmin(){
