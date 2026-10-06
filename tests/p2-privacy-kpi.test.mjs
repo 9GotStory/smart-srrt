@@ -94,7 +94,7 @@ test('raw Event RPC requires view permission while public RPC returns summary', 
   assert.match(publicBlock, /buildDashboardSummary_/);
   assert.doesNotMatch(publicBlock, /return\s+getFilteredEventRows_/);
   assert.match(eventBlock, /requireAuth_\(sessionToken, 'view'\)/);
-  assert.match(eventBlock, /return getFilteredEventRows_/);
+  assert.match(eventBlock, /getFilteredEventRows_\(filter \|\| \{\}\)/);
 });
 
 test('browser obtains Event rows only for an authenticated user', () => {
