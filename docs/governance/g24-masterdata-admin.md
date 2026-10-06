@@ -112,6 +112,16 @@ The row remains in MasterData for auditability and operational recovery.
 
 A disabled Value is removed from active MasterData returned for new selection.
 
+Server-side validation also prevents a new Event or a changed master-backed field from using an inactive/unknown Value.
+
+For Event update, an inactive/legacy Value remains valid only when that field is unchanged from the stored row.
+
+For ContentLibrary:
+
+- new content must use an active `content_category`;
+- changing an existing category must select an active category;
+- an existing inactive/legacy category may be preserved when left unchanged.
+
 It is **not** removed from historical Event or Content records.
 
 When editing an existing Event whose saved master-backed Value is no longer active, the browser temporarily injects:
