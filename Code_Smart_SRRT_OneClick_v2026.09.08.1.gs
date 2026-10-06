@@ -1229,12 +1229,11 @@ function closeEvent(sessionToken, eventId, closeReason, expectedRevision) {
     var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
     var rowNumber = findEventRowById_(sheet, eventId, false);
     var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
-    if (status === 'closed') return 'เหตุการณ์นี้ถูกปิดไว้แล้ว';
-
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
     if (expected !== currentRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
     }
+    if (status === 'closed') return 'เหตุการณ์นี้ถูกปิดไว้แล้ว';
 
     var now = new Date();
     sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('closed');
@@ -1272,13 +1271,12 @@ function reopenEvent(sessionToken, eventId, reopenReason, expectedRevision) {
     var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
     var rowNumber = findEventRowById_(sheet, eventId, false);
     var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
-    if (status === 'active') return 'เหตุการณ์นี้เปิดใช้งานอยู่แล้ว';
-    if (status !== 'closed') throw new Error('สามารถเปิดเหตุการณ์อีกครั้งได้เฉพาะเหตุการณ์ที่มีสถานะ closed');
-
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
     if (expected !== currentRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
     }
+    if (status === 'active') return 'เหตุการณ์นี้เปิดใช้งานอยู่แล้ว';
+    if (status !== 'closed') throw new Error('สามารถเปิดเหตุการณ์อีกครั้งได้เฉพาะเหตุการณ์ที่มีสถานะ closed');
 
     var now = new Date();
     sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('active');
