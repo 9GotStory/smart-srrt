@@ -4,7 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "build": "node scripts/build-one-click.mjs",
+    "build:check": "node scripts/build-one-click.mjs --check",
+    "check:contracts": "node scripts/check-contracts.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "verify": "npm run build:check && npm run check:contracts && npm test"
   },
   "engines": {
     "node": ">=24"
