@@ -102,10 +102,37 @@ test('missing quality context yields review when core context exists',()=>{
   const codes=Array.from(out.warnings,w=>w.code);
   assert.ok(codes.includes('MISSING_REPORTER'));
   assert.ok(codes.includes('MISSING_ONSET_DATE'));
-  assert.ok(codes.includes('MISSING_VERIFICATION'));
+  assert.ok(codes.includes('MISSING_OR_PENDING_VERIFICATION'));
   assert.ok(codes.includes('MISSING_COORDINATION_AGENCY'));
   assert.ok(codes.includes('MISSING_CONTROL_MEASURES'));
   assert.ok(codes.includes('MISSING_INVESTIGATION_DECISION'));
+});
+
+test('pending verification is a soft review warning',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.col15='รอตรวจสอบ';
+
+  const out=ctx.deriveReportReadiness_(event);
+  assert.equal(out.status,'review');
+  assert.ok(out.warnings.some(w=>w.code==='MISSING_OR_PENDING_VERIFICATION'));
+});
+
+test('investigation decision warning is context-specific to criteria-met Events',()=>{
+  const ctx=makeContext();
+
+  const notMet=completeEvent();
+  notMet.col17='ไม่เข้าเกณฑ์';
+  notMet.col24='';
+  notMet.col26='';
+  const notMetOut=ctx.deriveReportReadiness_(notMet);
+  assert.equal(notMetOut.warnings.some(w=>w.code==='MISSING_INVESTIGATION_DECISION'),false);
+  assert.equal(notMetOut.warnings.some(w=>w.code==='MISSING_INVESTIGATION_DATE'),false);
+
+  const met=completeEvent();
+  met.col24='';
+  const metOut=ctx.deriveReportReadiness_(met);
+  assert.ok(metOut.warnings.some(w=>w.code==='MISSING_INVESTIGATION_DECISION'));
 });
 
 test('pending criteria warns and criteria-met without investigation date warns',()=>{
