@@ -1606,6 +1606,53 @@ function normalizeMasterKey_(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function getActiveMasterValueSets_() {
+  var sets = {};
+  Object.keys(MASTER_DATA_POLICIES).forEach(function(type){ sets[type] = {}; });
+  var rows = getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1);
+  rows.forEach(function(r) {
+    var type = String(r[0] || '').trim();
+    var value = String(r[1] || '').trim();
+    var active = String(r[4]).toLowerCase() !== 'false';
+    if (!type || !value || !active || !sets[type]) return;
+    sets[type][value] = true;
+  });
+  return sets;
+}
+
+function validateEventMasterData_(data, beforeRow) {
+  var mapping = {
+    4:'surveillance',
+    5:'disease_group',
+    7:'event_type',
+    15:'verify_status',
+    17:'criteria',
+    19:'risk'
+  };
+  var sets = getActiveMasterValueSets_();
+
+  Object.keys(mapping).forEach(function(colKey) {
+    var col = Number(colKey);
+    var type = mapping[col];
+    var value = String((data || {})['col' + col] || '').trim();
+    if (!value) return;
+    if (sets[type] && sets[type][value]) return;
+
+    var oldValue = beforeRow ? String(beforeRow[col - 1] || '').trim() : '';
+    if (beforeRow && oldValue === value) return;
+
+    throw new Error('ค่า "' + value + '" ของ ' + MASTER_DATA_POLICIES[type].label + ' ไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+  });
+}
+
+function isActiveMasterValue_(type, value) {
+  getMasterPolicy_(type);
+  value = String(value || '').trim();
+  if (!value) return false;
+  var sets = getActiveMasterValueSets_();
+  return !!(sets[type] && sets[type][value]);
+}
+
 function getMasterPolicy_(type) {
   type = String(type || '').trim();
   var policy = MASTER_DATA_POLICIES[type];
@@ -2036,6 +2083,7 @@ function addRecord(sessionToken, formData) {
     var eventId = Utilities.getUuid();
     var now = new Date();
 
+    validateEventMasterData_(formData || {}, null);
     sheet.getRange(newRow, 1).setValue(newRow - 1);
     saveRowData_(sheet, newRow, formData, user);
     sheet.getRange(newRow, EVENT_META_COL.EVENT_ID, 1, EVENT_META_HEADERS.length).setValues([[
@@ -2068,6 +2116,7 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
     }
 
+    validateEventMasterData_(formData || {}, before);
     saveRowData_(sheet, rowNumber, formData, user);
     sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
     writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify(formData));
@@ -2470,18 +2519,30 @@ function listContent(sessionToken) {
 
 function saveContent(sessionToken, item) {
   var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
   var sheet = getSheet_(CONFIG.SHEETS.CONTENT);
+  var category = String(item.category || '').trim();
+  if (!category) throw new Error('กรุณาเลือกหมวดหมู่เนื้อหา');
+
   if (!item.id) {
+    if (!isActiveMasterValue_('content_category', category)) {
+      throw new Error('หมวดหมู่เนื้อหาไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+    }
     item.id = Utilities.getUuid();
-    sheet.appendRow([item.id, item.category, item.title, item.description, item.url, item.fileId, item.status || 'draft', item.sort || 999, new Date(), new Date(), user.email]);
+    sheet.appendRow([item.id,category,item.title,item.description,item.url,item.fileId,item.status || 'draft',item.sort || 999,new Date(),new Date(),user.email]);
     writeAudit_(user, 'CREATE_CONTENT', CONFIG.SHEETS.CONTENT, item.id, '', JSON.stringify(item));
     return 'เพิ่มข้อมูลเนื้อหาเรียบร้อยแล้ว';
   }
+
   var values = sheet.getDataRange().getValues();
   for (var i=1; i<values.length; i++) {
     if (values[i][0] === item.id) {
+      var existingCategory = String(values[i][1] || '').trim();
+      if (category !== existingCategory && !isActiveMasterValue_('content_category', category)) {
+        throw new Error('หมวดหมู่เนื้อหาใหม่ไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+      }
       var before = JSON.stringify(values[i]);
-      sheet.getRange(i+1,2,1,10).setValues([[item.category,item.title,item.description,item.url,item.fileId,item.status,item.sort || 999,values[i][8] || new Date(),new Date(),user.email]]);
+      sheet.getRange(i+1,2,1,10).setValues([[category,item.title,item.description,item.url,item.fileId,item.status,item.sort || 999,values[i][8] || new Date(),new Date(),user.email]]);
       writeAudit_(user, 'UPDATE_CONTENT', CONFIG.SHEETS.CONTENT, item.id, before, JSON.stringify(item));
       return 'อัปเดตข้อมูลเนื้อหาเรียบร้อยแล้ว';
     }
