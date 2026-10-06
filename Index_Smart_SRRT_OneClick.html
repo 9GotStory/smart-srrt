@@ -253,6 +253,18 @@
   <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
 </div></div>
 
+<div class="modal" id="reportReadinessModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-file-waveform"></i> ตรวจความพร้อมก่อนสร้างรายงาน AI</div>
+  <input type="hidden" id="readinessEventId">
+  <div id="readinessSummary" class="help" style="margin-bottom:12px"></div>
+  <div id="readinessWarnings" class="content-list"></div>
+  <div class="help" style="margin-top:12px">คำเตือนนี้เป็นตัวช่วยตรวจข้อมูลเท่านั้น ไม่ใช่ขั้นตอนอนุมัติ และไม่บังคับให้แก้ข้อมูลก่อนสร้างรายงาน</div>
+  <div class="actions">
+    <button class="btn light" onclick="closeModal('reportReadinessModal')">กลับไปตรวจข้อมูล</button>
+    <button class="btn green" id="proceedReportBtn" onclick="proceedReportGeneration()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานต่อ</button>
+  </div>
+</div></div>
+
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
   <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
@@ -304,7 +316,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[],masterAdminCache=[],masterTypePolicies=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[],masterAdminCache=[],masterTypePolicies=[],pendingReportEventId='';
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -725,11 +737,60 @@
     if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
     try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
+  function renderReportReadiness(readiness){
+    const warnings=Array.isArray(readiness&&readiness.warnings)?readiness.warnings:[];
+    el('readinessSummary').innerHTML=`สถานะ: <b>${warnings.length?'ควรตรวจข้อมูลก่อน':'พร้อมสร้างรายงาน'}</b> · Revision <b>${Number(readiness.sourceRevision||0)}</b> · ${escapeHtml(readiness.eventLifecycleLabel||'')}${readiness.promptVersion?` · Prompt ${escapeHtml(readiness.promptVersion)}`:''}`;
+    el('readinessWarnings').innerHTML=warnings.map(w=>{
+      const important=w.severity==='important';
+      const badge=important?'<span class="status st-high">สำคัญ</span>':'<span class="status st-mid">แนะนำ</span>';
+      return`<div class="content-item"><h4>${badge} ${escapeHtml(w.message||'ควรตรวจข้อมูล')}</h4></div>`
+    }).join('')||'<div class="content-item"><h4><span class="status st-low">พร้อม</span> ไม่พบคำเตือนด้านข้อมูลสำหรับรายงาน</h4></div>'
+  }
+  async function runReportGeneration(eventId,btn,w){
+    const old=btn?btn.innerHTML:'';
+    try{
+      if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง'}
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');
+      const url=await gs('generateReportFromWeb',token,eventId);
+      if(w)w.location=url;else window.open(url,'_blank');
+      toast('สร้างรายงานเรียบร้อยแล้ว')
+    }catch(e){
+      if(w)w.close();
+      toast(e.message||e)
+    }finally{
+      if(btn){btn.disabled=false;btn.innerHTML=old}
+    }
+  }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
-    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังตรวจความพร้อมของข้อมูล...</p>');
+      const readiness=await gs('getReportReadiness',token,eventId);
+      if(readiness&&Array.isArray(readiness.warnings)&&readiness.warnings.length){
+        if(w)w.close();
+        pendingReportEventId=eventId;
+        el('readinessEventId').value=eventId;
+        renderReportReadiness(readiness);
+        openModal('reportReadinessModal');
+        return
+      }
+      await runReportGeneration(eventId,btn,w)
+    }catch(e){
+      if(w)w.close();
+      toast(e.message||e)
+    }finally{
+      btn.disabled=false;btn.innerHTML=old
+    }
+  }
+  async function proceedReportGeneration(){
+    const eventId=el('readinessEventId').value||pendingReportEventId;
+    if(!eventId){toast('ไม่พบ EventID');return}
+    const btn=el('proceedReportBtn'),w=window.open('','_blank');
+    closeModal('reportReadinessModal');
+    await runReportGeneration(eventId,btn,w);
+    pendingReportEventId=''
   }
 
   function exportClientExcel(){
