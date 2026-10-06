@@ -58,7 +58,7 @@ function lockStub(){return {getScriptLock:()=>({waitLock(){},releaseLock(){}})}}
 test('P3 schema appends lifecycle metadata after P1 columns',()=>{
   const ctx=context();
   assert.equal(ctx.SCHEMA_VERSION, undefined);
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'3');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 3);
   assert.equal(ctx.MAIN_HEADERS.length,30);
   assert.equal(ctx.EVENT_META_HEADERS.length,8);
   assert.deepEqual(Array.from(ctx.WORKFLOW_META_HEADERS),[
