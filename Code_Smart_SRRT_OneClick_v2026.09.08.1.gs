@@ -172,11 +172,14 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
     ensureEventAttachmentSheet_(ss);
-    ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
+    var auditMigration = ensureAuditSchema_(ss);
     ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','UserAgent']);
 
     var assets = ensureSystemAssets_(ss);
     seedSettings_(ss, assets);
+    var auditArchive = ensureAuditArchiveSpreadsheet_(ss);
+    var settingsSheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
+    upsertSettingDirect_(settingsSheet, 'AUDIT_ARCHIVE_SPREADSHEET_ID', auditArchive.getId(), 'Spreadsheet ID สำหรับเก็บ Audit archive', true);
     seedMasterData_(ss);
     var adminInfo = seedSuperAdmin_(ss);
     formatSheets_(ss);
@@ -186,6 +189,7 @@ function installSmartSRRTCore_() {
     props.setProperty('REPORT_FOLDER_ID', assets.reportFolderId);
     props.setProperty('LOGO_FOLDER_ID', assets.logoFolderId);
     props.setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+    props.setProperty('AUDIT_ARCHIVE_SPREADSHEET_ID', auditArchive.getId());
     props.setProperty('TEMPLATE_DOC_ID', assets.templateDocId);
 
     var message = [
@@ -193,6 +197,7 @@ function installSmartSRRTCore_() {
       'ฐานข้อมูล: ' + ss.getName(),
       'โฟลเดอร์ระบบและ Template รายงานถูกสร้างให้อัตโนมัติ',
       'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
+      'Audit identity: backfilled ' + auditMigration.backfilledIds + ', retention ' + getAuditRetentionDays_() + ' วัน',
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -205,6 +210,7 @@ function installSmartSRRTCore_() {
       systemFolderId: assets.systemFolderId,
       reportFolderId: assets.reportFolderId,
       attachmentFolderId: assets.attachmentFolderId,
+      auditArchiveSpreadsheetId: auditArchive.getId(),
       templateDocId: assets.templateDocId,
       adminEmail: adminInfo.email,
       eventMigration: eventMigration
@@ -797,6 +803,8 @@ function seedSettings_(ss, assets) {
     ['SYSTEM_FOLDER_ID', assets.systemFolderId, 'โฟลเดอร์หลักของระบบ'],
     ['LOGO_FOLDER_ID', assets.logoFolderId, 'โฟลเดอร์เก็บโลโก้'],
     ['ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์'],
+    ['AUDIT_RETENTION_DAYS',String(CONFIG.DEFAULT_AUDIT_RETENTION_DAYS),'จำนวนวันที่เก็บ AuditLogs ในฐานข้อมูลหลักก่อน Archive'],
+    ['AUDIT_ARCHIVE_SPREADSHEET_ID','','Spreadsheet ID สำหรับเก็บ Audit archive'],
     ['GEMINI_API_KEY','','Gemini API Key ตั้งค่าผ่านหน้า Admin'],
     ['GEMINI_MODEL','AUTO','AUTO หรือชื่อโมเดล Gemini ที่รองรับ generateContent'],
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
@@ -806,7 +814,7 @@ function seedSettings_(ss, assets) {
     ['SCHEMA_VERSION',CONFIG.SCHEMA_VERSION,'รุ่นโครงสร้างข้อมูลถาวร']
   ];
   rows.forEach(function(r) {
-    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
+    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','AUDIT_ARCHIVE_SPREADSHEET_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
   });
 }
 
@@ -2180,6 +2188,8 @@ function getInstallationStatus(sessionToken) {
     systemFolderId: settings.SYSTEM_FOLDER_ID || '',
     reportFolderId: settings.REPORT_FOLDER_ID || '',
     attachmentFolderId: settings.ATTACHMENT_FOLDER_ID || '',
+    auditArchiveSpreadsheetId: settings.AUDIT_ARCHIVE_SPREADSHEET_ID || '',
+    auditRetentionDays: getAuditRetentionDays_(),
     templateDocId: settings.TEMPLATE_DOC_ID || '',
     logoFileId: settings.LOGO_FILE_ID || '',
     areas: Math.max(getSheet_(CONFIG.SHEETS.AREAS).getLastRow() - 1, 0),
@@ -2232,7 +2242,7 @@ function getSystemSettings(sessionToken) {
 function saveSystemSettings(sessionToken, settingsArray) {
   var user = requireAuth_(sessionToken, 'settings');
   var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
-  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION','SCHEMA_VERSION'];
+  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','ATTACHMENT_FOLDER_ID','AUDIT_ARCHIVE_SPREADSHEET_ID','AUDIT_RETENTION_DAYS','INSTALL_VERSION','SCHEMA_VERSION'];
   settingsArray.forEach(function(s) {
     if (!s.key || blockedKeys.indexOf(String(s.key)) >= 0) return;
     upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
