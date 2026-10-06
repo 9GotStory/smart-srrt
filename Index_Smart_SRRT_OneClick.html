@@ -94,14 +94,14 @@
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
         <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
 
     <section id="page-records" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
       <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
-      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
     </section>
 
     <section id="page-reporter" class="section">
@@ -392,12 +392,21 @@
   function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
   function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
   function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
+  function lifecycleBadge(r){
+    const code=String(r&&r.eventLifecycle||''),label=r&&r.eventLifecycleLabel?r.eventLifecycleLabel:'-';
+    let c='status ';
+    if(code==='investigated')c+='st-low';
+    else if(code==='investigation_required'||code==='criteria_pending'||code==='verification_pending')c+='st-mid';
+    else if(code==='voided'||code==='verification_rejected')c+='st-high';
+    else c+='';
+    return`<span class="${c}">${escapeHtml(label)}</span>`
+  }
 
   function renderTables(){
     if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
     const manage=roleCanRecord();
-    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
-    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>';
+    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
+    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">ไม่มีข้อมูล</td></tr>';
     el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
