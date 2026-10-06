@@ -195,6 +195,7 @@ test('updateRecord resolves by EventID and increments Revision', () => {
   const audits=[];
   ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
   ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.validateEventMasterData_=()=>{};
   ctx.writeAudit_=(...args)=>audits.push(args);
   ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
 
