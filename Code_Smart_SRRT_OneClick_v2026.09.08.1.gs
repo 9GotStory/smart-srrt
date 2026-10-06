@@ -746,7 +746,7 @@ function getPublishedContent() {
   }).sort(function(a,b){return Number(a.sort)-Number(b.sort);});
 }
 
-function getDashboardData(filter) {
+function getFilteredEventRows_(filter) {
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return [];
@@ -768,6 +768,80 @@ function getDashboardData(filter) {
     return String(r.col29) === String(filter.village) || ('หมู่ ' + String(r.col10)) === String(filter.village);
   });
   return result;
+}
+
+function getDashboardData(sessionToken, filter) {
+  requireAuth_(sessionToken, 'view');
+  return getFilteredEventRows_(filter || {});
+}
+
+function getPublicDashboardData(filter) {
+  return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
+}
+
+function buildDashboardAggregate_(rows) {
+  var byVillage = {};
+  var byMonth = {};
+  var byDiseaseGroup = {};
+  var byRisk = {};
+  var byDisease = {};
+  var criteria = 0;
+  var investigated = 0;
+  var pendingCriteria = 0;
+
+  rows.forEach(function(r) {
+    var village = r.col29
+      ? ('บ้าน' + r.col29 + (r.col10 ? ' หมู่ ' + r.col10 : ''))
+      : (r.col10 ? 'หมู่ ' + r.col10 : 'ไม่ระบุหมู่บ้าน');
+    var month = r.col2 ? String(r.col2).substring(0, 7) : 'ไม่ระบุ';
+    var diseaseGroup = String(r.col5 || 'ไม่ระบุ');
+    var risk = String(r.col19 || 'ไม่ระบุ');
+    var disease = String(r.col6 || 'ไม่ระบุ');
+    var meetsCriteria = String(r.col17 || '').indexOf('เข้าเกณฑ์') >= 0;
+    var hasInvestigationDate = r.col26 !== '';
+
+    byVillage[village] = (byVillage[village] || 0) + 1;
+    byMonth[month] = (byMonth[month] || 0) + 1;
+    byDiseaseGroup[diseaseGroup] = (byDiseaseGroup[diseaseGroup] || 0) + 1;
+    byRisk[risk] = (byRisk[risk] || 0) + 1;
+    byDisease[disease] = (byDisease[disease] || 0) + 1;
+
+    if (meetsCriteria) {
+      criteria++;
+      if (!hasInvestigationDate) pendingCriteria++;
+    }
+    if (hasInvestigationDate) investigated++;
+  });
+
+  function sortedEntries_(map, alpha) {
+    var keys = Object.keys(map);
+    if (alpha) keys.sort();
+    else keys.sort(function(a,b){ return map[b] - map[a] || String(a).localeCompare(String(b), 'th'); });
+    return keys.map(function(k){ return [k, map[k]]; });
+  }
+
+  var diseaseEntries = sortedEntries_(byDisease, false);
+  var villageEntries = sortedEntries_(byVillage, false);
+  var total = rows.length;
+  var rate = criteria
+    ? Math.round(investigated / criteria * 100)
+    : (total ? Math.round(investigated / total * 100) : 0);
+
+  return {
+    kpi: {
+      events: total,
+      criteria: criteria,
+      investigated: investigated,
+      investigationRate: rate,
+      pendingCriteria: pendingCriteria
+    },
+    topDisease: diseaseEntries.length ? diseaseEntries[0][0] : 'ไม่ระบุ',
+    topVillage: villageEntries.length ? villageEntries[0][0] : 'ไม่ระบุ',
+    byVillage: villageEntries,
+    byMonth: sortedEntries_(byMonth, true),
+    byDiseaseGroup: sortedEntries_(byDiseaseGroup, false),
+    byRisk: sortedEntries_(byRisk, false)
+  };
 }
 
 function rowToObject_(row) {
@@ -901,7 +975,7 @@ function saveRowData_(sheet, row, data, user) {
 
 function getAnalytics(sessionToken) {
   var user = requireAuth_(sessionToken, 'view');
-  var data = getDashboardData({});
+  var data = getFilteredEventRows_({});
   var users = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
   var logs = getSheet_(CONFIG.SHEETS.AUDIT).getDataRange().getValues().slice(1);
   var byRisk = countBy_(data, 'col19');
@@ -1209,7 +1283,7 @@ function logVisit_(e) {
 
 function exportData(sessionToken, format) {
   requireAuth_(sessionToken, 'export');
-  var data = getDashboardData({});
+  var data = getFilteredEventRows_({});
   var ss = SpreadsheetApp.create('SRRT_Export_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmm'));
   var sh = ss.getActiveSheet();
   sh.setName('SRRT_Data');
