@@ -779,6 +779,10 @@ function getPublicDashboardData(filter) {
   return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
 }
 
+function isInvestigationCriteriaMet_(value) {
+  return String(value || '').trim() === 'เข้าเกณฑ์';
+}
+
 function buildDashboardAggregate_(rows) {
   var byVillage = {};
   var byMonth = {};
@@ -797,7 +801,7 @@ function buildDashboardAggregate_(rows) {
     var diseaseGroup = String(r.col5 || 'ไม่ระบุ');
     var risk = String(r.col19 || 'ไม่ระบุ');
     var disease = String(r.col6 || 'ไม่ระบุ');
-    var meetsCriteria = String(r.col17 || '').indexOf('เข้าเกณฑ์') >= 0;
+    var meetsCriteria = isInvestigationCriteriaMet_(r.col17);
     var hasInvestigationDate = r.col26 !== '';
 
     byVillage[village] = (byVillage[village] || 0) + 1;
@@ -985,7 +989,7 @@ function getAnalytics(sessionToken) {
   return {
     kpi: {
       events: data.length,
-      criteria: data.filter(function(r){return String(r.col17).indexOf('เข้าเกณฑ์') >= 0;}).length,
+      criteria: data.filter(function(r){return isInvestigationCriteriaMet_(r.col17);}).length,
       investigated: data.filter(function(r){return r.col26 !== '';}).length,
       users: users.length,
       activeUsers: users.filter(function(r){return r[5] === 'active';}).length,
