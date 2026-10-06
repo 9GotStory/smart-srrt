@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '3',
+  SCHEMA_VERSION: '4',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -23,7 +23,9 @@ var CONFIG = {
     MASTER: 'MasterData',
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
+    ATTACHMENTS: 'EventAttachments',
     AUDIT: 'AuditLogs',
+    AUDIT_ARCHIVE: 'AuditArchive',
     VISITS: 'VisitLogs'
   },
   ROLES: {
@@ -32,7 +34,8 @@ var CONFIG = {
     ADMIN: 'Admin',
     STAFF: 'Staff'
   },
-  MAX_LOGO_BYTES: 3 * 1024 * 1024
+  MAX_LOGO_BYTES: 3 * 1024 * 1024,
+  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024
 };
 
 var MAIN_HEADERS = [
@@ -88,6 +91,7 @@ function onOpen() {
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
       .addItem('อัปเกรด Workflow / Owner', 'migrateP3Workflow')
+      .addItem('อัปเกรด Supporting Governance', 'migrateP4Governance')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -131,8 +135,11 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
+    ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','FileSize','DriveUrl','Description','Status','CreatedAt','CreatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
-    ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','UserAgent']);
+    ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt','ArchivedBy']);
+    var visitSheet = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','RequestParams']);
+    migrateVisitLogHeader_(visitSheet);
 
     var assets = ensureSystemAssets_(ss);
     seedSettings_(ss, assets);
@@ -144,6 +151,7 @@ function installSmartSRRTCore_() {
     props.setProperty('SYSTEM_FOLDER_ID', assets.systemFolderId);
     props.setProperty('REPORT_FOLDER_ID', assets.reportFolderId);
     props.setProperty('LOGO_FOLDER_ID', assets.logoFolderId);
+    props.setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
     props.setProperty('TEMPLATE_DOC_ID', assets.templateDocId);
 
     var message = [
@@ -228,6 +236,11 @@ function ensureSystemAssets_(ss) {
     'โลโก้ระบบ',
     systemFolder
   );
+  var attachmentFolder = getOrCreateFolder_(
+    directSettings.ATTACHMENT_FOLDER_ID || props.getProperty('ATTACHMENT_FOLDER_ID'),
+    'เอกสารแนบเหตุการณ์',
+    systemFolder
+  );
 
   var templateId = directSettings.TEMPLATE_DOC_ID || props.getProperty('TEMPLATE_DOC_ID');
   if (!isGoogleDocAvailable_(templateId)) {
@@ -238,6 +251,7 @@ function ensureSystemAssets_(ss) {
     systemFolderId: systemFolder.getId(),
     reportFolderId: reportFolder.getId(),
     logoFolderId: logoFolder.getId(),
+    attachmentFolderId: attachmentFolder.getId(),
     templateDocId: templateId
   };
 }
@@ -579,6 +593,40 @@ function getEventMetaFromRow_(row) {
   };
 }
 
+function migrateVisitLogHeader_(sheet) {
+  if (!sheet) return false;
+  var current = String(sheet.getRange(1, 3).getValue() || '').trim();
+  if (!current || current === 'UserAgent') {
+    sheet.getRange(1, 3).setValue('RequestParams');
+    return true;
+  }
+  return false;
+}
+
+function migrateP4Governance() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var attachments = ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','FileSize','DriveUrl','Description','Status','CreatedAt','CreatedBy']);
+    ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt','ArchivedBy']);
+    var visits = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','RequestParams']);
+    var renamedVisitHeader = migrateVisitLogHeader_(visits);
+    var assets = ensureSystemAssets_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    upsertSettingDirect_(settings, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์', true);
+    setSchemaVersionAtLeast_(settings, 4);
+    return [
+      'อัปเกรด Supporting Governance เรียบร้อยแล้ว',
+      'EventAttachments: ' + attachments.getName(),
+      'VisitLogs header renamed: ' + (renamedVisitHeader ? 'YES' : 'NO'),
+      'Schema version: 4'
+    ].join('\n');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function seedSettings_(ss, assets) {
   var sheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
   var rows = [
@@ -596,6 +644,7 @@ function seedSettings_(ss, assets) {
     ['MAIN_SHEET_ID', String(ss.getSheetByName(CONFIG.SHEETS.MAIN).getSheetId()), 'Sheet ID ของ MainData'],
     ['SYSTEM_FOLDER_ID', assets.systemFolderId, 'โฟลเดอร์หลักของระบบ'],
     ['LOGO_FOLDER_ID', assets.logoFolderId, 'โฟลเดอร์เก็บโลโก้'],
+    ['ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์'],
     ['GEMINI_API_KEY','','Gemini API Key ตั้งค่าผ่านหน้า Admin'],
     ['GEMINI_MODEL','AUTO','AUTO หรือชื่อโมเดล Gemini ที่รองรับ generateContent'],
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
@@ -605,7 +654,7 @@ function seedSettings_(ss, assets) {
     ['SCHEMA_VERSION',CONFIG.SCHEMA_VERSION,'รุ่นโครงสร้างข้อมูลถาวร']
   ];
   rows.forEach(function(r) {
-    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
+    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
   });
 }
 
@@ -865,6 +914,89 @@ function getAppBoot(sessionToken) {
     version: CONFIG.VERSION,
     systemOpen: String(settings.SYSTEM_STATUS || 'open') === 'open'
   };
+}
+
+var MASTER_TYPES = ['surveillance','disease_group','event_type','verify_status','criteria','risk','content_category'];
+
+function listMasterItems(sessionToken, type) {
+  requireAuth_(sessionToken, 'master');
+  type = String(type || '').trim();
+  if (type && MASTER_TYPES.indexOf(type) < 0) throw new Error('ประเภท MasterData ไม่ถูกต้อง');
+  return getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1).map(function(r){
+    return {
+      type:String(r[0] || ''),
+      value:String(r[1] || ''),
+      label:String(r[2] || r[1] || ''),
+      sort:Number(r[3] || 999),
+      active:String(r[4]).toLowerCase() !== 'false',
+      updatedAt:r[5] || '',
+      updatedBy:r[6] || ''
+    };
+  }).filter(function(item){ return !type || item.type === type; });
+}
+
+function saveMasterItem(sessionToken, item) {
+  var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
+  var type = String(item.type || '').trim();
+  var value = String(item.value || '').trim();
+  var label = String(item.label || value).trim();
+  var sort = Number(item.sort || 999);
+  var active = item.active !== false;
+  var originalType = String(item.originalType || '').trim();
+  var originalValue = String(item.originalValue || '').trim();
+
+  if (MASTER_TYPES.indexOf(type) < 0) throw new Error('ประเภท MasterData ไม่ถูกต้อง');
+  if (!value) throw new Error('กรุณาระบุ Value');
+  if (!label) throw new Error('กรุณาระบุ Label');
+  if (!isFinite(sort) || sort < 0) throw new Error('SortOrder ไม่ถูกต้อง');
+  if (type === 'criteria' && value === 'เข้าเกณฑ์' && !active) {
+    throw new Error('ไม่สามารถปิดใช้ค่าเข้าเกณฑ์ ซึ่งเป็นค่ามาตรฐานสำหรับ KPI');
+  }
+
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  var targetRow = 0;
+  var existingByNewKey = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var rowType = String(rows[i][0] || '');
+    var rowValue = String(rows[i][1] || '');
+    if (rowType === type && rowValue === value) existingByNewKey = i + 1;
+    if (originalType && originalValue && rowType === originalType && rowValue === originalValue) targetRow = i + 1;
+  }
+
+  if (targetRow) {
+    if (type !== originalType || value !== originalValue) throw new Error('Type และ Value ของรายการเดิมเปลี่ยนไม่ได้ กรุณาสร้างรายการใหม่');
+  } else {
+    if (existingByNewKey) throw new Error('มี MasterData Type/Value นี้อยู่แล้ว');
+    targetRow = sheet.getLastRow() + 1;
+  }
+
+  var before = targetRow <= sheet.getLastRow() ? sheet.getRange(targetRow,1,1,7).getDisplayValues()[0] : [];
+  sheet.getRange(targetRow,1,1,7).setValues([[type,value,label,sort,active,new Date(),user.email]]);
+  writeAudit_(user, originalType ? 'UPDATE_MASTER_DATA' : 'CREATE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, JSON.stringify(before), JSON.stringify(item));
+  return 'บันทึก MasterData เรียบร้อยแล้ว';
+}
+
+function disableMasterItem(sessionToken, type, value) {
+  var user = requireAuth_(sessionToken, 'master');
+  type = String(type || '').trim();
+  value = String(value || '').trim();
+  if (type === 'criteria' && value === 'เข้าเกณฑ์') throw new Error('ไม่สามารถปิดใช้ค่าเข้าเกณฑ์ ซึ่งเป็นค่ามาตรฐานสำหรับ KPI');
+
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === type && String(rows[i][1]) === value) {
+      var before = sheet.getRange(i+1,1,1,7).getDisplayValues()[0];
+      sheet.getRange(i+1,5).setValue(false);
+      sheet.getRange(i+1,6,1,2).setValues([[new Date(),user.email]]);
+      writeAudit_(user, 'DISABLE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, JSON.stringify(before), JSON.stringify({active:false}));
+      return 'ปิดใช้ MasterData เรียบร้อยแล้ว';
+    }
+  }
+  throw new Error('ไม่พบ MasterData ที่ระบุ');
 }
 
 function getMasterData() {
@@ -1489,13 +1621,160 @@ function getSystemSettings(sessionToken) {
 function saveSystemSettings(sessionToken, settingsArray) {
   var user = requireAuth_(sessionToken, 'settings');
   var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
-  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION','SCHEMA_VERSION'];
+  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION','SCHEMA_VERSION'];
   settingsArray.forEach(function(s) {
     if (!s.key || blockedKeys.indexOf(String(s.key)) >= 0) return;
     upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
   });
   writeAudit_(user, 'UPDATE_SETTINGS', CONFIG.SHEETS.SETTINGS, 'web-admin', '', JSON.stringify(settingsArray.map(function(s){return s.key;})));
   return 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว';
+}
+
+function getAttachmentFolder_() {
+  var settings = getSettingsMap_();
+  var folderId = String(settings.ATTACHMENT_FOLDER_ID || '');
+  try {
+    if (folderId) return DriveApp.getFolderById(folderId);
+  } catch (ignore) {}
+  var assets = ensureSystemAssets_(getDb_());
+  var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
+  upsertSettingDirect_(sheet, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์', true);
+  return DriveApp.getFolderById(assets.attachmentFolderId);
+}
+
+function allowedAttachmentMime_(mimeType) {
+  return [
+    'application/pdf',
+    'image/png','image/jpeg','image/webp',
+    'text/plain','text/csv',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ].indexOf(String(mimeType || '').toLowerCase()) >= 0;
+}
+
+function listEventAttachments(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, true);
+  return getSheet_(CONFIG.SHEETS.ATTACHMENTS).getDataRange().getValues().slice(1).filter(function(r){
+    return String(r[1]) === String(eventId) && String(r[8] || 'active').toLowerCase() === 'active';
+  }).map(function(r){
+    return {
+      attachmentId:r[0], eventId:r[1], fileName:r[3], mimeType:r[4], fileSize:Number(r[5] || 0),
+      description:r[7] || '', createdAt:r[9] || '', createdBy:r[10] || ''
+    };
+  });
+}
+
+function uploadEventAttachment(sessionToken, eventId, payload) {
+  var user = requireAuth_(sessionToken, 'edit');
+  payload = payload || {};
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(main, eventId, false);
+  var workflow = String(main.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
+  if (workflow === 'CLOSED') throw new Error('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเพิ่มเอกสารแนบ');
+
+  var mimeType = String(payload.mimeType || '').toLowerCase();
+  if (!allowedAttachmentMime_(mimeType)) throw new Error('ประเภทไฟล์เอกสารแนบไม่รองรับ');
+  var bytes = Utilities.base64Decode(String(payload.base64 || ''));
+  if (!bytes.length) throw new Error('ไม่พบข้อมูลไฟล์');
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) throw new Error('ไฟล์เอกสารแนบต้องมีขนาดไม่เกิน 5 MB');
+
+  var cleanName = String(payload.name || 'attachment').replace(/[^\wก-๙.\- ]+/g,'_').trim() || 'attachment';
+  var folder = getAttachmentFolder_();
+  var file = folder.createFile(Utilities.newBlob(bytes, mimeType, new Date().getTime() + '_' + cleanName));
+  // Deliberately keep Event attachments private. Do not use ANYONE_WITH_LINK.
+
+  var attachmentId = Utilities.getUuid();
+  var description = String(payload.description || '').trim();
+  getSheet_(CONFIG.SHEETS.ATTACHMENTS).appendRow([
+    attachmentId, eventId, file.getId(), cleanName, mimeType, bytes.length, file.getUrl(),
+    description, 'active', new Date(), user.email
+  ]);
+  writeAudit_(user, 'UPLOAD_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, '', JSON.stringify({eventId:eventId,fileName:cleanName,fileSize:bytes.length}));
+  return {ok:true, attachmentId:attachmentId, fileName:cleanName, message:'แนบไฟล์เรียบร้อยแล้ว'};
+}
+
+function downloadEventAttachment(sessionToken, attachmentId) {
+  requireAuth_(sessionToken, 'view');
+  var rows = getSheet_(CONFIG.SHEETS.ATTACHMENTS).getDataRange().getValues().slice(1);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(attachmentId) && String(rows[i][8] || 'active').toLowerCase() === 'active') {
+      var file = DriveApp.getFileById(String(rows[i][2]));
+      var blob = file.getBlob();
+      return {
+        fileName:String(rows[i][3] || file.getName()),
+        mimeType:String(rows[i][4] || blob.getContentType()),
+        base64:Utilities.base64Encode(blob.getBytes())
+      };
+    }
+  }
+  throw new Error('ไม่พบเอกสารแนบที่ระบุ');
+}
+
+function archiveEventAttachment(sessionToken, attachmentId) {
+  var user = requireAuth_(sessionToken, 'edit');
+  var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(attachmentId)) {
+      if (String(rows[i][8] || '').toLowerCase() === 'archived') return 'เอกสารแนบนี้ถูกเก็บเข้าคลังแล้ว';
+      sheet.getRange(i+1,9).setValue('archived');
+      writeAudit_(user, 'ARCHIVE_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, JSON.stringify({status:rows[i][8]}), JSON.stringify({status:'archived'}));
+      return 'เก็บเอกสารแนบเข้าคลังเรียบร้อยแล้ว';
+    }
+  }
+  throw new Error('ไม่พบเอกสารแนบที่ระบุ');
+}
+
+function auditArchiveKey_(row) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(row), Utilities.Charset.UTF_8);
+  return raw.map(function(b){ var v=(b<0?b+256:b).toString(16); return v.length===1?'0'+v:v; }).join('');
+}
+
+function archiveAuditLogs(sessionToken, olderThanDays) {
+  var user = requireAuth_(sessionToken, 'audit');
+  var days = Number(olderThanDays);
+  if (!isFinite(days) || days < 1 || Math.floor(days) !== days) throw new Error('จำนวนวันที่สำหรับ Archive ไม่ถูกต้อง');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var active = getSheet_(CONFIG.SHEETS.AUDIT);
+    var archive = getSheet_(CONFIG.SHEETS.AUDIT_ARCHIVE);
+    var rows = active.getDataRange().getValues();
+    if (rows.length <= 1) return 'ไม่มี Audit Logs สำหรับ Archive';
+
+    var existingKeys = {};
+    archive.getDataRange().getValues().slice(1).forEach(function(r){ if (r[0]) existingKeys[String(r[0])] = true; });
+    var cutoff = new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
+    var move = [];
+
+    for (var i = 1; i < rows.length; i++) {
+      var ts = rows[i][0] instanceof Date ? rows[i][0] : new Date(rows[i][0]);
+      if (isNaN(ts.getTime()) || ts >= cutoff) continue;
+      var key = auditArchiveKey_(rows[i]);
+      move.push({rowNumber:i+1,key:key,row:rows[i]});
+    }
+
+    if (!move.length) return 'ไม่มี Audit Logs ที่เก่ากว่าเกณฑ์';
+
+    var now = new Date();
+    var appendRows = move.filter(function(x){ return !existingKeys[x.key]; }).map(function(x){
+      return [x.key].concat(x.row).concat([now,user.email]);
+    });
+    if (appendRows.length) {
+      archive.getRange(archive.getLastRow()+1,1,appendRows.length,12).setValues(appendRows);
+    }
+
+    for (var j = move.length - 1; j >= 0; j--) active.deleteRow(move[j].rowNumber);
+    writeAudit_(user, 'ARCHIVE_AUDIT_LOGS', CONFIG.SHEETS.AUDIT_ARCHIVE, String(move.length), '', JSON.stringify({olderThanDays:days,archived:move.length}));
+    return 'Archive Audit Logs จำนวน ' + move.length + ' รายการเรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function listAuditLogs(sessionToken, limit) {
