@@ -3184,6 +3184,95 @@ function appendReportRegistry_(record) {
   return reportId;
 }
 
+function deriveReportReadiness_(event) {
+  event = event || {};
+  var warnings = [];
+
+  function add_(code, category, field, message) {
+    warnings.push({
+      code:code,
+      category:category,
+      field:field,
+      message:message
+    });
+  }
+
+  function missing_(value) {
+    return String(value || '').trim() === '';
+  }
+
+  var hasLocation = [
+    event.col8,
+    event.col29,
+    event.col10,
+    event.col11,
+    event.col12,
+    event.col13
+  ].some(function(v){ return !missing_(v); });
+
+  if (missing_(event.col2)) {
+    add_('MISSING_RECEIVED_DATE', 'core', 'col2', 'ยังไม่มีวันรับแจ้งเหตุการณ์');
+  }
+  if (missing_(event.col6)) {
+    add_('MISSING_DISEASE_EVENT', 'core', 'col6', 'ยังไม่ได้ระบุโรค/ภัย/เหตุการณ์');
+  }
+  if (!hasLocation) {
+    add_('MISSING_LOCATION_CONTEXT', 'core', 'location', 'ยังไม่มีข้อมูลสถานที่หรือพื้นที่เกิดเหตุ');
+  }
+  if (missing_(event.col14)) {
+    add_('MISSING_EVENT_DETAILS', 'core', 'col14', 'ยังไม่มีรายละเอียดเหตุการณ์สำหรับใช้สรุปในรายงาน');
+  }
+
+  if (missing_(event.col3)) {
+    add_('MISSING_REPORTER', 'quality', 'col3', 'ยังไม่มีผู้แจ้งข่าว/หน่วยงานที่แจ้ง');
+  }
+  if (missing_(event.col9)) {
+    add_('MISSING_ONSET_DATE', 'quality', 'col9', 'ยังไม่มีวันที่เริ่มป่วย/เริ่มเหตุการณ์');
+  }
+  if (missing_(event.col15)) {
+    add_('MISSING_VERIFICATION', 'quality', 'col15', 'ยังไม่มีผลการตรวจสอบเหตุการณ์');
+  }
+  if (missing_(event.col17) || String(event.col17 || '').trim() === 'รอดำเนินการ') {
+    add_('MISSING_OR_PENDING_CRITERIA', 'quality', 'col17', 'เกณฑ์สอบสวนโรคยังไม่ชัดเจนหรือยังรอดำเนินการ');
+  }
+  if (missing_(event.col20) && missing_(event.col23)) {
+    add_('MISSING_COORDINATION_AGENCY', 'quality', 'col20,col23', 'ยังไม่มีหน่วยงานแจ้งเตือนหรือหน่วยงานรับแจ้งสำหรับอ้างอิงในรายงาน');
+  }
+  if (missing_(event.col21)) {
+    add_('MISSING_CONTROL_MEASURES', 'quality', 'col21', 'ยังไม่มีข้อมูลกิจกรรม/มาตรการควบคุมโรคที่ดำเนินการแล้ว');
+  }
+  if (missing_(event.col24)) {
+    add_('MISSING_INVESTIGATION_DECISION', 'quality', 'col24', 'ยังไม่ได้ระบุว่าจะลงสอบสวนโรคหรือไม่');
+  }
+  if (isInvestigationCriteriaMet_(String(event.col17 || '').trim()) && missing_(event.col26)) {
+    add_('MISSING_INVESTIGATION_DATE', 'quality', 'col26', 'เหตุการณ์เข้าเกณฑ์สอบสวน แต่ยังไม่มีวันที่ลงสอบสวนโรค');
+  }
+
+  deriveEventConsistencyWarnings_(event).forEach(function(w) {
+    add_('CONSISTENCY_' + String(w.code || 'WARNING'), 'consistency', '', String(w.message || 'พบข้อมูลเหตุการณ์ที่ไม่สอดคล้องกัน'));
+  });
+
+  var hasCoreWarning = warnings.some(function(w){ return w.category === 'core'; });
+  return {
+    status: hasCoreWarning ? 'limited' : (warnings.length ? 'review' : 'ready'),
+    warningCount: warnings.length,
+    warnings: warnings
+  };
+}
+
+function getReportReadiness(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var row = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+  var event = rowToObject_(row);
+  var readiness = deriveReportReadiness_(event);
+  readiness.eventId = event.eventId;
+  readiness.revision = event.revision;
+  readiness.recordStatus = event.recordStatus;
+  return readiness;
+}
+
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
