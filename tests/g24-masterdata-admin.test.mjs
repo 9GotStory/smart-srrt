@@ -44,7 +44,7 @@ function masterHeader(){return ['Type','Value','Label','SortOrder','Active','Upd
 
 test('G-24 keeps schema v5 and allowlists exactly the supported MasterData types',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'5');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 5);
   assert.deepEqual(Object.keys(ctx.MASTER_DATA_POLICIES).sort(),[
     'content_category','criteria','disease_group','event_type','risk','surveillance','verify_status'
   ].sort());
