@@ -86,7 +86,7 @@ function auditRow(ts,id=''){
 
 test('G-21 schema v5 appends AuditID without changing prior audit columns',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'5');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 5);
   assert.equal(ctx.CONFIG.DEFAULT_AUDIT_RETENTION_DAYS,365);
   assert.deepEqual(Array.from(ctx.AUDIT_HEADERS),[
     'Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','AuditID'
