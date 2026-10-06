@@ -410,7 +410,7 @@ function migrateP1EventIdentity() {
       'สร้าง EventID ใหม่: ' + summary.backfilledIds,
       'กำหนด Revision เริ่มต้น: ' + summary.initializedRevision,
       'กำหนด RecordStatus เริ่มต้น: ' + summary.initializedStatus,
-      'Schema version: ' + CONFIG.SCHEMA_VERSION
+      'Schema version: 2'
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
     return message;
@@ -849,7 +849,7 @@ function registerUser(payload) {
 }
 
 function publicUser_(u) {
-  return {name:u.name, email:u.email, role:u.role, status:u.status, org:u.org, tambon:u.tambon, amphoe:u.amphoe, province:u.province};
+  return {userId:u.userId, name:u.name, email:u.email, role:u.role, status:u.status, org:u.org, tambon:u.tambon, amphoe:u.amphoe, province:u.province};
 }
 
 function getAppBoot(sessionToken) {
@@ -995,8 +995,8 @@ function rowToObject_(row) {
   var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
   var meta = getEventMetaFromRow_(row);
-  // P1 exposes only metadata required for browser identity/concurrency.
-  // Created/void audit metadata remains server-side until a later authenticated contract needs it.
+  // Raw Event projection is authenticated (P2). Expose only lifecycle metadata
+  // required by the record UI; detailed void metadata remains server-side.
   obj.eventId = meta.eventId;
   obj.revision = meta.revision;
   obj.recordStatus = meta.recordStatus;
