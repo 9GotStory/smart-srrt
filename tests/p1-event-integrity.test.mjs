@@ -138,7 +138,11 @@ test('P1 schema is additive after the legacy 30 business columns', () => {
     Array.from(ctx.EVENT_META_HEADERS),
     ['EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason']
   );
-  assert.equal(ctx.MAIN_SCHEMA_HEADERS.length, 38);
+  assert.ok(ctx.MAIN_SCHEMA_HEADERS.length >= 38);
+  assert.deepEqual(
+    Array.from(ctx.MAIN_SCHEMA_HEADERS.slice(0, 38)),
+    [...Array.from(ctx.MAIN_HEADERS), ...Array.from(ctx.EVENT_META_HEADERS)]
+  );
   assert.equal(ctx.EVENT_META_COL.EVENT_ID, 31);
   assert.equal(ctx.EVENT_META_COL.VOID_REASON, 38);
 });
