@@ -120,7 +120,7 @@ function makeContext(uuidStart = 1) {
 
 test('source and browser contracts use EventID rather than rowNumber for Event operations', () => {
   assert.match(source, /function updateRecord\(sessionToken, eventId, formData, expectedRevision\)/);
-  assert.match(source, /function deleteRecord\(sessionToken, eventId, voidReason\)/);
+  assert.match(source, /function deleteRecord\(sessionToken, eventId, voidReason, expectedRevision\)/);
   assert.match(source, /function generateReportFromWeb\(sessionToken, eventId\)/);
   assert.match(source, /function findEventRowById_/);
   const deleteBlock = source.match(/function deleteRecord[\s\S]*?(?=\nfunction )/)?.[0] ?? '';
@@ -238,7 +238,7 @@ test('deleteRecord voids the Event and preserves the physical row', () => {
   ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
 
   const beforeRows=sheet.getLastRow();
-  const msg=ctx.deleteRecord('token',id,'ข้อมูลซ้ำ');
+  const msg=ctx.deleteRecord('token',id,'ข้อมูลซ้ำ',1);
   assert.match(msg,/ยกเลิก/);
   assert.equal(sheet.getLastRow(),beforeRows);
   assert.equal(sheet.rows[1][31],2);
@@ -261,4 +261,47 @@ test('rowToObject exposes stable metadata but not physical rowNumber', () => {
   assert.equal(obj.revision,7);
   assert.equal(obj.recordStatus,'active');
   assert.equal(Object.hasOwn(obj,'rowNumber'),false);
+  assert.equal(Object.hasOwn(obj,'createdBy'),false);
+  assert.equal(Object.hasOwn(obj,'voidedBy'),false);
+  assert.equal(Object.hasOwn(obj,'voidReason'),false);
+});
+
+test('updateRecord requires expected Revision', () => {
+  const ctx = makeContext();
+  const id='66666666-6666-4666-8666-666666666666';
+  const row=makeRow();
+  row[30]=id; row[31]=2; row[32]='active';
+  const sheet=new FakeSheet([Array(38).fill(''),row]);
+  ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
+  ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.writeAudit_=()=>{};
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  assert.throws(
+    () => ctx.updateRecord('token',id,{col2:'2569-10-08'}),
+    /ไม่พบ Revision/
+  );
+  assert.equal(sheet.rows[1][31],2);
+});
+
+test('deleteRecord rejects a stale or missing Revision before voiding', () => {
+  const ctx = makeContext();
+  const id='77777777-7777-4777-8777-777777777777';
+  const row=makeRow();
+  row[30]=id; row[31]=3; row[32]='active';
+  const sheet=new FakeSheet([Array(38).fill(''),row]);
+  ctx.requireAuth_=()=>({email:'manager@example.test',role:'Manager'});
+  ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.writeAudit_=()=>{};
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+
+  assert.throws(
+    () => ctx.deleteRecord('token',id,'ข้อมูลซ้ำ'),
+    /ไม่พบ Revision/
+  );
+  assert.throws(
+    () => ctx.deleteRecord('token',id,'ข้อมูลซ้ำ',2),
+    /ถูกแก้ไขจากผู้ใช้อื่นแล้ว/
+  );
+  assert.equal(sheet.rows[1][31],3);
+  assert.equal(sheet.rows[1][32],'active');
 });
