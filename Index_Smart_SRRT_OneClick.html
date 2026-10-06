@@ -229,6 +229,12 @@
   <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
 </div></div>
 
+<div class="modal" id="reportHistoryModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-file-lines"></i> รายงานที่สร้างจากเหตุการณ์นี้</div>
+  <div id="reportHistoryList" class="content-list"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
+</div></div>
+
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
   <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
@@ -424,7 +430,7 @@
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(ownerName(r.ownerUserId))}</td><td>${escapeHtml(workflowBadge(r.workflowStatus,r.consistencyWarnings||[]))}</td><td>${escapeHtml(r.col27||'-')}</td><td>${primary}${voidBtn}</td></tr>`
     }).join('')||'<tr><td colspan="6">ไม่มีข้อมูล</td></tr>';
 
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> <button class="btn light" onclick='openReportHistory(${JSON.stringify(r.eventId||"")})'>ประวัติรายงาน</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
@@ -564,8 +570,28 @@
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
-    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> ตรวจความพร้อม';
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังตรวจความพร้อมของข้อมูล...</p>');
+      const readiness=await gs('getReportReadiness',token,eventId);
+      if(readiness.warnings&&readiness.warnings.length){
+        const proceed=confirm('ข้อมูลสำหรับรายงานยังมีข้อสังเกต:\n\n- '+readiness.warnings.join('\n- ')+'\n\nต้องการสร้างร่างรายงานเบื้องต้นต่อหรือไม่?');
+        if(!proceed){if(w)w.close();return}
+      }
+      btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';
+      if(w){w.document.body.innerHTML='<p style="font-family:sans-serif">กำลังสร้างร่างรายงาน AI...</p>'}
+      const r=await gs('generateReportFromWeb',token,eventId);
+      if(w)w.location=r.url;else window.open(r.url,'_blank');
+      const warningText=(r.readinessWarnings||[]).length?' · มี readiness warning '+r.readinessWarnings.length+' รายการ':'';
+      toast('สร้างร่างรายงานเรียบร้อยแล้ว · '+(r.model||'AI')+' · '+(r.promptVersion||'')+warningText)
+    }catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+  }
+  async function openReportHistory(eventId){
+    try{
+      const rows=await gs('listEventReports',token,eventId);
+      el('reportHistoryList').innerHTML=rows.map(r=>`<div class="content-item"><h4>รายงาน ${escapeHtml(r.reportId)}</h4><p>สร้างโดย ${escapeHtml(r.generatedBy||'-')}<br>Model: ${escapeHtml(r.geminiModel||'-')} · Prompt: ${escapeHtml(r.promptVersion||'-')}<br>${(r.readinessWarnings||[]).length?'Warnings: '+escapeHtml(r.readinessWarnings.join(' | ')):'Readiness: ไม่มีคำเตือน'}</p><a href="${escapeHtml(r.documentUrl)}" target="_blank" rel="noopener noreferrer">เปิด Google Docs <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>`).join('')||'<div class="help">ยังไม่มีรายงานที่สร้างจากเหตุการณ์นี้</div>';
+      openModal('reportHistoryModal')
+    }catch(e){toast(e.message||e)}
   }
 
   async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
