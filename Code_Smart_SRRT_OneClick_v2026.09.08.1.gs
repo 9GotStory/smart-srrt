@@ -3224,11 +3224,13 @@ function deriveReportReadiness_(event) {
     : deriveEventConsistencyWarnings_(event);
 
   consistency.forEach(function(w) {
+    var message = String(w.message || 'ข้อมูลเหตุการณ์มีความไม่สอดคล้องกัน');
+    if (warnings.some(function(existing){ return existing.message === message; })) return;
     warnings.push({
       code:'CONSISTENCY_' + String(w.code || 'WARNING'),
       field:'',
       severity:'important',
-      message:String(w.message || 'ข้อมูลเหตุการณ์มีความไม่สอดคล้องกัน')
+      message:message
     });
   });
 
