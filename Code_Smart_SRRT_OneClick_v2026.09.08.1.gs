@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '5',
+  SCHEMA_VERSION: '6',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -100,6 +100,9 @@ var AUDIT_COL = {
   AUDIT_ID: 10
 };
 
+var VISIT_HEADERS = ['Timestamp','EntryPoint','LegacyRequestParams'];
+var VISIT_LEGACY_HEADERS = ['Timestamp','Page','UserAgent'];
+
 var MASTER_DATA_POLICIES = {
   surveillance: {
     label:'การเฝ้าระวัง',
@@ -169,7 +172,7 @@ function doGet(e) {
     .setTitle(title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  logVisit_(e);
+  logVisit_();
   return output;
 }
 
@@ -186,6 +189,7 @@ function onOpen() {
       .addItem('อัปเกรด Event Owner', 'migrateG05EventOwner')
       .addItem('อัปเกรด Event Attachments', 'migrateG11EventAttachments')
       .addItem('อัปเกรด Audit Retention', 'migrateG21AuditRetention')
+      .addItem('อัปเกรด VisitLogs', 'migrateG29VisitLogs')
       .addItem('จัดเก็บ Audit เก่า', 'archiveAuditLogsFromSheetMenu')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
@@ -232,7 +236,7 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
     ensureEventAttachmentSheet_(ss);
     var auditMigration = ensureAuditSchema_(ss);
-    ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','UserAgent']);
+    var visitMigration = ensureVisitLogSchema_(ss);
 
     var assets = ensureSystemAssets_(ss);
     seedSettings_(ss, assets);
@@ -257,6 +261,7 @@ function installSmartSRRTCore_() {
       'โฟลเดอร์ระบบและ Template รายงานถูกสร้างให้อัตโนมัติ',
       'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
       'Audit identity: backfilled ' + auditMigration.backfilledIds + ', retention ' + getAuditRetentionDays_() + ' วัน',
+      'VisitLogs: rows ' + visitMigration.rows + ', legacy headers ' + (visitMigration.migratedLegacyHeaders ? 'migrated' : 'ok'),
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -450,6 +455,63 @@ function ensureSheet_(ss, name, headers) {
     if (changed || current.join('') === '') sheet.getRange(1, 1, 1, headers.length).setValues([patched]);
   }
   return sheet;
+}
+
+function ensureVisitLogSchema_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.VISITS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.VISITS);
+    sheet.appendRow(VISIT_HEADERS);
+    return {sheet:sheet, rows:0, migratedLegacyHeaders:false};
+  }
+
+  if (sheet.getMaxColumns() < VISIT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), VISIT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(VISIT_HEADERS);
+    return {sheet:sheet, rows:0, migratedLegacyHeaders:false};
+  }
+
+  var current = sheet.getRange(1, 1, 1, VISIT_HEADERS.length).getValues()[0];
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  var migratedLegacyHeaders = false;
+  var patched = current.slice();
+
+  for (var i = 0; i < VISIT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = VISIT_HEADERS[i];
+    var legacy = VISIT_LEGACY_HEADERS[i];
+
+    if (actual === expected) continue;
+    if (actual === legacy) {
+      patched[i] = expected;
+      migratedLegacyHeaders = true;
+      continue;
+    }
+
+    if (!actual) {
+      if (rowCount > 0) {
+        var values = sheet.getRange(2, i + 1, rowCount, 1).getValues();
+        for (var r = 0; r < values.length; r++) {
+          if (String(values[r][0] || '').trim() !== '') {
+            throw new Error('ไม่สามารถอัปเกรด VisitLogs ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แต่หัวข้อว่าง');
+          }
+        }
+      }
+      patched[i] = expected;
+      continue;
+    }
+
+    throw new Error('ไม่สามารถอัปเกรด VisitLogs ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" ซึ่งไม่ใช่ schema ที่รองรับ');
+  }
+
+  if (patched.join('\u0001') !== current.map(function(v){return String(v || '').trim();}).join('\u0001')) {
+    sheet.getRange(1, 1, 1, VISIT_HEADERS.length).setValues([patched]);
+  }
+
+  return {sheet:sheet, rows:rowCount, migratedLegacyHeaders:migratedLegacyHeaders};
 }
 
 function ensureAuditSchema_(ss) {
@@ -701,6 +763,40 @@ function migrateG21AuditRetention() {
       'สร้าง AuditID ใหม่: ' + audit.backfilledIds,
       'Retention เริ่มต้น: ' + getAuditRetentionDays_() + ' วัน',
       'Archive spreadsheet พร้อมใช้งาน',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG29VisitLogs() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var visit = ensureVisitLogSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 6);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+
+    var message = [
+      'อัปเกรด VisitLogs เรียบร้อยแล้ว',
+      'จำนวน Visit rows เดิม: ' + visit.rows,
+      'ปรับชื่อหัวข้อ legacy: ' + (visit.migratedLegacyHeaders ? 'ใช่' : 'ไม่'),
+      'รายการใหม่จะไม่เก็บ request parameter values',
       'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
@@ -2930,9 +3026,9 @@ function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValu
   } catch(e) {}
 }
 
-function logVisit_(e) {
+function logVisit_() {
   try {
-    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', JSON.stringify(e && e.parameter ? e.parameter : {})]);
+    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', '']);
   } catch(err) {}
 }
 
