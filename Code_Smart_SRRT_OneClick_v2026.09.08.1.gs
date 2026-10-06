@@ -3155,6 +3155,111 @@ function exportData(sessionToken, format) {
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
 
+function deriveReportReadiness_(event) {
+  event = event || {};
+  var warnings = [];
+
+  function missing_(code, field, message, severity) {
+    warnings.push({
+      code:code,
+      field:field,
+      severity:severity || 'recommended',
+      message:message
+    });
+  }
+
+  function blank_(value) {
+    return String(value || '').trim() === '';
+  }
+
+  if (blank_(event.col2)) {
+    missing_('MISSING_RECEIVED_DATE', 'col2', 'ยังไม่มีวันรับแจ้ง', 'important');
+  }
+  if (blank_(event.col3)) {
+    missing_('MISSING_REPORTER', 'col3', 'ยังไม่มีผู้แจ้งข่าว/หน่วยงานที่แจ้ง', 'important');
+  }
+  if (blank_(event.col6)) {
+    missing_('MISSING_DISEASE_EVENT', 'col6', 'ยังไม่มีโรค/ภัย/เหตุการณ์', 'important');
+  }
+
+  var hasLocation = [event.col8,event.col29,event.col10,event.col11,event.col12,event.col13]
+    .some(function(v){ return !blank_(v); });
+  if (!hasLocation) {
+    missing_('MISSING_LOCATION', 'location', 'ยังไม่มีข้อมูลสถานที่หรือพื้นที่เกิดเหตุ', 'important');
+  }
+
+  if (blank_(event.col14)) {
+    missing_('MISSING_EVENT_DETAIL', 'col14', 'ยังไม่มีรายละเอียดเหตุการณ์สำหรับใช้สร้างเนื้อหารายงาน', 'important');
+  }
+
+  if (blank_(event.col9)) {
+    missing_('MISSING_ONSET_DATE', 'col9', 'ยังไม่มีวันที่เริ่มป่วย', 'recommended');
+  }
+  if (blank_(event.col15)) {
+    missing_('MISSING_VERIFICATION', 'col15', 'ยังไม่มีผลการตรวจสอบเหตุการณ์', 'recommended');
+  }
+  if (blank_(event.col17)) {
+    missing_('MISSING_CRITERIA', 'col17', 'ยังไม่มีผลประเมินเกณฑ์สอบสวนโรค', 'recommended');
+  }
+  if (blank_(event.col19)) {
+    missing_('MISSING_RISK', 'col19', 'ยังไม่มีผลประเมินความเสี่ยงแจ้งเตือน', 'recommended');
+  }
+  if (blank_(event.col20)) {
+    missing_('MISSING_ALERT_AGENCY', 'col20', 'ยังไม่มีหน่วยงานแจ้งเตือน', 'recommended');
+  }
+  if (blank_(event.col23)) {
+    missing_('MISSING_RECEIVE_AGENCY', 'col23', 'ยังไม่มีหน่วยงานรับแจ้ง', 'recommended');
+  }
+  if (blank_(event.col21)) {
+    missing_('MISSING_CONTROL_MEASURES', 'col21', 'ยังไม่มีข้อมูลการดำเนินการตามมาตรการ', 'recommended');
+  }
+
+  var investigationDecision = String(event.col24 || '').trim();
+  if (investigationDecision === 'ลงสอบสวน' && blank_(event.col26)) {
+    missing_('MISSING_INVESTIGATION_DATE', 'col26', 'ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค', 'recommended');
+  }
+
+  var consistency = Array.isArray(event.eventConsistencyWarnings)
+    ? event.eventConsistencyWarnings
+    : deriveEventConsistencyWarnings_(event);
+
+  consistency.forEach(function(w) {
+    warnings.push({
+      code:'CONSISTENCY_' + String(w.code || 'WARNING'),
+      field:'',
+      severity:'important',
+      message:String(w.message || 'ข้อมูลเหตุการณ์มีความไม่สอดคล้องกัน')
+    });
+  });
+
+  var importantCount = warnings.filter(function(w){ return w.severity === 'important'; }).length;
+  var recommendedCount = warnings.length - importantCount;
+
+  return {
+    status:warnings.length ? 'review_recommended' : 'ready',
+    canGenerate:true,
+    warningCount:warnings.length,
+    importantCount:importantCount,
+    recommendedCount:recommendedCount,
+    warnings:warnings
+  };
+}
+
+function getReportReadiness(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var row = sheet.getRange(rowNumber, 1, 1, Math.max(MAIN_SCHEMA_HEADERS.length, EVENT_OWNER_COL)).getDisplayValues()[0];
+  var event = rowToObject_(row);
+  var readiness = deriveReportReadiness_(event);
+  readiness.eventId = event.eventId;
+  readiness.sourceRevision = event.revision;
+  readiness.eventLifecycle = event.eventLifecycle;
+  readiness.eventLifecycleLabel = event.eventLifecycleLabel;
+  readiness.promptVersion = CONFIG.REPORT_PROMPT_VERSION;
+  return readiness;
+}
+
 function appendReportRegistry_(record) {
   record = record || {};
   var reportId = String(record.reportId || '').trim();
