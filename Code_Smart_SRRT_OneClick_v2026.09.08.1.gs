@@ -402,7 +402,7 @@ function migrateP1EventIdentity() {
     var ss = getDb_();
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var summary = ensureEventIdentityData_(sheet);
-    var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     setSchemaVersionAtLeast_(settings, 2);
     var message = [
       'อัปเกรด Event identity เรียบร้อยแล้ว',
@@ -507,7 +507,7 @@ function migrateP3Workflow() {
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     ensureEventIdentityData_(sheet);
     var summary = ensureWorkflowData_(sheet);
-    var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     setSchemaVersionAtLeast_(settings, 3);
     var message = [
       'อัปเกรด Workflow / Owner เรียบร้อยแล้ว',
