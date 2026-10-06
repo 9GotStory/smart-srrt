@@ -223,7 +223,13 @@ test('browser checks readiness before generation and lets the user continue or c
 });
 
 test('G-26 introduces no readiness score or percentage contract',()=>{
+  const ctx=makeContext();
+  const out=ctx.deriveReportReadiness_(completeEvent());
+  assert.equal(Object.hasOwn(out,'score'),false);
+  assert.equal(Object.hasOwn(out,'percentage'),false);
+  assert.equal(Object.hasOwn(out,'percent'),false);
+  assert.deepEqual(Object.keys(out).sort(),['status','warningCount','warnings'].sort());
+
   const derive=fnBlock(source,'deriveReportReadiness_');
-  assert.doesNotMatch(derive,/score|percentage|percent|%/i);
   assert.match(derive,/status: hasCoreWarning \? 'limited' : \(warnings\.length \? 'review' : 'ready'\)/);
 });
