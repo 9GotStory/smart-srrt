@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    :root{
+      --primary:#0f766e;--secondary:#2563eb;--accent:#f59e0b;--danger:#dc2626;--ok:#16a34a;
+      --bg:#eef4f7;--card:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;
+      --sidebar:285px;--radius:20px;--shadow:0 16px 42px rgba(15,23,42,.10)
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Prompt',sans-serif;background:linear-gradient(135deg,#effaf8 0%,#f5f7fb 55%,#eef2ff 100%);color:var(--text)}
+    button,input,select,textarea{font-family:'Prompt',sans-serif}
+    .app{display:flex;min-height:100vh}
+    .sidebar{width:var(--sidebar);background:linear-gradient(180deg,#073b3a,var(--primary) 55%,#115e59);color:#fff;padding:22px 18px;position:fixed;inset:0 auto 0 0;z-index:20;box-shadow:10px 0 30px rgba(15,23,42,.18);overflow:auto}
+    .brand{display:flex;gap:12px;align-items:center;padding:8px 6px 20px;border-bottom:1px solid rgba(255,255,255,.18)}
+    .brand img{width:58px;height:58px;object-fit:contain;background:#fff;border-radius:16px;padding:5px}.brand h1{font-size:17px;line-height:1.25;margin:0;font-weight:700}.brand p{margin:3px 0 0;font-size:12px;opacity:.85}
+    .nav{margin-top:20px;display:grid;gap:8px}.nav button{border:0;background:transparent;color:#dff7f3;text-align:left;padding:13px 14px;border-radius:15px;cursor:pointer;font-weight:500;display:flex;gap:12px;align-items:center;font-size:14px}.nav button:hover,.nav button.active{background:rgba(255,255,255,.16);color:#fff}.nav .auth-only,.nav .manager-only{display:none}
+    .auth-card{margin-top:22px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:18px;padding:13px;font-size:12px}.auth-card b{display:block;font-size:13px}.auth-card span{display:block;word-break:break-word}.auth-card button{margin-top:9px;width:100%;border:0;border-radius:12px;padding:9px;background:#fff;color:var(--primary);font-weight:700;cursor:pointer}
+    .main{margin-left:var(--sidebar);width:calc(100% - var(--sidebar));padding:24px}.topbar{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}.hamb{display:none;border:0;background:#fff;border-radius:14px;padding:10px 12px;box-shadow:var(--shadow)}
+    .banner{background:rgba(255,255,255,.86);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.8);box-shadow:var(--shadow);border-radius:var(--radius);padding:20px;display:flex;align-items:center;justify-content:space-between;gap:18px}.banner h2{margin:0;font-size:25px;color:var(--primary)}.banner p{margin:4px 0 0;color:var(--muted)}.banner .pill{background:#ecfeff;color:#155e75;border:1px solid #a5f3fc;padding:9px 13px;border-radius:999px;font-weight:600;white-space:nowrap}
+    .section{display:none}.section.active{display:block}.grid{display:grid;gap:16px}.kpis{grid-template-columns:repeat(4,minmax(150px,1fr));margin:18px 0}.card{background:var(--card);border:1px solid rgba(226,232,240,.9);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}.kpi i{font-size:23px;color:var(--primary);background:#ccfbf1;padding:11px;border-radius:15px}.kpi .num{font-size:32px;font-weight:800;margin-top:10px;color:var(--primary)}.kpi .label{color:var(--muted);font-size:13px}
+    .filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.input{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;min-height:42px}.btn{border:0;border-radius:12px;padding:10px 14px;color:#fff;background:var(--primary);font-weight:700;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center}.btn.secondary{background:var(--secondary)}.btn.gray{background:#64748b}.btn.orange{background:#f59e0b}.btn.red{background:#dc2626}.btn.green{background:#16a34a}.btn.light{background:#f1f5f9;color:#0f172a;border:1px solid var(--line)}.btn:disabled{opacity:.55;cursor:not-allowed}
+    .charts{grid-template-columns:1fr 1fr}.chart{height:330px}.table-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line)}table{width:100%;border-collapse:collapse;background:#fff;white-space:nowrap}th{background:var(--primary);color:#fff;text-align:left;padding:11px;font-size:12px}td{padding:10px;border-bottom:1px solid #e5e7eb;font-size:12px;vertical-align:top}tr:hover td{background:#f8fafc}
+    .status{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:700;display:inline-block}.st-high{background:#fee2e2;color:#991b1b}.st-mid{background:#fef3c7;color:#92400e}.st-low{background:#dcfce7;color:#166534}.insight{background:linear-gradient(135deg,#fff7ed,#fffbeb);border-left:7px solid var(--accent)}
+    .panel-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0}.panel-head h3{margin:0;color:var(--primary);font-size:21px}.form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.fg label{display:block;font-weight:700;color:#115e59;margin-bottom:6px;font-size:13px}.fg input,.fg select,.fg textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}.span-3{grid-column:span 3}.actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+    .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:60;overflow:auto;padding:30px}.modal.open{display:block}.modal-box{background:#fff;max-width:1080px;margin:auto;border-radius:22px;box-shadow:0 25px 80px rgba(0,0,0,.25);padding:22px}.modal-sm{max-width:460px}.modal-title{font-size:21px;font-weight:800;color:var(--primary);border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:16px}
+    .toast{position:fixed;right:18px;bottom:18px;z-index:90;background:#0f172a;color:#fff;padding:14px 16px;border-radius:14px;display:none;box-shadow:var(--shadow);max-width:430px}.toast.show{display:block}
+    .content-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.content-item{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff}.content-item h4{margin:0 0 5px;color:var(--primary)}.content-item p{margin:0 0 10px;color:var(--muted);font-size:12px}.content-item a{color:var(--secondary);font-weight:700;text-decoration:none}
+    .closed{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;border-radius:16px;padding:14px;margin-bottom:14px;font-weight:700}.help{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:14px;padding:12px;font-size:12px;line-height:1.65}.logo-preview{display:flex;align-items:center;gap:14px;padding:12px;border:1px dashed var(--line);border-radius:14px;margin:10px 0}.logo-preview img{width:80px;height:80px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.setting-group{border:1px solid var(--line);border-radius:16px;padding:14px}.setting-group h4{margin:0 0 12px;color:var(--primary)}.mini{font-size:11px;color:var(--muted)}.progress{display:none;margin-top:10px;color:var(--primary);font-weight:700}.progress.show{display:block}
+    .mobile-overlay{display:none}
+    @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.settings-grid{grid-template-columns:1fr}}
+    @media(max-width:980px){.sidebar{transform:translateX(-105%);transition:.25s}.sidebar.open{transform:none}.mobile-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}.main{margin-left:0;width:100%;padding:16px}.hamb{display:block}.topbar{align-items:stretch}.banner{flex-direction:column;align-items:flex-start}.charts{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span-3{grid-column:span 1}.chart{height:285px}}
+    @media(max-width:560px){.kpis{grid-template-columns:1fr}.kpi .num{font-size:28px}.banner h2{font-size:21px}.modal{padding:10px}.filter .input,.filter .btn{width:100%}.panel-head{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+<div class="mobile-overlay" id="overlay" onclick="toggleSidebar(false)"></div>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><img id="logoImg" src="" alt="logo"><div><h1 id="sideTitle">Smart SRRT</h1><p id="sideOrg">District Edition</p></div></div>
+    <div class="nav">
+      <button class="active" data-page="dashboard" onclick="showPage('dashboard',this)"><i class="fa-solid fa-chart-line"></i>Dashboard</button>
+      <button class="auth-only" data-page="records" onclick="showPage('records',this)"><i class="fa-solid fa-pen-to-square"></i>บันทึก/แก้ไขข้อมูล</button>
+      <button class="auth-only" data-page="reporter" onclick="showPage('reporter',this)"><i class="fa-solid fa-file-medical"></i>สร้างรายงานสอบสวนโรค</button>
+      <button class="manager-only" data-page="admin" onclick="showPage('admin',this)"><i class="fa-solid fa-gears"></i>การจัดการระบบ</button>
+      <button data-page="library" onclick="showPage('library',this)"><i class="fa-solid fa-book-medical"></i>ประกาศ/แนวทาง/คู่มือ</button>
+    </div>
+    <div class="auth-card" id="authBox"><b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard ได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="hamb" onclick="toggleSidebar(true)"><i class="fa-solid fa-bars"></i></button>
+      <div class="banner" style="flex:1"><div><h2 id="appName">Smart SRRT Dashboard & AI Reporter</h2><p id="appSubtitle">ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่</p></div><div class="pill" id="bannerText"><i class="fa-solid fa-bullhorn"></i> ระบบพร้อมใช้งาน</div></div>
+    </div>
+    <div id="closedBox" class="closed" style="display:none"><i class="fa-solid fa-triangle-exclamation"></i> ระบบถูกปิดการบันทึกและสร้างรายงานชั่วคราว ขณะนี้ยังดู Dashboard ได้</div>
+
+    <section id="page-dashboard" class="section active">
+      <div id="captureArea">
+        <div class="filter card">
+          <b><i class="fa-solid fa-filter"></i> ตัวกรอง</b>
+          <input class="input" type="date" id="startDate" title="วันที่เริ่มต้น">
+          <input class="input" type="date" id="endDate" title="วันที่สิ้นสุด">
+          <select class="input" id="filterProvince" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select>
+          <select class="input" id="filterAmphoe" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select>
+          <select class="input" id="filterTambon" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select>
+          <select class="input" id="filterVillage"><option value="">ทุกหมู่บ้าน</option></select>
+          <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
+          <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
+          <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
+        </div>
+        <div class="grid kpis">
+          <div class="card kpi"><i class="fa-solid fa-bell"></i><div class="num" id="kpiTotal">0</div><div class="label">เหตุการณ์ทั้งหมด</div></div>
+          <div class="card kpi"><i class="fa-solid fa-user-doctor"></i><div class="num" id="kpiCriteria">0</div><div class="label">เข้าเกณฑ์สอบสวนโรค</div></div>
+          <div class="card kpi"><i class="fa-solid fa-shield-virus"></i><div class="num" id="kpiInvestigated">0</div><div class="label">ลงสอบสวนโรคแล้ว</div></div>
+          <div class="card kpi"><i class="fa-solid fa-percent"></i><div class="num" id="kpiRate">0%</div><div class="label">ความครบถ้วนการสอบสวน</div></div>
+        </div>
+        <div class="card insight"><b style="color:#b45309"><i class="fa-solid fa-robot"></i> Smart Insights</b><div id="smartInsight" style="margin-top:8px;line-height:1.8">กำลังโหลดข้อมูล...</div></div>
+        <div class="grid charts">
+          <div class="card"><b>จำนวนเหตุการณ์รายหมู่บ้าน</b><div id="barChart" class="chart"></div></div>
+          <div class="card"><b>แนวโน้มรายเดือน</b><div id="lineChart" class="chart"></div></div>
+          <div class="card"><b>สัดส่วนตามกลุ่มโรค</b><div id="pieDisease" class="chart"></div></div>
+          <div class="card"><b>สัดส่วนตามระดับความเสี่ยง</b><div id="pieRisk" class="chart"></div></div>
+        </div>
+      </div>
+      <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+    </section>
+
+    <section id="page-records" class="section">
+      <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
+      <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+    </section>
+
+    <section id="page-reporter" class="section">
+      <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
+      <div class="help">ระบบสร้างโฟลเดอร์รายงานและ Google Docs Template ให้อัตโนมัติตั้งแต่ติดตั้งครั้งแรก เหลือเพียงใส่ Gemini API Key ผ่านหน้า Admin</div>
+      <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
+    </section>
+
+    <section id="page-admin" class="section">
+      <div class="grid kpis">
+        <div class="card kpi"><i class="fa-solid fa-users"></i><div class="num" id="akUsers">0</div><div class="label">ผู้ใช้ทั้งหมด</div></div>
+        <div class="card kpi"><i class="fa-solid fa-user-check"></i><div class="num" id="akActive">0</div><div class="label">ผู้ใช้ Active</div></div>
+        <div class="card kpi"><i class="fa-solid fa-map-location-dot"></i><div class="num" id="akAreas">0</div><div class="label">หมู่บ้านในระบบ</div></div>
+        <div class="card kpi"><i class="fa-solid fa-database"></i><div class="num" id="akEvents">0</div><div class="label">เหตุการณ์ในระบบ</div></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-screwdriver-wrench"></i> สถานะการติดตั้ง</h3><button class="btn orange" onclick="repairSystem()"><i class="fa-solid fa-wand-magic-sparkles"></i>ตรวจสอบ/ซ่อมระบบอัตโนมัติ</button></div>
+        <div id="installStatus" class="help">กำลังตรวจสอบ...</div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
+        <div class="settings-grid">
+          <div class="setting-group">
+            <h4>ข้อมูลเว็บไซต์</h4>
+            <div class="fg"><label>ชื่อระบบ</label><input id="set_APP_NAME"></div>
+            <div class="fg"><label>คำอธิบายระบบ</label><input id="set_APP_SUBTITLE"></div>
+            <div class="fg"><label>ชื่อหน่วยงาน</label><input id="set_ORG_NAME"></div>
+            <div class="fg"><label>ข้อมูลติดต่อ</label><input id="set_CONTACT_INFO"></div>
+            <div class="fg"><label>ข้อความประกาศ</label><input id="set_BANNER_TEXT"></div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="fg"><label>สีหลัก</label><input type="color" id="set_PRIMARY_COLOR"></div>
+              <div class="fg"><label>สีรอง</label><input type="color" id="set_SECONDARY_COLOR"></div>
+            </div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="fg"><label>สถานะระบบ</label><select id="set_SYSTEM_STATUS"><option value="open">เปิดใช้งาน</option><option value="closed">ปิดบันทึกชั่วคราว</option></select></div>
+              <div class="fg"><label>เปิดสมัครผู้ใช้</label><select id="set_ALLOW_SELF_REGISTER"><option value="true">เปิด</option><option value="false">ปิด</option></select></div>
+            </div>
+          </div>
+          <div class="setting-group">
+            <h4>โลโก้ระบบ</h4>
+            <div class="logo-preview"><img id="adminLogoPreview" src="" alt="preview"><div><b>อัปโหลดจากหน้าเว็บได้โดยตรง</b><div class="mini">PNG, JPG/JPEG หรือ WEBP ขนาดไม่เกิน 3 MB</div></div></div>
+            <input class="input" type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" style="width:100%">
+            <button class="btn" style="width:100%;margin-top:10px" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
+            <div id="logoProgress" class="progress">กำลังอัปโหลด...</div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+            <h4>AI Reporter</h4>
+            <div class="fg"><label>Gemini API Key</label><input type="password" id="set_GEMINI_API_KEY" autocomplete="off"></div>
+            <div class="fg"><label>Gemini Model</label><input id="set_GEMINI_MODEL" placeholder="AUTO"></div>
+            <div class="fg"><label>Template Google Doc ID</label><input id="set_TEMPLATE_DOC_ID"></div>
+            <div class="fg"><label>Report Folder ID</label><input id="set_REPORT_FOLDER_ID"></div>
+            <div class="mini">ระบบสร้าง Template และ Folder ให้แล้วอัตโนมัติ สามารถเปลี่ยนเป็นไฟล์/โฟลเดอร์อื่นได้จากหน้านี้</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
+        <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
+        <input class="input" id="areaSearch" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
+        <div class="table-wrap"><table><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3>จัดการผู้ใช้งาน</h3><button class="btn" onclick="loadUsers()"><i class="fa-solid fa-rotate"></i>โหลดผู้ใช้</button></div>
+        <input class="input" id="userSearch" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
+        <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
+      </div>
+
+      <div class="grid charts" style="margin-top:16px">
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><div id="contentAdminList"></div></div>
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>Audit Logs</h3><button class="btn gray" onclick="loadAudit()">โหลดประวัติ</button></div><div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div></div>
+      </div>
+    </section>
+
+    <section id="page-library" class="section"><div class="panel-head"><h3><i class="fa-solid fa-book-medical"></i> ประกาศ แนวทาง และคู่มือ</h3></div><div id="libraryList" class="content-list"></div></section>
+  </main>
+</div>
+
+<div class="modal" id="loginModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</div>
+  <input class="input" id="loginEmail" placeholder="Email" style="width:100%;margin-bottom:10px">
+  <input class="input" id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:10px">
+  <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button>
+  <button class="btn light" style="width:100%;margin-top:8px" onclick="closeModal('loginModal')">ปิด</button>
+  <hr><b>สมัครผู้ใช้ใหม่</b>
+  <input class="input" id="regName" placeholder="ชื่อ-สกุล" style="width:100%;margin:8px 0">
+  <input class="input" id="regEmail" placeholder="Email" style="width:100%;margin-bottom:8px">
+  <input class="input" id="regPass" type="password" placeholder="Password อย่างน้อย 4 ตัว" style="width:100%;margin-bottom:8px">
+  <input class="input" id="regOrg" placeholder="หน่วยงาน" style="width:100%;margin-bottom:8px">
+  <button class="btn secondary" style="width:100%" onclick="register()">สมัครใช้งาน</button>
+</div></div>
+
+<div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editRow"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
+
+<div class="modal" id="userModal"><div class="modal-box modal-sm">
+  <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
+  <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
+  <label>Role</label><select class="input" id="uRole" style="width:100%;margin-bottom:8px"><option>Super Admin</option><option>Manager</option><option>Admin</option><option>Staff</option></select>
+  <label>Status</label><select class="input" id="uStatus" style="width:100%;margin-bottom:8px"><option>active</option><option>pending</option><option>blocked</option></select>
+  <label>หน่วยงาน</label><input class="input" id="uOrg" style="width:100%;margin-bottom:8px">
+  <label>ตำบล</label><input class="input" id="uTambon" style="width:100%;margin-bottom:8px">
+  <label>อำเภอ</label><input class="input" id="uAmphoe" style="width:100%;margin-bottom:8px">
+  <label>จังหวัด</label><input class="input" id="uProvince" style="width:100%;margin-bottom:8px">
+  <label>เปลี่ยนรหัสผ่านใหม่ (ไม่กรอก = ไม่เปลี่ยน)</label><input class="input" id="uPassword" type="password" style="width:100%;margin-bottom:8px">
+  <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" onclick="saveUser()">บันทึกผู้ใช้</button></div>
+</div></div>
+
+<div class="modal" id="areaModal"><div class="modal-box modal-sm">
+  <div class="modal-title">ข้อมูลหมู่บ้าน</div><input type="hidden" id="aId">
+  <label>จังหวัด</label><input class="input" id="aProvince" style="width:100%;margin-bottom:8px">
+  <label>อำเภอ</label><input class="input" id="aAmphoe" style="width:100%;margin-bottom:8px">
+  <label>ตำบล</label><input class="input" id="aTambon" style="width:100%;margin-bottom:8px">
+  <label>หมู่ที่</label><input class="input" id="aMoo" style="width:100%;margin-bottom:8px">
+  <label>ชื่อหมู่บ้าน</label><input class="input" id="aVillage" style="width:100%;margin-bottom:8px">
+  <label>รหัสหมู่บ้าน</label><input class="input" id="aVillageCode" style="width:100%;margin-bottom:8px">
+  <label>สถานะ</label><select class="input" id="aActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" onclick="saveAreaItem()">บันทึก</button></div>
+</div></div>
+
+<div class="modal" id="contentModal"><div class="modal-box modal-sm">
+  <div class="modal-title">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
+  <label>หมวดหมู่</label><input class="input" id="cCategory" style="width:100%;margin-bottom:8px" placeholder="ประกาศ / คู่มือ / แนวทาง">
+  <label>หัวข้อ</label><input class="input" id="cTitle" style="width:100%;margin-bottom:8px">
+  <label>รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
+  <label>URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
+  <label>Status</label><select class="input" id="cStatus" style="width:100%;margin-bottom:8px"><option>published</option><option>draft</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('contentModal')">ปิด</button><button class="btn green" onclick="saveContentItem()">บันทึก</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<script>
+  google.charts.load('current', {'packages':['corechart']});
+  let token=localStorage.getItem('SRRT_TOKEN')||'';
+  let currentUser=null,settings={},master={},areas=[],allData=[],currentContent=[],usersCache=[],areaAdminCache=[];
+  const fields=[
+    [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
+    [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
+    [7,'ประเภทเหตุการณ์','select:event_type'],[8,'สถานที่เกิดเหตุ','text'],
+    [13,'จังหวัด','area:province'],[12,'อำเภอ','area:amphoe'],[11,'ตำบล','area:tambon'],[10,'หมู่ที่','area:moo'],
+    [29,'ชื่อหมู่บ้าน','area:village'],[30,'รหัสหมู่บ้าน','text'],
+    [14,'รายละเอียดเหตุการณ์','textarea'],[15,'การตรวจสอบ','select:verify_status'],[16,'วิธีการตรวจสอบ','text'],
+    [17,'เข้าเกณฑ์สอบสวนโรค','select:criteria'],[18,'ประเภทการสอบสวนโรค','text'],
+    [24,'ลงสอบสวนโรค','select_custom:ลงสอบสวน|ไม่ลงสอบสวน'],[26,'วันที่ลงสอบสวนโรค','date'],
+    [19,'ประเมินความเสี่ยงแจ้งเตือน','select:risk'],[20,'หน่วยงานแจ้งเตือน','text'],[23,'หน่วยงานรับแจ้ง','text'],
+    [21,'การดำเนินการตามมาตรการ','textarea'],[22,'วันที่ดำเนินการตามมาตรการ','date']
+  ];
+  const settingFields=['APP_NAME','APP_SUBTITLE','ORG_NAME','CONTACT_INFO','BANNER_TEXT','PRIMARY_COLOR','SECONDARY_COLOR','SYSTEM_STATUS','ALLOW_SELF_REGISTER','GEMINI_API_KEY','GEMINI_MODEL','TEMPLATE_DOC_ID','REPORT_FOLDER_ID'];
+
+  function el(id){return document.getElementById(id)}
+  function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
+  function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
+  function openModal(id){el(id).classList.add('open')} function closeModal(id){el(id).classList.remove('open')}
+  function toggleSidebar(show){el('sidebar').classList.toggle('open',show);el('overlay').classList.toggle('show',show)}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function unique(arr){return [...new Set(arr.filter(v=>String(v||'').trim()!=='').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'th'))}
+  function roleCanManage(){return currentUser&&['Super Admin','Manager'].includes(currentUser.role)}
+  function roleCanRecord(){return currentUser&&['Super Admin','Manager','Admin'].includes(currentUser.role)}
+
+  function showPage(page,btn){
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');toggleSidebar(false);
+    if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
+  }
+
+  function applyTheme(){
+    document.documentElement.style.setProperty('--primary',settings.PRIMARY_COLOR||'#0f766e');
+    document.documentElement.style.setProperty('--secondary',settings.SECONDARY_COLOR||'#2563eb');
+    const logo=settings.LOGO_URL||'https://lh3.googleusercontent.com/d/1ANG8ALHZASMzdI4MFLtZHwbWcwS0vMWQ';
+    el('logoImg').src=logo;el('adminLogoPreview').src=logo;
+    el('appName').textContent=settings.APP_NAME||'Smart SRRT Dashboard & AI Reporter';
+    el('appSubtitle').textContent=settings.APP_SUBTITLE||'ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่';
+    el('sideTitle').textContent=settings.APP_NAME||'Smart SRRT';
+    el('sideOrg').textContent=settings.ORG_NAME||'District Edition';
+    el('bannerText').innerHTML='<i class="fa-solid fa-bullhorn"></i> '+escapeHtml(settings.BANNER_TEXT||'ระบบพร้อมใช้งาน');
+    el('closedBox').style.display=String(settings.SYSTEM_STATUS||'open')==='closed'?'block':'none'
+  }
+
+  async function boot(){
+    try{
+      const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
+      applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      google.charts.setOnLoadCallback(loadDashboard)
+    }catch(e){toast(e.message||e)}
+  }
+
+  function updateAuthBox(){
+    const box=el('authBox');
+    document.querySelectorAll('.auth-only').forEach(x=>x.style.display=roleCanRecord()?'flex':'none');
+    document.querySelectorAll('.manager-only').forEach(x=>x.style.display=roleCanManage()?'flex':'none');
+    if(currentUser){
+      box.innerHTML=`<b>${escapeHtml(currentUser.name)}</b><span>${escapeHtml(currentUser.role)} | ${escapeHtml(currentUser.email)}</span><button onclick="doLogout()">ออกจากระบบ</button>`
+    }else{
+      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard ได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
+    }
+  }
+
+  function openLogin(){openModal('loginModal')}
+  async function doLogin(){
+    try{
+      const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
+      if(!r.ok){toast(r.message);return}
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');renderTables()
+    }catch(e){toast(e.message||e)}
+  }
+  async function doLogout(){try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));renderTables()}
+  async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
+
+  function setupDashboardFilters(){
+    const source=areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}));
+    fillSelect(el('filterProvince'),unique(source.map(x=>x.province)),'ทุกจังหวัด',el('filterProvince').value);
+    updateDashboardAreaFilters('province')
+  }
+  function fillSelect(select,values,placeholder,current){
+    select.innerHTML=`<option value="">${placeholder}</option>`+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(values.includes(current))select.value=current
+  }
+  function updateDashboardAreaFilters(level){
+    const p=el('filterProvince').value,a=level==='province'?'':el('filterAmphoe').value,t=level==='tambon'?el('filterTambon').value:'';
+    const source=(areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}))).filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    if(level==='province')fillSelect(el('filterAmphoe'),unique(source.map(x=>x.amphoe)),'ทุกอำเภอ','');
+    const amph=el('filterAmphoe').value;
+    const source2=source.filter(x=>!amph||x.amphoe===amph);
+    if(level==='province'||level==='amphoe')fillSelect(el('filterTambon'),unique(source2.map(x=>x.tambon)),'ทุกตำบล','');
+    const tamb=el('filterTambon').value;
+    const source3=source2.filter(x=>!tamb||x.tambon===tamb);
+    fillSelect(el('filterVillage'),unique(source3.map(x=>x.village||('หมู่ '+x.moo))),'ทุกหมู่บ้าน','')
+  }
+
+  async function loadDashboard(){
+    try{
+      const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
+      allData=await gs('getDashboardData',filter);updateDashboard();renderTables();if(!areas.length)setupDashboardFilters()
+    }catch(e){toast(e.message||e)}
+  }
+  function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
+  function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
+  function locationLabel(r){return `${villageLabel(r)} ต.${r.col11||'-'} อ.${r.col12||'-'} จ.${r.col13||'-'}`}
+  function updateDashboard(){
+    const total=allData.length,criteria=allData.filter(r=>(r.col17||'').includes('เข้าเกณฑ์')).length,investigated=allData.filter(r=>r.col26).length;
+    const rate=criteria?Math.round(investigated/criteria*100):(total?Math.round(investigated/total*100):0);
+    el('kpiTotal').textContent=total;el('kpiCriteria').textContent=criteria;el('kpiInvestigated').textContent=investigated;el('kpiRate').textContent=rate+'%';
+    el('smartInsight').innerHTML=makeInsight(total);drawCharts()
+  }
+  function makeInsight(total){
+    if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>(r.col17||'').includes('เข้าเกณฑ์')&&!r.col26).length;
+    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(topDisease)}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(topVillage)}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
+  function countMap(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.entries(m)}
+  function drawCharts(){
+    if(!google.visualization)return;
+    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+    draw('lineChart','LineChart',monthRows(),{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
+    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
+  }
+  function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
+  function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
+  function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
+
+  function renderTables(){
+    const manage=roleCanRecord();
+    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick="makeReport(${r.rowNumber},this)">AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
+    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick="deleteEvent(${r.rowNumber})">ลบ</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>';
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick="makeReport(${r.rowNumber},this)">สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+  }
+
+  function buildRecordForm(){
+    el('recordForm').innerHTML=fields.map(f=>{
+      const span=f[2]==='textarea'?' span-3':'',id='in'+f[0];let input='';
+      if(f[2]==='textarea')input=`<textarea id="${id}" rows="3"></textarea>`;
+      else if(f[2]==='date')input=`<input type="date" id="${id}">`;
+      else if(f[2].startsWith('select:')){const key=f[2].split(':')[1];input=`<select id="${id}"><option value="">-- เลือก --</option>${(master[key]||[]).map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('select_custom:')){const opts=f[2].split(':')[1].split('|');input=`<select id="${id}"><option value="">-- เลือก --</option>${opts.map(o=>`<option>${escapeHtml(o)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
+      else input=`<input type="text" id="${id}">`;
+      return`<div class="fg${span}"><label>${escapeHtml(f[1])}</label>${input}</div>`
+    }).join('');
+    refreshRecordAreaOptions()
+  }
+  function refreshRecordAreaOptions(){
+    if(!el('in13'))return;
+    const p=el('in13').value,a=el('in12').value,t=el('in11').value;
+    const filtered=areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    setDatalist('in13List',unique(areas.map(x=>x.province)));setDatalist('in12List',unique(areas.filter(x=>!p||x.province===p).map(x=>x.amphoe)));
+    setDatalist('in11List',unique(areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)).map(x=>x.tambon)));
+    setDatalist('in10List',unique(filtered.map(x=>x.moo)));setDatalist('in29List',unique(filtered.map(x=>x.village)))
+  }
+  function setDatalist(id,values){el(id).innerHTML=values.map(v=>`<option value="${escapeHtml(v)}"></option>`).join('')}
+  function onRecordAreaChange(col){
+    refreshRecordAreaOptions();
+    if(col===29){
+      const v=el('in29').value,p=el('in13').value,a=el('in12').value,t=el('in11').value;
+      const found=areas.find(x=>x.village===v&&(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+      if(found){el('in13').value=found.province;el('in12').value=found.amphoe;el('in11').value=found.tambon;el('in10').value=found.moo;el('in30').value=found.villageCode||''}
+    }
+  }
+  function toIso(thai){if(!thai)return'';const p=String(thai).split('-');if(p.length!==3)return thai;let y=+p[0];if(y>2400)y-=543;return`${y}-${p[1]}-${p[2]}`}
+  function toThai(iso){if(!iso)return'';const p=String(iso).split('-');if(p.length!==3)return iso;return`${+p[0]+543}-${p[1]}-${p[2]}`}
+  function openRecordForm(mode,i){
+    if(!roleCanRecord()){openLogin();return}
+    el('formMode').value=mode;el('recordTitle').textContent=mode==='add'?'เพิ่มข้อมูลเหตุการณ์ใหม่':'แก้ไขข้อมูลเหตุการณ์';
+    fields.forEach(f=>{const x=el('in'+f[0]);if(x)x.value=''});
+    if(mode==='edit'){const r=allData[i];el('editRow').value=r.rowNumber;fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})}
+    refreshRecordAreaOptions();openModal('recordModal')
+  }
+  async function saveRecord(){
+    const btn=el('saveRecordBtn');try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
+      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
+      const msg=el('formMode').value==='add'?await gs('addRecord',token,data):await gs('updateRecord',token,el('editRow').value,data);
+      closeModal('recordModal');toast(msg);await loadDashboard()
+    }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
+  }
+  async function deleteEvent(row){if(!confirm('ยืนยันลบข้อมูลแถวนี้?'))return;try{toast(await gs('deleteRecord',token,row));loadDashboard()}catch(e){toast(e.message||e)}}
+  async function makeReport(row,btn){
+    const old=btn.innerHTML,w=window.open('','_blank');
+    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,row);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
+    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+  }
+
+  function exportClientExcel(){
+    const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
+  }
+  async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
+  function captureDashboard(){html2canvas(el('captureArea'),{scale:2,backgroundColor:'#eef4f7',useCORS:true}).then(canvas=>{const a=document.createElement('a');a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';a.href=canvas.toDataURL('image/png');a.click()}).catch(e=>toast(e.message))}
+
+  async function loadAdmin(){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
+    try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
+    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit()])
+  }
+  async function loadInstallStatus(){
+    try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
+  }
+  async function repairSystem(){if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;try{toast(await gs('repairInstallation',token));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||[];applyTheme();setupDashboardFilters();loadInstallStatus()}catch(e){toast(e.message||e)}}
+
+  async function loadSettings(){
+    try{
+      const rows=await gs('getSystemSettings',token);const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveSettings(){
+    try{
+      const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
+      toast(await gs('saveSystemSettings',token,arr));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||areas;applyTheme();loadInstallStatus()
+    }catch(e){toast(e.message||e)}
+  }
+  async function uploadLogoFile(){
+    const file=el('logoFile').files[0];if(!file){toast('กรุณาเลือกไฟล์โลโก้');return}if(file.size>3*1024*1024){toast('ไฟล์ต้องไม่เกิน 3 MB');return}
+    el('logoProgress').classList.add('show');
+    try{
+      const base64=await fileToBase64(file);const r=await gs('uploadLogo',token,{name:file.name,mimeType:file.type,base64});
+      settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
+    }catch(e){toast(e.message||e)}finally{el('logoProgress').classList.remove('show')}
+  }
+  function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file)})}
+
+  async function loadAreasAdmin(){
+    try{areaAdminCache=await gs('listAreas',token,el('areaSearch').value);el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openAreaForm(i){
+    const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
+  }
+  async function saveAreaItem(){
+    try{
+      const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
+      toast(await gs('saveArea',token,item));closeModal('areaModal');await refreshAreas()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableArea(id){if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;try{toast(await gs('deleteArea',token,id));await refreshAreas()}catch(e){toast(e.message||e)}}
+  async function refreshAreas(){const b=await gs('getAppBoot',token);areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();loadAreasAdmin()}
+  async function importAreaFile(input){
+    const file=input.files[0];if(!file)return;
+    try{
+      const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const mapped=rows.map(r=>({province:r['จังหวัด']||r['province']||r['Province'],amphoe:r['อำเภอ']||r['amphoe']||r['Amphoe'],tambon:r['ตำบล']||r['tambon']||r['Tambon'],moo:r['หมู่']||r['หมู่ที่']||r['moo']||r['Moo'],village:r['ชื่อหมู่บ้าน']||r['หมู่บ้าน']||r['village']||r['Village'],villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''})).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
+      if(!mapped.length)throw new Error('ไม่พบคอลัมน์ข้อมูลพื้นที่ที่รองรับ');
+      for(let i=0;i<mapped.length;i+=200)toast(await gs('importAreas',token,mapped.slice(i,i+200)));
+      await refreshAreas()
+    }catch(e){toast(e.message||e)}finally{input.value=''}
+  }
+
+  async function loadUsers(){
+    try{usersCache=await gs('listUsers',token,el('userSearch').value);el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
+  async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
+
+  async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
+  function openContentForm(){el('cId').value='';el('cCategory').value='';el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
+  function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;el('cCategory').value=r.category;el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
+  async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
+  async function loadAudit(){try{const rows=await gs('listAuditLogs',token,100);el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}}
+  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
+
+  boot();
+</script>
+</body>
+</html>

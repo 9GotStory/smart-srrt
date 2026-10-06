@@ -1,0 +1,138 @@
+คู่มือติดตั้ง Smart SRRT ระดับอำเภอ
+สำหรับ Code เวอร์ชัน 2026.09.08.1
+
+1. สร้าง Google Sheet ใหม่
+- เข้า Google Drive → New → Google Sheets → Blank spreadsheet
+- ตั้งชื่อ เช่น “Smart SRRT อำเภอเมืองอุดรธานี 2569”
+- แนะนำให้แต่ละอำเภอมี Google Sheet ของตนเอง 1 ชุด
+
+2. เปิด Apps Script
+- ใน Google Sheet ไปที่ Extensions → Apps Script
+- เปิดไฟล์ Code.gs
+
+3. ใส่ Code ใหม่
+- ดาวน์โหลดไฟล์ Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
+- ใน Code.gs กด Ctrl+A → Delete แล้ววาง Code ใหม่ทั้งหมด
+- กด Save หรือ Ctrl+S
+
+4. สร้างไฟล์ Index.html
+- ใน Apps Script ด้านซ้ายกด + → HTML
+- ตั้งชื่อว่า Index
+- นำเนื้อหาจากไฟล์ Index_Smart_SRRT_OneClick.html เดิมมาวางใน Index.html
+- กด Save
+- หลังขั้นตอนนี้ควรมีอย่างน้อย Code.gs และ Index.html
+
+5. Run ตัวติดตั้ง
+- เลือกฟังก์ชัน installSmartSRRT แล้วกด Run
+- ครั้งแรกให้ Review permissions → เลือกบัญชี Google → Advanced → Go to ... (unsafe) → Allow
+- ระบบต้องใช้สิทธิ์ Google Sheets, Google Drive, Google Docs, Apps Script และ External API
+
+6. ตรวจสอบฐานข้อมูลที่ระบบสร้าง
+- ระบบจะสร้างชีท เช่น MainData, UserAccounts, SystemSettings, MasterData, AreaMaster, ContentLibrary, AuditLogs และ VisitLogs
+- ระบบจะสร้างโฟลเดอร์สำหรับรายงาน โลโก้ และ Template อัตโนมัติ
+
+7. จดรหัส Super Admin
+- หลังติดตั้งเสร็จ ให้จด Email และ Password ของ Super Admin ทันที
+- หากลืมรหัสภายหลัง สามารถรัน resetSuperAdminPassword ได้
+
+8. ตั้งค่า Gemini API Key
+- เปิดชีท SystemSettings
+- ใส่ Gemini API Key ที่แถว GEMINI_API_KEY
+- ตั้ง GEMINI_MODEL เป็น AUTO
+- ไม่ควรตั้งเป็น gemini-2.5-flash
+
+9. บังคับระบบใช้ AUTO
+- กลับไป Apps Script
+- เลือก forceGeminiModelAuto แล้วกด Run
+- ระบบจะตั้ง GEMINI_MODEL = AUTO และล้าง Model Cache
+
+10. ทดสอบ Gemini
+- เลือก testGeminiConnection แล้วกด Run
+- ตรวจ Execution log
+- ผลที่ต้องการคือ Status 200 และมีชื่อโมเดลที่ใช้งานได้ เช่น models/gemini-3.8-flash, 3.7, 3.6 หรือ 3.5
+
+11. ซ่อม/ตรวจการติดตั้ง
+- แนะนำให้รัน repairInstallation 1 ครั้ง
+- ฟังก์ชันนี้ช่วยตรวจฐานข้อมูล, SystemSettings, Report Folder, Template และ Sheet ID
+
+12. ตั้งชื่อระบบและหน่วยงาน
+- ใน SystemSettings ปรับ APP_NAME, ORG_NAME, CONTACT_INFO และ BANNER_TEXT
+- ตัวอย่าง APP_NAME: Smart SRRT อำเภอเมืองอุดรธานี
+
+13. ตั้งสีระบบ
+- ใน SystemSettings ปรับ PRIMARY_COLOR และ SECONDARY_COLOR ตามต้องการ
+
+14. เตรียม Template รายงานสอบสวนโรค
+- หากใช้ Template เดิมที่เป็น DOCX ให้เปิดด้วย Google Docs เพื่อแปลงเป็น Google Docs
+- คัดลอก Document ID จาก URL แล้วนำไปใส่ที่ TEMPLATE_DOC_ID ใน SystemSettings
+
+15. ตรวจ Report Folder
+- ตรวจสอบ REPORT_FOLDER_ID ใน SystemSettings
+- ไม่ควรแก้ ID เอง เว้นแต่ตั้งใจย้ายโฟลเดอร์
+
+16. Deploy เป็น Web App
+- ไปที่ Deploy → New deployment
+- เลือก Web app
+- Description เช่น Smart SRRT District v2026.09.08.1
+- Execute as = Me
+- Who has access = Anyone หรือ Anyone with Google account ตามนโยบายองค์กร
+- กด Deploy
+
+17. อนุญาตสิทธิ์ Web App
+- หากระบบถามสิทธิ์อีกครั้ง ให้ Authorize access และ Allow
+- คัดลอก Web App URL ที่ลงท้ายด้วย /exec เก็บไว้
+
+18. ทดสอบหน้า Web App
+- เปิด URL /exec
+- Login ด้วย Super Admin
+- ตรวจว่าหน้า Smart SRRT แสดงผลปกติ
+
+19. ตั้งค่า Admin ครั้งแรก
+- ตรวจชื่อระบบ ชื่อหน่วยงาน Gemini API Key, Gemini Model = AUTO, Template Report, Report Folder, Users และพื้นที่
+
+20. เพิ่มพื้นที่อำเภอ
+- เพิ่มหรือ Import จังหวัด อำเภอ ตำบล หมู่ ชื่อหมู่บ้าน และรหัสหมู่บ้าน
+- สามารถใช้ AreaMaster_Template.csv เดิมได้
+
+21. เพิ่ม/อนุมัติ User
+- ผู้ใช้สมัครผ่านหน้าเว็บได้ โดยสถานะเริ่มต้นเป็น pending
+- Super Admin เปลี่ยนเป็น active และกำหนด Role เช่น Super Admin, Manager, Admin หรือ Staff
+
+22. ทดสอบบันทึกเหตุการณ์
+- ทดลองบันทึกเหตุการณ์ 1 ราย
+- ตรวจว่า Dashboard แสดงข้อมูลถูกต้อง
+
+23. ทดสอบสร้างรายงานสอบสวน
+- เปิดรายการผู้ป่วยแล้วกด “สร้างรายงานสอบสวน”
+- ระบบจะส่งข้อมูลไป Gemini แบบ AUTO แล้วสร้าง Google Docs Report ใน Report Folder
+- Code ใหม่รองรับ fallback เมื่อเกิด 404, 410, 429, 500, 502, 503 และ 504
+
+24. เมื่อแก้ Code ภายหลัง
+- หลังแก้ Code ต้อง Save และไปที่ Deploy → Manage deployments
+- เลือก Deployment เดิม → Edit → New version → Deploy
+- ไม่ควรสร้าง URL ใหม่ หากต้องการให้ผู้ใช้เดิมใช้ลิงก์เดิมต่อ
+
+ลำดับติดตั้งฉบับย่อ
+1) สร้าง Google Sheet
+2) Extensions → Apps Script
+3) วาง Code.gs ใหม่ v2026.09.08.1
+4) สร้าง Index.html
+5) Run installSmartSRRT()
+6) อนุญาต Permission
+7) จด Super Admin
+8) ใส่ GEMINI_API_KEY
+9) Run forceGeminiModelAuto()
+10) Run testGeminiConnection()
+11) Run repairInstallation()
+12) ตั้งชื่อระบบ/หน่วยงาน
+13) ตั้ง Template
+14) เพิ่มพื้นที่
+15) Deploy → Web App
+16) Execute as = Me
+17) ทดสอบ Login
+18) ทดสอบบันทึกเหตุการณ์
+19) ทดสอบสร้างรายงานสอบสวน
+20) แจก URL ให้ผู้ใช้งาน
+
+ข้อแนะนำสำหรับการติดตั้งหลายอำเภอ
+แนะนำให้แต่ละอำเภอมี Google Sheet, Apps Script, Database และ Report Folder ของตนเอง แต่ใช้ Code เวอร์ชันเดียวกันทุกอำเภอ

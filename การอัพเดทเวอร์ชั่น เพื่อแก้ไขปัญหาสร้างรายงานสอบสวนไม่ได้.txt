@@ -1,0 +1,22 @@
+ให้นำไปติดตั้งดังนี้ครับ:
+
+เปิด Google Sheet ของ Smart SRRT ระดับอำเภอ → Extensions → Apps Script
+เปิด Code.gs
+ลบ Code เดิมทั้งหมด แล้ววาง Code จากไฟล์ใหม่นี้ทั้งหมด
+กด Save
+ที่ช่องเลือก Function ด้านบน ให้รัน forceGeminiModelAuto() 1 ครั้ง
+จากนั้นรัน testGeminiConnection()
+ควรเห็นประมาณว่า
+API Version: v1
+Model: models/gemini-3.8-flash
+Status: 200
+ไปที่ Deploy → Manage deployments → Edit ✏️ → Version: New version → Deploy
+ไม่ต้องสร้าง URL ใหม่ ให้ Update deployment เดิม เพื่อให้ทุกเครื่องใช้ URL เดิมได้
+
+หลังจากนั้นลองเครื่องที่เคยขึ้น Error ในภาพ แล้วกด สร้างรายงานสอบสวน ใหม่ครับ
+
+จุดที่สำคัญมากคือ ต้องทำข้อ 7 ด้วย เพราะถ้าแค่แก้ Code แล้ว Save แต่ ไม่ Deploy New version เครื่องผู้ใช้งานจะยังรัน Web App เวอร์ชันเก่าอยู่ ซึ่งเป็นอีกเหตุผลหนึ่งที่ทำให้ดูเหมือน “บางเครื่องได้ บางเครื่องไม่ได้”
+
+และ gemini-3.8-flash เป็น Stable GA ที่ Google เปิดใช้ตั้งแต่ 2 กันยายน 2026 จึงเหมาะเป็นตัวหลักปัจจุบันครับ
+
+ถ้าหลังรัน testGeminiConnection() แล้วคุณส่ง ผล Execution log มาให้ผม 1 รูป ผมจะตรวจต่อให้ว่าตอนนี้ API Key ของ Smart SRRT เลือกโมเดลไหน และพร้อมให้หลายเครื่องสร้างรายงานพร้อมกันหรือยังครับ
