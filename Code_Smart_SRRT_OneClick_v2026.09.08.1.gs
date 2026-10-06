@@ -481,13 +481,22 @@ function migrateG11EventAttachments() {
     var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     var assets = ensureSystemAssets_(ss);
     upsertSettingDirect_(settings, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'Google Drive Folder สำหรับเอกสารแนบเหตุการณ์', true);
-    upsertSettingDirect_(settings, 'SCHEMA_VERSION', '4', 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 4);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
     PropertiesService.getScriptProperties().setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
     var message = [
       'อัปเกรด Event Attachments เรียบร้อยแล้ว',
       'สร้าง/ตรวจสอบชีท: ' + CONFIG.SHEETS.ATTACHMENTS,
       'โฟลเดอร์เอกสารแนบพร้อมใช้งาน',
-      'Schema version: 4'
+      'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
     return message;
@@ -1175,7 +1184,7 @@ function uploadEventAttachment(sessionToken, eventId, payload, expectedRevision)
 }
 
 function downloadEventAttachment(sessionToken, attachmentId) {
-  requireAuth_(sessionToken, 'view');
+  var user = requireAuth_(sessionToken, 'view');
   var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
   var found = findAttachmentRowById_(sheet, attachmentId, false);
   var row = found.values;
@@ -1194,6 +1203,15 @@ function downloadEventAttachment(sessionToken, attachmentId) {
   if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) {
     throw new Error('ไฟล์เอกสารแนบมีขนาดเกินขีดจำกัดการดาวน์โหลดของระบบ');
   }
+
+  writeAudit_(
+    user,
+    'DOWNLOAD_EVENT_ATTACHMENT',
+    CONFIG.SHEETS.ATTACHMENTS,
+    attachmentId,
+    '',
+    JSON.stringify({eventId:eventId, fileName:String(row[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || file.getName())})
+  );
 
   return {
     fileName:String(row[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || file.getName()),
