@@ -1685,7 +1685,7 @@ function uploadEventAttachment(sessionToken, eventId, payload) {
   var cleanName = String(payload.name || 'attachment').replace(/[^\wก-๙.\- ]+/g,'_').trim() || 'attachment';
   var folder = getAttachmentFolder_();
   var file = folder.createFile(Utilities.newBlob(bytes, mimeType, new Date().getTime() + '_' + cleanName));
-  // Deliberately keep Event attachments private. Do not use ANYONE_WITH_LINK.
+  // Deliberately keep Event attachments private; do not alter Drive sharing.
 
   var attachmentId = Utilities.getUuid();
   var description = String(payload.description || '').trim();
