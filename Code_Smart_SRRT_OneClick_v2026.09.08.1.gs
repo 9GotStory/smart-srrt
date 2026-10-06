@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '6',
+  SCHEMA_VERSION: '7',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -24,6 +24,7 @@ var CONFIG = {
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
     ATTACHMENTS: 'EventAttachments',
+    REPORTS: 'ReportRegistry',
     AUDIT: 'AuditLogs',
     VISITS: 'VisitLogs'
   },
@@ -35,7 +36,8 @@ var CONFIG = {
   },
   MAX_LOGO_BYTES: 3 * 1024 * 1024,
   MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024,
-  DEFAULT_AUDIT_RETENTION_DAYS: 365
+  DEFAULT_AUDIT_RETENTION_DAYS: 365,
+  REPORT_PROMPT_VERSION: '2026.10.06.1'
 };
 
 var MAIN_HEADERS = [
@@ -98,6 +100,25 @@ var AUDIT_COL = {
   AFTER: 8,
   IP_HINT: 9,
   AUDIT_ID: 10
+};
+
+var REPORT_REGISTRY_HEADERS = [
+  'ReportID','EventID','SourceRevision','DocumentID','DocumentURL','GeneratedAt',
+  'GeneratedBy','GeminiModels','GeminiApiVersions','PromptVersion','TemplateDocID'
+];
+
+var REPORT_REGISTRY_COL = {
+  REPORT_ID: 1,
+  EVENT_ID: 2,
+  SOURCE_REVISION: 3,
+  DOCUMENT_ID: 4,
+  DOCUMENT_URL: 5,
+  GENERATED_AT: 6,
+  GENERATED_BY: 7,
+  GEMINI_MODELS: 8,
+  GEMINI_API_VERSIONS: 9,
+  PROMPT_VERSION: 10,
+  TEMPLATE_DOC_ID: 11
 };
 
 var VISIT_HEADERS = ['Timestamp','EntryPoint','LegacyRequestParams'];
@@ -190,6 +211,7 @@ function onOpen() {
       .addItem('อัปเกรด Event Attachments', 'migrateG11EventAttachments')
       .addItem('อัปเกรด Audit Retention', 'migrateG21AuditRetention')
       .addItem('อัปเกรด VisitLogs', 'migrateG29VisitLogs')
+      .addItem('อัปเกรด Report Registry', 'migrateG17ReportRegistry')
       .addItem('จัดเก็บ Audit เก่า', 'archiveAuditLogsFromSheetMenu')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
@@ -235,6 +257,7 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
     ensureEventAttachmentSheet_(ss);
+    var reportRegistry = ensureReportRegistrySheet_(ss);
     var auditMigration = ensureAuditSchema_(ss);
     var visitMigration = ensureVisitLogSchema_(ss);
 
@@ -262,6 +285,7 @@ function installSmartSRRTCore_() {
       'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
       'Audit identity: backfilled ' + auditMigration.backfilledIds + ', retention ' + getAuditRetentionDays_() + ' วัน',
       'VisitLogs: rows ' + visitMigration.rows + ', legacy headers ' + (visitMigration.migratedLegacyHeaders ? 'migrated' : 'ok'),
+      'Report Registry: rows ' + reportRegistry.rows + ', prompt version ' + CONFIG.REPORT_PROMPT_VERSION,
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -455,6 +479,56 @@ function ensureSheet_(ss, name, headers) {
     if (changed || current.join('') === '') sheet.getRange(1, 1, 1, headers.length).setValues([patched]);
   }
   return sheet;
+}
+
+function ensureReportRegistrySheet_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.REPORTS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.REPORTS);
+    sheet.appendRow(REPORT_REGISTRY_HEADERS);
+    return {sheet:sheet, rows:0};
+  }
+
+  if (sheet.getMaxColumns() < REPORT_REGISTRY_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), REPORT_REGISTRY_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(REPORT_REGISTRY_HEADERS);
+    return {sheet:sheet, rows:0};
+  }
+
+  var current = sheet.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).getValues()[0];
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  var patched = current.slice();
+
+  for (var i = 0; i < REPORT_REGISTRY_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = REPORT_REGISTRY_HEADERS[i];
+
+    if (actual === expected) continue;
+
+    if (!actual) {
+      if (rowCount > 0) {
+        var values = sheet.getRange(2, i + 1, rowCount, 1).getValues();
+        for (var r = 0; r < values.length; r++) {
+          if (String(values[r][0] || '').trim() !== '') {
+            throw new Error('ไม่สามารถเตรียม ReportRegistry ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แต่หัวข้อว่าง');
+          }
+        }
+      }
+      patched[i] = expected;
+      continue;
+    }
+
+    throw new Error('ไม่สามารถเตรียม ReportRegistry ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+  }
+
+  if (patched.join('\u0001') !== current.map(function(v){return String(v || '').trim();}).join('\u0001')) {
+    sheet.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).setValues([patched]);
+  }
+
+  return {sheet:sheet, rows:rowCount};
 }
 
 function ensureVisitLogSchema_(ss) {
@@ -797,6 +871,39 @@ function migrateG29VisitLogs() {
       'จำนวน Visit rows เดิม: ' + visit.rows,
       'ปรับชื่อหัวข้อ legacy: ' + (visit.migratedLegacyHeaders ? 'ใช่' : 'ไม่'),
       'รายการใหม่จะไม่เก็บ request parameter values',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG17ReportRegistry() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var registry = ensureReportRegistrySheet_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 7);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+
+    var message = [
+      'อัปเกรด Report Registry เรียบร้อยแล้ว',
+      'จำนวน Report records เดิม: ' + registry.rows,
+      'Prompt version: ' + CONFIG.REPORT_PROMPT_VERSION,
       'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
