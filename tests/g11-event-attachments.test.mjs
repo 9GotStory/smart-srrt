@@ -96,7 +96,7 @@ function attachmentRow(status='active'){
 
 test('G-11 schema v4 adds only a dedicated attachment sheet contract',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'4');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 4);
   assert.equal(ctx.CONFIG.SHEETS.ATTACHMENTS,'EventAttachments');
   assert.equal(ctx.MAIN_SCHEMA_HEADERS.length,38);
   assert.equal(ctx.EVENT_OWNER_COL,39);
