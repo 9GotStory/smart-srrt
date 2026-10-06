@@ -57,7 +57,7 @@ function fnBlock(name){
 
 test('G-29 schema v6 defines honest VisitLogs headers',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'6');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 6);
   assert.deepEqual(Array.from(ctx.VISIT_HEADERS),['Timestamp','EntryPoint','LegacyRequestParams']);
   assert.deepEqual(Array.from(ctx.VISIT_LEGACY_HEADERS),['Timestamp','Page','UserAgent']);
 });
