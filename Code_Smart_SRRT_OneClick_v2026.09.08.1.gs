@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '3',
+  SCHEMA_VERSION: '4',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -23,6 +23,7 @@ var CONFIG = {
     MASTER: 'MasterData',
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
+    ATTACHMENTS: 'EventAttachments',
     AUDIT: 'AuditLogs',
     VISITS: 'VisitLogs'
   },
@@ -32,7 +33,8 @@ var CONFIG = {
     ADMIN: 'Admin',
     STAFF: 'Staff'
   },
-  MAX_LOGO_BYTES: 3 * 1024 * 1024
+  MAX_LOGO_BYTES: 3 * 1024 * 1024,
+  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024
 };
 
 var MAIN_HEADERS = [
@@ -59,6 +61,27 @@ var EVENT_META_COL = {
 var EVENT_OWNER_HEADER = 'OwnerUserID';
 var EVENT_OWNER_COL = 39;
 
+var EVENT_ATTACHMENT_HEADERS = [
+  'AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','Description',
+  'Status','UploadedAt','UploadedBy','RemovedAt','RemovedBy','RemoveReason'
+];
+
+var EVENT_ATTACHMENT_COL = {
+  ATTACHMENT_ID: 1,
+  EVENT_ID: 2,
+  FILE_ID: 3,
+  FILE_NAME: 4,
+  MIME_TYPE: 5,
+  SIZE_BYTES: 6,
+  DESCRIPTION: 7,
+  STATUS: 8,
+  UPLOADED_AT: 9,
+  UPLOADED_BY: 10,
+  REMOVED_AT: 11,
+  REMOVED_BY: 12,
+  REMOVE_REASON: 13
+};
+
 function doGet(e) {
   var title = CONFIG.APP_TITLE;
   try {
@@ -84,6 +107,7 @@ function onOpen() {
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
       .addItem('อัปเกรด Event Owner', 'migrateG05EventOwner')
+      .addItem('อัปเกรด Event Attachments', 'migrateG11EventAttachments')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
