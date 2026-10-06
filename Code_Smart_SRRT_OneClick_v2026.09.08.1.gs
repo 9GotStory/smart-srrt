@@ -3229,8 +3229,8 @@ function deriveReportReadiness_(event) {
   if (missing_(event.col9)) {
     add_('MISSING_ONSET_DATE', 'quality', 'col9', 'ยังไม่มีวันที่เริ่มป่วย/เริ่มเหตุการณ์');
   }
-  if (missing_(event.col15)) {
-    add_('MISSING_VERIFICATION', 'quality', 'col15', 'ยังไม่มีผลการตรวจสอบเหตุการณ์');
+  if (missing_(event.col15) || String(event.col15 || '').trim() === 'รอตรวจสอบ') {
+    add_('MISSING_OR_PENDING_VERIFICATION', 'quality', 'col15', 'ผลการตรวจสอบเหตุการณ์ยังไม่ชัดเจนหรือยังรอตรวจสอบ');
   }
   if (missing_(event.col17) || String(event.col17 || '').trim() === 'รอดำเนินการ') {
     add_('MISSING_OR_PENDING_CRITERIA', 'quality', 'col17', 'เกณฑ์สอบสวนโรคยังไม่ชัดเจนหรือยังรอดำเนินการ');
@@ -3241,10 +3241,11 @@ function deriveReportReadiness_(event) {
   if (missing_(event.col21)) {
     add_('MISSING_CONTROL_MEASURES', 'quality', 'col21', 'ยังไม่มีข้อมูลกิจกรรม/มาตรการควบคุมโรคที่ดำเนินการแล้ว');
   }
-  if (missing_(event.col24)) {
-    add_('MISSING_INVESTIGATION_DECISION', 'quality', 'col24', 'ยังไม่ได้ระบุว่าจะลงสอบสวนโรคหรือไม่');
+  var criteriaMet = isInvestigationCriteriaMet_(String(event.col17 || '').trim());
+  if (criteriaMet && missing_(event.col24)) {
+    add_('MISSING_INVESTIGATION_DECISION', 'quality', 'col24', 'เหตุการณ์เข้าเกณฑ์สอบสวน แต่ยังไม่ได้ระบุว่าจะลงสอบสวนโรคหรือไม่');
   }
-  if (isInvestigationCriteriaMet_(String(event.col17 || '').trim()) && missing_(event.col26)) {
+  if (criteriaMet && missing_(event.col26)) {
     add_('MISSING_INVESTIGATION_DATE', 'quality', 'col26', 'เหตุการณ์เข้าเกณฑ์สอบสวน แต่ยังไม่มีวันที่ลงสอบสวนโรค');
   }
 
