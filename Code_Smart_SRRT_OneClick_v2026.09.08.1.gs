@@ -402,7 +402,7 @@ function ensureEventIdentityData_(sheet) {
       }
     }
     var existingStatus = String(meta[i][2] || '').trim().toLowerCase();
-    if (existingStatus && ['active','void'].indexOf(existingStatus) < 0) {
+    if (existingStatus && ['active','closed','void'].indexOf(existingStatus) < 0) {
       throw new Error('พบ RecordStatus ไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + existingStatus);
     }
   }
@@ -685,8 +685,8 @@ function getCurrentUserHint_() {
 
 function hasPermission_(role, action) {
   var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','assign','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','assign','users','settings','master','audit','export','approve'],
+    'Super Admin': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
+    'Manager': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
     'Admin': ['view','create','edit','report','export'],
     'Staff': ['view','export']
   };
@@ -697,7 +697,7 @@ function requireAuth_(sessionToken, action) {
   var user = getUserByToken_(sessionToken);
   if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
   if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report','assign'].indexOf(action) >= 0) {
+  if (['create','edit','delete','report','assign','close_event'].indexOf(action) >= 0) {
     var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
     if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
   }
@@ -838,6 +838,8 @@ function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) 
     var ss = getDb_();
     var sheet = ensureEventOwnerSchema_(ss);
     var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
     if (expected !== currentRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
@@ -1052,6 +1054,9 @@ function deriveEventLifecycle_(event) {
   if (recordStatus === 'void') {
     return {code:'voided', label:'ยกเลิก'};
   }
+  if (recordStatus === 'closed') {
+    return {code:'closed', label:'ปิดเหตุการณ์แล้ว'};
+  }
 
   // A recorded investigation date is the strongest existing evidence that
   // the investigation has already taken place. Earlier contradictory fields
@@ -1187,6 +1192,8 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
   try {
     var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
     var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไขข้อมูล');
     var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
     var expected = Number(expectedRevision);
@@ -1201,6 +1208,93 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
     sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
     writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify(formData));
     return 'อัปเดตข้อมูลเรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function closeEvent(sessionToken, eventId, closeReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'close_event');
+  var reason = String(closeReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
+
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') return 'เหตุการณ์นี้ถูกปิดไว้แล้ว';
+
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
+    }
+
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('closed');
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(user.email || '');
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'CLOSE_EVENT',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({recordStatus:status}),
+      JSON.stringify({recordStatus:'closed', reason:reason})
+    );
+    return 'ปิดเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reopenEvent(sessionToken, eventId, reopenReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'close_event');
+  var reason = String(reopenReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');
+
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'active') return 'เหตุการณ์นี้เปิดใช้งานอยู่แล้ว';
+    if (status !== 'closed') throw new Error('สามารถเปิดเหตุการณ์อีกครั้งได้เฉพาะเหตุการณ์ที่มีสถานะ closed');
+
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
+    }
+
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('active');
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(user.email || '');
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'REOPEN_EVENT',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({recordStatus:'closed'}),
+      JSON.stringify({recordStatus:'active', reason:reason})
+    );
+    return 'เปิดเหตุการณ์อีกครั้งเรียบร้อยแล้ว';
   } finally {
     lock.releaseLock();
   }
