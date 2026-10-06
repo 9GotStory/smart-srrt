@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '4',
+  SCHEMA_VERSION: '5',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -24,6 +24,7 @@ var CONFIG = {
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
     ATTACHMENTS: 'EventAttachments',
+    REPORTS: 'ReportRegistry',
     AUDIT: 'AuditLogs',
     AUDIT_ARCHIVE: 'AuditArchive',
     VISITS: 'VisitLogs'
@@ -35,7 +36,8 @@ var CONFIG = {
     STAFF: 'Staff'
   },
   MAX_LOGO_BYTES: 3 * 1024 * 1024,
-  MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024
+  MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024,
+  REPORT_PROMPT_VERSION: '2026.10.06-p5.1'
 };
 
 var MAIN_HEADERS = [
@@ -145,6 +147,7 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','FileUrl','Active','UploadedAt','UploadedBy','DisabledAt','DisabledBy']);
+    ensureSheet_(ss, CONFIG.SHEETS.REPORTS, ['ReportID','EventID','DocumentID','DocumentURL','GeneratedAt','GeneratedBy','Model','ApiVersion','PromptVersion','TemplateDocID','ReadinessWarnings','Status']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt']);
     var visitSheet = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','Parameters']);
@@ -455,6 +458,7 @@ function ensureVisitLogsSchema_(sheet) {
 
 function ensureSupportingGovernanceSchema_(ss) {
   ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','FileUrl','Active','UploadedAt','UploadedBy','DisabledAt','DisabledBy']);
+  ensureSheet_(ss, CONFIG.SHEETS.REPORTS, ['ReportID','EventID','DocumentID','DocumentURL','GeneratedAt','GeneratedBy','Model','ApiVersion','PromptVersion','TemplateDocID','ReadinessWarnings','Status']);
   ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt']);
   var visits = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','Parameters']);
   ensureVisitLogsSchema_(visits);
@@ -1548,6 +1552,7 @@ function getInstallationStatus(sessionToken) {
     logoFileId: settings.LOGO_FILE_ID || '',
     attachmentFolderId: settings.ATTACHMENT_FOLDER_ID || '',
     attachments: Math.max(getSheet_(CONFIG.SHEETS.ATTACHMENTS).getLastRow() - 1, 0),
+    reports: Math.max(getSheet_(CONFIG.SHEETS.REPORTS).getLastRow() - 1, 0),
     areas: Math.max(getSheet_(CONFIG.SHEETS.AREAS).getLastRow() - 1, 0),
     events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0)
   };
@@ -1763,7 +1768,61 @@ function exportData(sessionToken, format) {
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
 
-function generateReportFromWeb(sessionToken, eventId) {
+function getReportReadinessWarnings_(event) {
+  event = event || {};
+  var warnings = getEventConsistencyWarnings_(event).slice();
+  if (!String(event.col14 || '').trim()) warnings.push('ยังไม่มีรายละเอียดเหตุการณ์สำหรับใช้ร่างรายงาน');
+  if (!String(event.col19 || '').trim()) warnings.push('ยังไม่ได้บันทึกการประเมินความเสี่ยงของทีมสอบสวน');
+  return warnings.filter(function(value, index, arr){ return arr.indexOf(value) === index; });
+}
+
+function getReportReadiness(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var row = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+  var event = rowToObject_(row);
+  var settings = getSettingsMap_();
+  var configWarnings = [];
+  if (!String(settings.GEMINI_API_KEY || '').trim()) configWarnings.push('ยังไม่ได้ตั้งค่า Gemini API Key');
+  if (!String(settings.TEMPLATE_DOC_ID || '').trim()) configWarnings.push('ยังไม่ได้ตั้งค่า Template Google Doc');
+  if (!String(settings.REPORT_FOLDER_ID || '').trim()) configWarnings.push('ยังไม่ได้ตั้งค่าโฟลเดอร์รายงาน');
+  return {
+    eventId:event.eventId,
+    revision:event.revision,
+    warnings:getReportReadinessWarnings_(event),
+    configurationWarnings:configWarnings,
+    ready:configWarnings.length === 0
+  };
+}
+
+function listReportsForEvent(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, true);
+  return getSheet_(CONFIG.SHEETS.REPORTS).getDataRange().getDisplayValues().slice(1).filter(function(r) {
+    return String(r[1]) === String(eventId);
+  }).map(function(r) {
+    var warnings = [];
+    try { warnings = r[10] ? JSON.parse(r[10]) : []; } catch (ignore) {}
+    return {
+      reportId:r[0],
+      eventId:r[1],
+      documentId:r[2],
+      url:r[3],
+      generatedAt:r[4],
+      generatedBy:r[5],
+      model:r[6],
+      apiVersion:r[7],
+      promptVersion:r[8],
+      templateDocId:r[9],
+      readinessWarnings:warnings,
+      status:r[11] || 'generated'
+    };
+  }).sort(function(a,b){ return String(b.generatedAt).localeCompare(String(a.generatedAt)); });
+}
+
+function generateReportFromWeb(sessionToken, eventId, acknowledgeWarnings) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var settings = getSettingsMap_();
@@ -1773,6 +1832,12 @@ function generateReportFromWeb(sessionToken, eventId) {
 
   var rowNumber = findEventRowById_(sheet, eventId, false);
   var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+  var event = rowToObject_(rowData);
+  var readinessWarnings = getReportReadinessWarnings_(event);
+  if (readinessWarnings.length && acknowledgeWarnings !== true) {
+    throw new Error('ข้อมูลสำหรับรายงานยังมีคำเตือน: ' + readinessWarnings.join(' | ') + ' กรุณาตรวจสอบหรือยืนยันการสร้างรายงานเบื้องต้น');
+  }
+
   var disease = rowData[5] || '..........';
   var place = rowData[7] || '..........';
   var villageName = rowData[28] || '';
@@ -1787,7 +1852,7 @@ function generateReportFromWeb(sessionToken, eventId) {
     villageCode ? '(รหัสหมู่บ้าน ' + villageCode + ')' : ''
   ].filter(function(x){return x;}).join(' ');
   var title = 'รายงานการสอบสวนเบื้องต้น ผู้ป่วยสงสัยโรค' + disease + ' ' + locationInfo;
-  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings);
+  var aiResult = analyzeWithGemini_(rowData, locationInfo, settings);
 
   var newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
   var document = DocumentApp.openById(newDocFile.getId());
@@ -1803,18 +1868,33 @@ function generateReportFromWeb(sessionToken, eventId) {
     '<<วันเริ่มป่วย>>': rowData[8] || '..........',
     '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
     '<<มาตรการ>>': rowData[20] || '..........',
-    '<<ผลวิเคราะห์จากAI>>': aiAnalysis
+    '<<ผลวิเคราะห์จากAI>>': aiResult.text
   };
   Object.keys(replacements).forEach(function(k) {
-  if (k === '<<ผลวิเคราะห์จากAI>>') {
-    replacePlaceholderWithParagraphs_(body, k, replacements[k]);
-  } else {
-    body.replaceText(k, replacements[k]);
-  }
-});
+    if (k === '<<ผลวิเคราะห์จากAI>>') replacePlaceholderWithParagraphs_(body, k, replacements[k]);
+    else body.replaceText(k, replacements[k]);
+  });
   document.saveAndClose();
-  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, eventId, '', newDocFile.getId());
-  return newDocFile.getUrl();
+
+  var reportId = Utilities.getUuid();
+  var modelLabel = (aiResult.models || []).join(',');
+  var apiVersionLabel = (aiResult.apiVersions || []).join(',');
+  getSheet_(CONFIG.SHEETS.REPORTS).appendRow([
+    reportId,
+    eventId,
+    newDocFile.getId(),
+    newDocFile.getUrl(),
+    new Date(),
+    user.email,
+    modelLabel,
+    apiVersionLabel,
+    CONFIG.REPORT_PROMPT_VERSION,
+    templateId,
+    JSON.stringify(readinessWarnings),
+    'generated'
+  ]);
+  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.REPORTS, reportId, '', JSON.stringify({eventId:eventId,documentId:newDocFile.getId(),model:modelLabel,promptVersion:CONFIG.REPORT_PROMPT_VERSION,warnings:readinessWarnings}));
+  return {reportId:reportId,url:newDocFile.getUrl(),warnings:readinessWarnings,model:modelLabel,promptVersion:CONFIG.REPORT_PROMPT_VERSION};
 }
 
 function analyzeWithGemini_(rowData, locationInfo, settings) {
@@ -1826,7 +1906,6 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
   }
 
   var modelInfo = resolveGeminiModelInfo_(apiKey, settings, false);
-
   if (!modelInfo || !modelInfo.modelName) {
     throw new Error('ไม่พบโมเดล Gemini ที่รองรับ generateContent สำหรับ API Key นี้ กรุณาตรวจสอบ API Key, Gemini API และ Quota/Billing แล้ว Run testGeminiConnection() อีกครั้ง');
   }
@@ -1839,24 +1918,26 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
   var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3');
-  if (String(part1 || '').indexOf('🚨') === 0) {
-    throw new Error(String(part1).replace(/^🚨\s*/, ''));
-  }
+  if (!part1 || !part1.text) throw new Error('Gemini ไม่สามารถสร้างหัวข้อ 1-3 ได้');
 
   Utilities.sleep(500);
 
   var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6');
-  if (String(part2 || '').indexOf('🚨') === 0) {
-    throw new Error(String(part2).replace(/^🚨\s*/, ''));
-  }
+  if (!part2 || !part2.text) throw new Error('Gemini ไม่สามารถสร้างหัวข้อ 4-6 ได้');
 
-  var finalText = String(part1 || '').trim() + '\n\n' + String(part2 || '').trim();
+  var finalText = String(part1.text || '').trim() + '\n\n' + String(part2.text || '').trim();
+  var models = [part1.modelName, part2.modelName].filter(function(v,i,a){ return v && a.indexOf(v) === i; });
+  var apiVersions = [part1.apiVersion, part2.apiVersion].filter(function(v,i,a){ return v && a.indexOf(v) === i; });
 
-  Logger.log('AI Reporter part1 length: ' + String(part1 || '').length);
-  Logger.log('AI Reporter part2 length: ' + String(part2 || '').length);
+  Logger.log('AI Reporter part1 length: ' + String(part1.text || '').length);
+  Logger.log('AI Reporter part2 length: ' + String(part2.text || '').length);
   Logger.log('AI Reporter final length: ' + finalText.length);
 
-  return finalText.replace(/\*/g, '').replace(/```/g, '').trim();
+  return {
+    text:finalText.replace(/\*/g, '').replace(/\x60\x60\x60/g, '').trim(),
+    models:models,
+    apiVersions:apiVersions
+  };
 }
 
 function resolveGeminiModel_(apiKey, settings) {
@@ -2223,10 +2304,10 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
             text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
           }
 
-          return text;
+          return {text:text, modelName:currentModelInfo.modelName, apiVersion:currentModelInfo.apiVersion};
         }
 
-        return '🚨 Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + '): ' + responseText;
+        throw new Error('Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + ')');
       }
 
       var errorMessage = json && json.error && json.error.message
@@ -2255,8 +2336,7 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
 
       clearGeminiModelCache_();
 
-      return '🚨 พบปัญหาจาก ' + lastErrorText +
-        '\nข้อแนะนำ: ตรวจว่า หน้า Admin > Gemini Model เป็น AUTO แล้ว Run testGeminiConnection() ใหม่';
+      throw new Error('พบปัญหาจาก ' + lastErrorText + ' | ตรวจว่า Gemini Model เป็น AUTO และทดสอบการเชื่อมต่ออีกครั้ง');
 
     } catch (error) {
       lastErrorText = 'Apps Script error ขณะเรียก Gemini API (' + label + '): ' + error.toString();
@@ -2266,8 +2346,7 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
     }
   }
 
-  return '🚨 พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText +
-    '\n\nข้อแนะนำ: อาจเป็นช่วงที่ Gemini มีการใช้งานสูง ให้ลอง Run clearGeminiModelCache() แล้วสร้างรายงานใหม่อีกครั้ง หรือกำหนด Gemini Model ในหน้า Admin';
+  throw new Error('พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText);
 }
 
 function buildReportPromptPart_(rowData, locationInfo, sectionRange) {
