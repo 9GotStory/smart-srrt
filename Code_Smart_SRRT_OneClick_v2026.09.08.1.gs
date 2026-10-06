@@ -774,7 +774,11 @@ function rowToObject_(row) {
   var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
   var meta = getEventMetaFromRow_(row);
-  Object.keys(meta).forEach(function(k){ obj[k] = meta[k]; });
+  // P1 exposes only metadata required for browser identity/concurrency.
+  // Created/void audit metadata remains server-side until a later authenticated contract needs it.
+  obj.eventId = meta.eventId;
+  obj.revision = meta.revision;
+  obj.recordStatus = meta.recordStatus;
   return obj;
 }
 
@@ -827,8 +831,11 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
     var rowNumber = findEventRowById_(sheet, eventId, false);
     var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
-    var expected = Number(expectedRevision || 0);
-    if (expected && expected !== currentRevision) {
+    var expected = Number(expectedRevision);
+    if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+      throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
+    }
+    if (expected !== currentRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
     }
 
@@ -841,7 +848,7 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
   }
 }
 
-function deleteRecord(sessionToken, eventId, voidReason) {
+function deleteRecord(sessionToken, eventId, voidReason, expectedRevision) {
   var user = requireAuth_(sessionToken, 'delete');
   var reason = String(voidReason || '').trim();
   if (!reason) throw new Error('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
@@ -856,6 +863,13 @@ function deleteRecord(sessionToken, eventId, voidReason) {
 
     var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    var expected = Number(expectedRevision);
+    if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+      throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนยกเลิกอีกครั้ง');
+    }
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนยกเลิกอีกครั้ง');
+    }
     var now = new Date();
 
     sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
