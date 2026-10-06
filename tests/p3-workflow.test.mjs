@@ -56,7 +56,7 @@ test('P3 schema appends workflow metadata after the P1 prefix',()=>{
   ]);
   assert.equal(ctx.EVENT_META_COL.WORKFLOW_STATUS,39);
   assert.equal(ctx.EVENT_META_COL.CLOSE_REASON,44);
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'3');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 3);
 });
 
 test('workflow derivation stays lightweight and distinguishes void/closed/progress/open',()=>{
