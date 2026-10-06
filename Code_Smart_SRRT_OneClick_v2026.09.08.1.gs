@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '3',
+  SCHEMA_VERSION: '4',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -23,7 +23,9 @@ var CONFIG = {
     MASTER: 'MasterData',
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
+    ATTACHMENTS: 'EventAttachments',
     AUDIT: 'AuditLogs',
+    AUDIT_ARCHIVE: 'AuditArchive',
     VISITS: 'VisitLogs'
   },
   ROLES: {
@@ -32,7 +34,8 @@ var CONFIG = {
     ADMIN: 'Admin',
     STAFF: 'Staff'
   },
-  MAX_LOGO_BYTES: 3 * 1024 * 1024
+  MAX_LOGO_BYTES: 3 * 1024 * 1024,
+  MAX_ATTACHMENT_BYTES: 10 * 1024 * 1024
 };
 
 var MAIN_HEADERS = [
@@ -141,8 +144,11 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
+    ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','FileUrl','Active','UploadedAt','UploadedBy','DisabledAt','DisabledBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
-    ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','UserAgent']);
+    ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt']);
+    var visitSheet = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','Parameters']);
+    ensureVisitLogsSchema_(visitSheet);
 
     var assets = ensureSystemAssets_(ss);
     seedSettings_(ss, assets);
@@ -154,6 +160,7 @@ function installSmartSRRTCore_() {
     props.setProperty('SYSTEM_FOLDER_ID', assets.systemFolderId);
     props.setProperty('REPORT_FOLDER_ID', assets.reportFolderId);
     props.setProperty('LOGO_FOLDER_ID', assets.logoFolderId);
+    props.setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
     props.setProperty('TEMPLATE_DOC_ID', assets.templateDocId);
 
     var message = [
@@ -238,6 +245,11 @@ function ensureSystemAssets_(ss) {
     'โลโก้ระบบ',
     systemFolder
   );
+  var attachmentFolder = getOrCreateFolder_(
+    directSettings.ATTACHMENT_FOLDER_ID || props.getProperty('ATTACHMENT_FOLDER_ID'),
+    'ไฟล์แนบเหตุการณ์',
+    systemFolder
+  );
 
   var templateId = directSettings.TEMPLATE_DOC_ID || props.getProperty('TEMPLATE_DOC_ID');
   if (!isGoogleDocAvailable_(templateId)) {
@@ -248,6 +260,7 @@ function ensureSystemAssets_(ss) {
     systemFolderId: systemFolder.getId(),
     reportFolderId: reportFolder.getId(),
     logoFolderId: logoFolder.getId(),
+    attachmentFolderId: attachmentFolder.getId(),
     templateDocId: templateId
   };
 }
@@ -434,6 +447,19 @@ function ensureEventLifecycleData_(sheet) {
   return summary;
 }
 
+function ensureVisitLogsSchema_(sheet) {
+  if (!sheet) return;
+  var header = String(sheet.getRange(1, 3).getValue() || '');
+  if (!header || header === 'UserAgent') sheet.getRange(1, 3).setValue('Parameters');
+}
+
+function ensureSupportingGovernanceSchema_(ss) {
+  ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','FileUrl','Active','UploadedAt','UploadedBy','DisabledAt','DisabledBy']);
+  ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt']);
+  var visits = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','Parameters']);
+  ensureVisitLogsSchema_(visits);
+}
+
 function migrateSmartSRRTSchema() {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -442,6 +468,7 @@ function migrateSmartSRRTSchema() {
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var eventSummary = ensureEventIdentityData_(sheet);
     var lifecycleSummary = ensureEventLifecycleData_(sheet);
+    ensureSupportingGovernanceSchema_(ss);
     var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
     upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
     var message = [
@@ -521,6 +548,7 @@ function seedSettings_(ss, assets) {
     ['MAIN_SHEET_ID', String(ss.getSheetByName(CONFIG.SHEETS.MAIN).getSheetId()), 'Sheet ID ของ MainData'],
     ['SYSTEM_FOLDER_ID', assets.systemFolderId, 'โฟลเดอร์หลักของระบบ'],
     ['LOGO_FOLDER_ID', assets.logoFolderId, 'โฟลเดอร์เก็บโลโก้'],
+    ['ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บไฟล์แนบเหตุการณ์'],
     ['GEMINI_API_KEY','','Gemini API Key ตั้งค่าผ่านหน้า Admin'],
     ['GEMINI_MODEL','AUTO','AUTO หรือชื่อโมเดล Gemini ที่รองรับ generateContent'],
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
@@ -530,7 +558,7 @@ function seedSettings_(ss, assets) {
     ['SCHEMA_VERSION',CONFIG.SCHEMA_VERSION,'รุ่นโครงสร้างข้อมูลถาวร']
   ];
   rows.forEach(function(r) {
-    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
+    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
   });
 }
 
@@ -827,6 +855,74 @@ function getMasterData() {
   });
   Object.keys(out).forEach(function(k){ out[k].sort(function(a,b){return a.sort-b.sort;}); });
   return out;
+}
+
+var ALLOWED_MASTER_TYPES = ['surveillance','disease_group','event_type','verify_status','criteria','risk','content_category'];
+
+function isAllowedMasterType_(type) {
+  return ALLOWED_MASTER_TYPES.indexOf(String(type || '').trim()) >= 0;
+}
+
+function listMasterDataAdmin(sessionToken, type) {
+  requireAuth_(sessionToken, 'master');
+  var filterType = String(type || '').trim();
+  if (filterType && !isAllowedMasterType_(filterType)) throw new Error('MasterData Type ไม่รองรับ');
+  return getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1).map(function(r) {
+    return {
+      type:String(r[0] || ''),
+      value:String(r[1] || ''),
+      label:String(r[2] || ''),
+      sort:Number(r[3] || 999),
+      active:String(r[4]).toLowerCase() !== 'false',
+      updatedAt:r[5] || '',
+      updatedBy:String(r[6] || '')
+    };
+  }).filter(function(item){ return !filterType || item.type === filterType; });
+}
+
+function saveMasterDataItem(sessionToken, item) {
+  var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
+  var type = String(item.type || '').trim();
+  var value = String(item.value || '').trim();
+  var label = String(item.label || value).trim();
+  var sort = Number(item.sort || 999);
+  var active = item.active !== false;
+  if (!isAllowedMasterType_(type)) throw new Error('MasterData Type ไม่รองรับ');
+  if (!value) throw new Error('กรุณาระบุ Value ของ MasterData');
+  if (!isFinite(sort) || sort < 0) sort = 999;
+
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  for (var i=1; i<rows.length; i++) {
+    if (String(rows[i][0]) === type && String(rows[i][1]) === value) {
+      var before = JSON.stringify(rows[i]);
+      sheet.getRange(i+1, 3, 1, 5).setValues([[label, sort, active, new Date(), user.email]]);
+      writeAudit_(user, 'UPDATE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, before, JSON.stringify(item));
+      return 'อัปเดต MasterData เรียบร้อยแล้ว';
+    }
+  }
+  sheet.appendRow([type,value,label,sort,active,new Date(),user.email]);
+  writeAudit_(user, 'CREATE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, '', JSON.stringify(item));
+  return 'เพิ่ม MasterData เรียบร้อยแล้ว';
+}
+
+function disableMasterDataItem(sessionToken, type, value) {
+  var user = requireAuth_(sessionToken, 'master');
+  type = String(type || '').trim();
+  value = String(value || '').trim();
+  if (!isAllowedMasterType_(type) || !value) throw new Error('MasterData ไม่ถูกต้อง');
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  for (var i=1; i<rows.length; i++) {
+    if (String(rows[i][0]) === type && String(rows[i][1]) === value) {
+      if (String(rows[i][4]).toLowerCase() === 'false') return 'MasterData นี้ปิดใช้งานอยู่แล้ว';
+      sheet.getRange(i+1, 5, 1, 3).setValues([[false,new Date(),user.email]]);
+      writeAudit_(user, 'DISABLE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, JSON.stringify(rows[i]), JSON.stringify({active:false}));
+      return 'ปิดใช้งาน MasterData เรียบร้อยแล้ว';
+    }
+  }
+  throw new Error('ไม่พบ MasterData ที่ระบุ');
 }
 
 function getPublishedContent() {
@@ -1450,6 +1546,8 @@ function getInstallationStatus(sessionToken) {
     reportFolderId: settings.REPORT_FOLDER_ID || '',
     templateDocId: settings.TEMPLATE_DOC_ID || '',
     logoFileId: settings.LOGO_FILE_ID || '',
+    attachmentFolderId: settings.ATTACHMENT_FOLDER_ID || '',
+    attachments: Math.max(getSheet_(CONFIG.SHEETS.ATTACHMENTS).getLastRow() - 1, 0),
     areas: Math.max(getSheet_(CONFIG.SHEETS.AREAS).getLastRow() - 1, 0),
     events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0)
   };
@@ -1514,15 +1612,138 @@ function listAuditLogs(sessionToken, limit) {
   return rows.slice(0, Number(limit || 100)).map(function(r){return {timestamp:r[0], email:r[1], role:r[2], action:r[3], targetSheet:r[4], targetId:r[5], before:r[6], after:r[7]};});
 }
 
+function archiveAuditLogs(sessionToken, olderThanDays) {
+  var user = requireAuth_(sessionToken, 'audit');
+  var days = Number(olderThanDays || 365);
+  if (!isFinite(days) || days < 30 || days > 3650) throw new Error('กำหนดช่วงจัดเก็บ Audit ได้ตั้งแต่ 30 ถึง 3650 วัน');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var active = getSheet_(CONFIG.SHEETS.AUDIT);
+    var archive = ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt']);
+    var rows = active.getDataRange().getValues();
+    var cutoff = new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
+    var candidates = [];
+
+    for (var i=1; i<rows.length; i++) {
+      var timestamp = rows[i][0];
+      if (timestamp instanceof Date && !isNaN(timestamp.getTime()) && timestamp < cutoff) {
+        candidates.push({rowNumber:i+1,values:rows[i]});
+      }
+    }
+    if (!candidates.length) return 'ไม่มี Audit Logs ที่เก่ากว่า ' + days + ' วัน';
+
+    var archivedAt = new Date();
+    var output = candidates.map(function(item){ return item.values.concat([archivedAt]); });
+    archive.getRange(archive.getLastRow()+1, 1, output.length, 10).setValues(output);
+    SpreadsheetApp.flush();
+
+    for (var j=candidates.length-1; j>=0; j--) active.deleteRow(candidates[j].rowNumber);
+    writeAudit_(user, 'ARCHIVE_AUDIT_LOGS', CONFIG.SHEETS.AUDIT_ARCHIVE, String(output.length), '', JSON.stringify({olderThanDays:days,count:output.length}));
+    return 'จัดเก็บ Audit Logs ไป Archive แล้ว ' + output.length + ' รายการ';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function isAllowedAttachmentMime_(mimeType) {
+  return [
+    'application/pdf',
+    'image/png','image/jpeg','image/webp',
+    'text/plain','text/csv',
+    'application/msword','application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ].indexOf(String(mimeType || '').toLowerCase()) >= 0;
+}
+
+function getAttachmentFolder_() {
+  var settings = getSettingsMap_();
+  try {
+    return DriveApp.getFolderById(String(settings.ATTACHMENT_FOLDER_ID || ''));
+  } catch (e) {
+    var assets = ensureSystemAssets_(getDb_());
+    var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
+    upsertSettingDirect_(sheet, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บไฟล์แนบเหตุการณ์', true);
+    return DriveApp.getFolderById(assets.attachmentFolderId);
+  }
+}
+
+function listEventAttachments(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, true);
+  return getSheet_(CONFIG.SHEETS.ATTACHMENTS).getDataRange().getDisplayValues().slice(1).filter(function(r) {
+    return String(r[1]) === String(eventId) && String(r[7]).toLowerCase() !== 'false';
+  }).map(function(r) {
+    return {attachmentId:r[0],eventId:r[1],fileId:r[2],fileName:r[3],mimeType:r[4],sizeBytes:Number(r[5] || 0),url:r[6],uploadedAt:r[8],uploadedBy:r[9]};
+  });
+}
+
+function uploadEventAttachment(sessionToken, eventId, payload) {
+  var user = requireAuth_(sessionToken, 'edit');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, false);
+  payload = payload || {};
+  var mimeType = String(payload.mimeType || '').toLowerCase();
+  if (!isAllowedAttachmentMime_(mimeType)) throw new Error('ชนิดไฟล์แนบไม่รองรับ');
+
+  var bytes;
+  try { bytes = Utilities.base64Decode(String(payload.base64 || '')); }
+  catch (e) { throw new Error('ข้อมูลไฟล์แนบไม่ถูกต้อง'); }
+  if (!bytes.length) throw new Error('ไม่พบข้อมูลไฟล์แนบ');
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) throw new Error('ไฟล์แนบต้องมีขนาดไม่เกิน 10 MB');
+
+  var cleanName = String(payload.name || 'attachment').replace(/[^\wก-๙.\-() ]+/g,'_').trim() || 'attachment';
+  var folder = getAttachmentFolder_();
+  var file = folder.createFile(Utilities.newBlob(bytes, mimeType, new Date().getTime() + '_' + cleanName));
+  var attachmentId = Utilities.getUuid();
+  var url = file.getUrl();
+  getSheet_(CONFIG.SHEETS.ATTACHMENTS).appendRow([
+    attachmentId,eventId,file.getId(),cleanName,mimeType,bytes.length,url,true,new Date(),user.email,'',''
+  ]);
+  writeAudit_(user, 'UPLOAD_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, '', JSON.stringify({eventId:eventId,fileId:file.getId(),fileName:cleanName,sizeBytes:bytes.length}));
+  return {attachmentId:attachmentId,fileName:cleanName,url:url,message:'อัปโหลดไฟล์แนบเรียบร้อยแล้ว'};
+}
+
+function disableEventAttachment(sessionToken, attachmentId) {
+  var user = requireAuth_(sessionToken, 'edit');
+  var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
+  var rows = sheet.getDataRange().getValues();
+  for (var i=1; i<rows.length; i++) {
+    if (String(rows[i][0]) === String(attachmentId)) {
+      if (String(rows[i][7]).toLowerCase() === 'false') return 'ไฟล์แนบนี้ถูกปิดใช้งานอยู่แล้ว';
+      sheet.getRange(i+1, 8).setValue(false);
+      sheet.getRange(i+1, 11, 1, 2).setValues([[new Date(),user.email]]);
+      writeAudit_(user, 'DISABLE_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, JSON.stringify(rows[i]), JSON.stringify({active:false}));
+      return 'ปิดใช้งานไฟล์แนบเรียบร้อยแล้ว';
+    }
+  }
+  throw new Error('ไม่พบไฟล์แนบ');
+}
+
 function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValue) {
   try {
     getSheet_(CONFIG.SHEETS.AUDIT).appendRow([new Date(), user.email || '', user.role || '', action, targetSheet, targetId, beforeValue, afterValue, '']);
   } catch(e) {}
 }
 
+function redactVisitParams_(params) {
+  params = params || {};
+  var safe = {};
+  Object.keys(params).forEach(function(key) {
+    var value = String(params[key] == null ? '' : params[key]);
+    if (/token|password|secret|api.?key|session/i.test(String(key))) safe[key] = '[REDACTED]';
+    else safe[key] = value.substring(0, 500);
+  });
+  return safe;
+}
+
 function logVisit_(e) {
   try {
-    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', JSON.stringify(e && e.parameter ? e.parameter : {})]);
+    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', JSON.stringify(redactVisitParams_(e && e.parameter ? e.parameter : {}))]);
   } catch(err) {}
 }
 
