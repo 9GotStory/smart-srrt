@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '2',
+  SCHEMA_VERSION: '3',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -40,7 +40,8 @@ var MAIN_HEADERS = [
 ];
 
 var EVENT_META_HEADERS = [
-  'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason'
+  'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason',
+  'WorkflowStatus','OwnerUserID','OwnerAssignedAt','ClosedAt','ClosedBy','CloseReason'
 ];
 
 var MAIN_SCHEMA_HEADERS = MAIN_HEADERS.concat(EVENT_META_HEADERS);
@@ -53,7 +54,13 @@ var EVENT_META_COL = {
   CREATED_BY: 35,
   VOIDED_AT: 36,
   VOIDED_BY: 37,
-  VOID_REASON: 38
+  VOID_REASON: 38,
+  WORKFLOW_STATUS: 39,
+  OWNER_USER_ID: 40,
+  OWNER_ASSIGNED_AT: 41,
+  CLOSED_AT: 42,
+  CLOSED_BY: 43,
+  CLOSE_REASON: 44
 };
 
 function doGet(e) {
@@ -80,6 +87,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('Smart SRRT')
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
+      .addItem('อัปเกรด Workflow / Owner', 'migrateP3Workflow')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -117,6 +125,7 @@ function installSmartSRRTCore_() {
 
     var mainSheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var eventMigration = ensureEventIdentityData_(mainSheet);
+    var workflowMigration = ensureWorkflowData_(mainSheet);
     ensureSheet_(ss, CONFIG.SHEETS.USERS, ['UserID','ชื่อ-สกุล','Email','PasswordHash','Role','Status','หน่วยงาน','ตำบล','อำเภอ','จังหวัด','วันที่ลงทะเบียน','อนุมัติโดย','วันที่อนุมัติ','LastLogin']);
     ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
@@ -142,6 +151,7 @@ function installSmartSRRTCore_() {
       'ฐานข้อมูล: ' + ss.getName(),
       'โฟลเดอร์ระบบและ Template รายงานถูกสร้างให้อัตโนมัติ',
       'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
+      'Workflow: initialized ' + workflowMigration.initializedWorkflow,
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -155,7 +165,8 @@ function installSmartSRRTCore_() {
       reportFolderId: assets.reportFolderId,
       templateDocId: assets.templateDocId,
       adminEmail: adminInfo.email,
-      eventMigration: eventMigration
+      eventMigration: eventMigration,
+      workflowMigration: workflowMigration
     };
   } finally {
     lock.releaseLock();
@@ -392,7 +403,7 @@ function migrateP1EventIdentity() {
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var summary = ensureEventIdentityData_(sheet);
     var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
-    upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    setSchemaVersionAtLeast_(settings, 2);
     var message = [
       'อัปเกรด Event identity เรียบร้อยแล้ว',
       'จำนวน Event ที่ตรวจ: ' + summary.rows,
@@ -406,6 +417,130 @@ function migrateP1EventIdentity() {
   } finally {
     lock.releaseLock();
   }
+}
+
+function setSchemaVersionAtLeast_(settingsSheet, targetVersion) {
+  var values = settingsSheet.getDataRange().getValues();
+  var current = 0;
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === 'SCHEMA_VERSION') {
+      current = Number(values[i][1] || 0);
+      break;
+    }
+  }
+  var next = Math.max(current || 0, Number(targetVersion || 0));
+  upsertSettingDirect_(settingsSheet, 'SCHEMA_VERSION', String(next), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+  return next;
+}
+
+function hasWorkflowProgress_(rowObj) {
+  var fields = ['col15','col16','col17','col18','col19','col20','col21','col22','col23','col24','col26'];
+  return fields.some(function(key){ return String(rowObj && rowObj[key] || '').trim() !== ''; });
+}
+
+function deriveWorkflowStatus_(rowObj) {
+  if (String(rowObj && rowObj.recordStatus || 'active').toLowerCase() === 'void') return 'VOID';
+  if (String(rowObj && rowObj.closedAt || '').trim() !== '') return 'CLOSED';
+  return hasWorkflowProgress_(rowObj) ? 'IN_PROGRESS' : 'OPEN';
+}
+
+function getEventConsistencyWarnings_(rowObj) {
+  var warnings = [];
+  var criteriaMet = String(rowObj && rowObj.col17 || '').trim() === 'เข้าเกณฑ์';
+  var investigationFlag = String(rowObj && rowObj.col24 || '').trim();
+  var investigationDate = String(rowObj && rowObj.col26 || '').trim();
+  var measures = String(rowObj && rowObj.col21 || '').trim();
+  var measureDate = String(rowObj && rowObj.col22 || '').trim();
+
+  if (investigationDate && !criteriaMet) {
+    warnings.push('มีวันที่ลงสอบสวน แต่สถานะเข้าเกณฑ์สอบสวนโรคไม่ใช่ "เข้าเกณฑ์"');
+  }
+  if (investigationFlag === 'ลงสอบสวน' && !criteriaMet) {
+    warnings.push('ระบุว่าลงสอบสวน แต่สถานะเข้าเกณฑ์สอบสวนโรคไม่ใช่ "เข้าเกณฑ์"');
+  }
+  if (measureDate && !measures) {
+    warnings.push('มีวันที่ดำเนินมาตรการ แต่ยังไม่มีรายละเอียดการดำเนินการตามมาตรการ');
+  }
+  if (String(rowObj && rowObj.workflowStatus || '') === 'CLOSED') {
+    if (!String(rowObj && rowObj.closedAt || '').trim() || !String(rowObj && rowObj.closedBy || '').trim() || !String(rowObj && rowObj.closeReason || '').trim()) {
+      warnings.push('สถานะ CLOSED มีข้อมูลการปิดเหตุการณ์ไม่ครบถ้วน');
+    }
+  }
+  return warnings;
+}
+
+function ensureWorkflowData_(sheet) {
+  var count = Math.max(sheet.getLastRow() - 1, 0);
+  var summary = {rows:count, initializedWorkflow:0};
+  if (!count) return summary;
+
+  var rows = sheet.getRange(2, 1, count, MAIN_SCHEMA_HEADERS.length).getDisplayValues();
+  var values = sheet.getRange(2, EVENT_META_COL.WORKFLOW_STATUS, count, 1).getValues();
+  var changed = false;
+
+  for (var i = 0; i < count; i++) {
+    if (!String(rows[i][1] || '').trim()) continue;
+    var current = String(values[i][0] || '').trim().toUpperCase();
+    if (current && ['OPEN','IN_PROGRESS','CLOSED','VOID'].indexOf(current) < 0) {
+      throw new Error('พบ WorkflowStatus ไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + current);
+    }
+    if (!current) {
+      var rowObj = rowToObject_(rows[i]);
+      rowObj.closedAt = rows[i][EVENT_META_COL.CLOSED_AT - 1] || '';
+      rowObj.closedBy = rows[i][EVENT_META_COL.CLOSED_BY - 1] || '';
+      rowObj.closeReason = rows[i][EVENT_META_COL.CLOSE_REASON - 1] || '';
+      values[i][0] = deriveWorkflowStatus_(rowObj);
+      summary.initializedWorkflow++;
+      changed = true;
+    }
+  }
+
+  if (changed) sheet.getRange(2, EVENT_META_COL.WORKFLOW_STATUS, count, 1).setValues(values);
+  return summary;
+}
+
+function migrateP3Workflow() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+    ensureEventIdentityData_(sheet);
+    var summary = ensureWorkflowData_(sheet);
+    var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
+    setSchemaVersionAtLeast_(settings, 3);
+    var message = [
+      'อัปเกรด Workflow / Owner เรียบร้อยแล้ว',
+      'จำนวน Event ที่ตรวจ: ' + summary.rows,
+      'กำหนด WorkflowStatus เริ่มต้น: ' + summary.initializedWorkflow,
+      'Schema version: 3'
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function findActiveUserById_(userId) {
+  userId = String(userId || '').trim();
+  if (!userId) return null;
+  var rows = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]) === userId) {
+      if (String(rows[i][5]).toLowerCase() !== 'active') throw new Error('ผู้รับผิดชอบไม่ได้อยู่ในสถานะ active');
+      return {userId:rows[i][0], name:rows[i][1], email:rows[i][2], role:rows[i][4], status:rows[i][5]};
+    }
+  }
+  throw new Error('ไม่พบผู้รับผิดชอบที่ระบุ');
+}
+
+function listAssignableUsers(sessionToken) {
+  requireAuth_(sessionToken, 'edit');
+  var rows = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  return rows.filter(function(r){ return String(r[5]).toLowerCase() === 'active'; }).map(function(r){
+    return {userId:r[0], name:r[1], role:r[4], org:r[6] || ''};
+  }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name), 'th'); });
 }
 
 function findEventRowById_(sheet, eventId, includeVoided) {
@@ -434,7 +569,13 @@ function getEventMetaFromRow_(row) {
     createdBy: row[EVENT_META_COL.CREATED_BY - 1] || '',
     voidedAt: row[EVENT_META_COL.VOIDED_AT - 1] || '',
     voidedBy: row[EVENT_META_COL.VOIDED_BY - 1] || '',
-    voidReason: row[EVENT_META_COL.VOID_REASON - 1] || ''
+    voidReason: row[EVENT_META_COL.VOID_REASON - 1] || '',
+    workflowStatus: String(row[EVENT_META_COL.WORKFLOW_STATUS - 1] || '').toUpperCase(),
+    ownerUserId: String(row[EVENT_META_COL.OWNER_USER_ID - 1] || ''),
+    ownerAssignedAt: row[EVENT_META_COL.OWNER_ASSIGNED_AT - 1] || '',
+    closedAt: row[EVENT_META_COL.CLOSED_AT - 1] || '',
+    closedBy: row[EVENT_META_COL.CLOSED_BY - 1] || '',
+    closeReason: row[EVENT_META_COL.CLOSE_REASON - 1] || ''
   };
 }
 
@@ -859,6 +1000,12 @@ function rowToObject_(row) {
   obj.eventId = meta.eventId;
   obj.revision = meta.revision;
   obj.recordStatus = meta.recordStatus;
+  obj.workflowStatus = meta.workflowStatus || deriveWorkflowStatus_(Object.assign({}, obj, meta));
+  obj.ownerUserId = meta.ownerUserId;
+  obj.closedAt = meta.closedAt;
+  obj.closedBy = meta.closedBy;
+  obj.closeReason = meta.closeReason;
+  obj.consistencyWarnings = getEventConsistencyWarnings_(Object.assign({}, obj, meta, {workflowStatus:obj.workflowStatus}));
   return obj;
 }
 
@@ -891,8 +1038,14 @@ function addRecord(sessionToken, formData) {
 
     sheet.getRange(newRow, 1).setValue(newRow - 1);
     saveRowData_(sheet, newRow, formData, user);
+    var ownerUserId = String(formData && formData.ownerUserId || '').trim();
+    if (ownerUserId) findActiveUserById_(ownerUserId);
+    var createdRow = sheet.getRange(newRow, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+    var createdObj = rowToObject_(createdRow);
+    var workflowStatus = deriveWorkflowStatus_(createdObj);
     sheet.getRange(newRow, EVENT_META_COL.EVENT_ID, 1, EVENT_META_HEADERS.length).setValues([[
-      eventId, 1, 'active', now, user.email, '', '', ''
+      eventId, 1, 'active', now, user.email, '', '', '',
+      workflowStatus, ownerUserId, ownerUserId ? now : '', '', '', ''
     ]]);
 
     writeAudit_(user, 'CREATE_RECORD', CONFIG.SHEETS.MAIN, eventId, '', JSON.stringify(formData));
@@ -919,8 +1072,28 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
     }
 
+    var currentWorkflow = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
+    if (currentWorkflow === 'CLOSED') throw new Error('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไข');
+
+    var existingOwner = String(sheet.getRange(rowNumber, EVENT_META_COL.OWNER_USER_ID).getValue() || '');
+    var ownerUserId = String(formData && formData.ownerUserId || '').trim();
+    if (ownerUserId) findActiveUserById_(ownerUserId);
+
     saveRowData_(sheet, rowNumber, formData, user);
+    var now = new Date();
+    if (ownerUserId !== existingOwner) {
+      sheet.getRange(rowNumber, EVENT_META_COL.OWNER_USER_ID).setValue(ownerUserId);
+      sheet.getRange(rowNumber, EVENT_META_COL.OWNER_ASSIGNED_AT).setValue(ownerUserId ? now : '');
+    }
     sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    var afterRow = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+    var afterObj = rowToObject_(afterRow);
+    var nextWorkflow = deriveWorkflowStatus_(afterObj);
+    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue(nextWorkflow);
+
+    if (ownerUserId !== existingOwner) {
+      writeAudit_(user, ownerUserId ? 'ASSIGN_EVENT_OWNER' : 'CLEAR_EVENT_OWNER', CONFIG.SHEETS.MAIN, eventId, existingOwner, ownerUserId);
+    }
     writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify(formData));
     return 'อัปเดตข้อมูลเรียบร้อยแล้ว';
   } finally {
@@ -957,11 +1130,79 @@ function deleteRecord(sessionToken, eventId, voidReason, expectedRevision) {
     sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_AT).setValue(now);
     sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_BY).setValue(user.email);
     sheet.getRange(rowNumber, EVENT_META_COL.VOID_REASON).setValue(reason);
+    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue('VOID');
     sheet.getRange(rowNumber, 27).setValue(user.email);
     sheet.getRange(rowNumber, 28).setValue(now);
 
     writeAudit_(user, 'VOID_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify({recordStatus:'void',voidReason:reason}));
     return 'ยกเลิกข้อมูลเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function closeEvent(sessionToken, eventId, reason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'edit');
+  reason = String(reason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (Number(expectedRevision) !== currentRevision) throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
+
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
+    if (status === 'CLOSED') return 'เหตุการณ์นี้ปิดไว้แล้ว';
+
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue('CLOSED');
+    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT).setValue(now);
+    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_BY).setValue(user.email);
+    sheet.getRange(rowNumber, EVENT_META_COL.CLOSE_REASON).setValue(reason);
+    sheet.getRange(rowNumber, 27).setValue(user.email);
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(user, 'CLOSE_EVENT', CONFIG.SHEETS.MAIN, eventId, '', JSON.stringify({reason:reason}));
+    return 'ปิดเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reopenEvent(sessionToken, eventId, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'edit');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (Number(expectedRevision) !== currentRevision) throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
+
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
+    if (status !== 'CLOSED') return 'เหตุการณ์นี้ไม่ได้อยู่ในสถานะปิด';
+
+    var before = {
+      closedAt: sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT).getDisplayValue(),
+      closedBy: sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_BY).getDisplayValue(),
+      closeReason: sheet.getRange(rowNumber, EVENT_META_COL.CLOSE_REASON).getDisplayValue()
+    };
+
+    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT, 1, 3).clearContent();
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    var row = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+    var nextWorkflow = deriveWorkflowStatus_(rowToObject_(row));
+    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue(nextWorkflow);
+    sheet.getRange(rowNumber, 27).setValue(user.email);
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(user, 'REOPEN_EVENT', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify({workflowStatus:nextWorkflow}));
+    return 'เปิดเหตุการณ์อีกครั้งเรียบร้อยแล้ว';
   } finally {
     lock.releaseLock();
   }
