@@ -945,6 +945,319 @@ function listAssignableEventOwners(sessionToken) {
   });
 }
 
+function enrichEventAttachments_(rows) {
+  var ss = getDb_();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  var counts = {};
+  if (sheet && sheet.getLastRow() > 1) {
+    var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, EVENT_ATTACHMENT_HEADERS.length).getValues();
+    values.forEach(function(r) {
+      var eventId = String(r[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+      var status = String(r[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+      if (eventId && status === 'active') counts[eventId] = (counts[eventId] || 0) + 1;
+    });
+  }
+  return rows.map(function(r) {
+    r.attachmentCount = counts[r.eventId] || 0;
+    return r;
+  });
+}
+
+function attachmentMimeAllowed_(mimeType) {
+  return [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ].indexOf(String(mimeType || '').toLowerCase()) >= 0;
+}
+
+function validateAttachmentMagic_(bytes, mimeType) {
+  function b_(i) {
+    var v = Number(bytes[i] || 0);
+    return v < 0 ? v + 256 : v;
+  }
+  mimeType = String(mimeType || '').toLowerCase();
+  if (mimeType === 'application/pdf') {
+    return b_(0) === 0x25 && b_(1) === 0x50 && b_(2) === 0x44 && b_(3) === 0x46 && b_(4) === 0x2d;
+  }
+  if (mimeType === 'image/jpeg') {
+    return b_(0) === 0xff && b_(1) === 0xd8 && b_(2) === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return b_(0) === 0x89 && b_(1) === 0x50 && b_(2) === 0x4e && b_(3) === 0x47 &&
+      b_(4) === 0x0d && b_(5) === 0x0a && b_(6) === 0x1a && b_(7) === 0x0a;
+  }
+  if (mimeType === 'image/webp') {
+    return b_(0) === 0x52 && b_(1) === 0x49 && b_(2) === 0x46 && b_(3) === 0x46 &&
+      b_(8) === 0x57 && b_(9) === 0x45 && b_(10) === 0x42 && b_(11) === 0x50;
+  }
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+    return b_(0) === 0x50 && b_(1) === 0x4b && b_(2) === 0x03 && b_(3) === 0x04;
+  }
+  return false;
+}
+
+function sanitizeAttachmentFileName_(name) {
+  var clean = String(name || 'attachment')
+    .replace(/[\\\/:*?"<>|]+/g, '_')
+    .replace(/[\r\n\t]+/g, '_')
+    .trim();
+  if (!clean) clean = 'attachment';
+  if (clean.length > 120) clean = clean.substring(0, 120);
+  return clean;
+}
+
+function formatAttachmentDateTime_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(value);
+}
+
+function getEventAttachmentRoot_() {
+  var settings = getSettingsMap_();
+  var folderId = String(settings.ATTACHMENT_FOLDER_ID || '').trim();
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (ignore) {}
+  }
+  var assets = ensureSystemAssets_(getDb_());
+  var settingsSheet = getSheet_(CONFIG.SHEETS.SETTINGS);
+  upsertSettingDirect_(settingsSheet, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'Google Drive Folder สำหรับเอกสารแนบเหตุการณ์', true);
+  PropertiesService.getScriptProperties().setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+  return DriveApp.getFolderById(assets.attachmentFolderId);
+}
+
+function getEventAttachmentFolder_(eventId) {
+  var root = getEventAttachmentRoot_();
+  var matches = root.getFoldersByName(String(eventId));
+  if (matches.hasNext()) return matches.next();
+  return root.createFolder(String(eventId));
+}
+
+function findAttachmentRowById_(sheet, attachmentId, includeRemoved) {
+  attachmentId = String(attachmentId || '').trim();
+  if (!isUuid_(attachmentId)) throw new Error('AttachmentID ไม่ถูกต้อง');
+  var count = Math.max(sheet.getLastRow() - 1, 0);
+  if (!count) throw new Error('ไม่พบเอกสารแนบ');
+  var values = sheet.getRange(2, 1, count, EVENT_ATTACHMENT_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][EVENT_ATTACHMENT_COL.ATTACHMENT_ID - 1] || '').trim() === attachmentId) {
+      var status = String(values[i][EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+      if (!includeRemoved && status === 'removed') throw new Error('เอกสารแนบนี้ถูกนำออกแล้ว');
+      return {rowNumber:i + 2, values:values[i]};
+    }
+  }
+  throw new Error('ไม่พบ AttachmentID: ' + attachmentId);
+}
+
+function listEventAttachments(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, false);
+
+  var ss = getDb_();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, EVENT_ATTACHMENT_HEADERS.length).getValues();
+  return values.filter(function(r) {
+    return String(r[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim() === String(eventId) &&
+      String(r[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase() === 'active';
+  }).map(function(r) {
+    return {
+      attachmentId:String(r[EVENT_ATTACHMENT_COL.ATTACHMENT_ID - 1] || ''),
+      fileName:String(r[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || ''),
+      mimeType:String(r[EVENT_ATTACHMENT_COL.MIME_TYPE - 1] || ''),
+      sizeBytes:Number(r[EVENT_ATTACHMENT_COL.SIZE_BYTES - 1] || 0),
+      description:String(r[EVENT_ATTACHMENT_COL.DESCRIPTION - 1] || ''),
+      uploadedAt:formatAttachmentDateTime_(r[EVENT_ATTACHMENT_COL.UPLOADED_AT - 1]),
+      uploadedBy:String(r[EVENT_ATTACHMENT_COL.UPLOADED_BY - 1] || '')
+    };
+  }).sort(function(a,b) {
+    return String(b.uploadedAt).localeCompare(String(a.uploadedAt));
+  });
+}
+
+function uploadEventAttachment(sessionToken, eventId, payload, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'edit');
+  payload = payload || {};
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนแนบไฟล์');
+  }
+
+  var mimeType = String(payload.mimeType || '').toLowerCase();
+  if (!attachmentMimeAllowed_(mimeType)) {
+    throw new Error('รองรับเฉพาะ PDF, JPG/JPEG, PNG, WEBP, DOCX และ XLSX');
+  }
+
+  var base64 = String(payload.base64 || '');
+  if (!base64) throw new Error('ไม่พบข้อมูลไฟล์แนบ');
+  var bytes = Utilities.base64Decode(base64);
+  if (!bytes.length) throw new Error('ไฟล์แนบไม่มีข้อมูล');
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) throw new Error('ไฟล์แนบต้องมีขนาดไม่เกิน 5 MB');
+  if (!validateAttachmentMagic_(bytes, mimeType)) throw new Error('ชนิดไฟล์ไม่ตรงกับเนื้อหาไฟล์ หรือไฟล์ไม่รองรับ');
+
+  var fileName = sanitizeAttachmentFileName_(payload.name);
+  var description = String(payload.description || '').trim();
+  if (description.length > 500) throw new Error('รายละเอียดไฟล์แนบต้องไม่เกิน 500 ตัวอักษร');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(main, eventId, false);
+    var status = String(main.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแนบไฟล์');
+
+    var currentRevision = Number(main.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนแนบไฟล์');
+    }
+
+    var attachmentSheet = ensureEventAttachmentSheet_(ss);
+    var folder = getEventAttachmentFolder_(eventId);
+    var attachmentId = Utilities.getUuid();
+    var now = new Date();
+    var file = null;
+    try {
+      file = folder.createFile(Utilities.newBlob(bytes, mimeType, attachmentId + '_' + fileName));
+      attachmentSheet.appendRow([
+        attachmentId,
+        eventId,
+        file.getId(),
+        fileName,
+        mimeType,
+        bytes.length,
+        description,
+        'active',
+        now,
+        user.email || '',
+        '',
+        '',
+        ''
+      ]);
+
+      main.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+      main.getRange(rowNumber, 27).setValue(user.email || '');
+      main.getRange(rowNumber, 28).setValue(now);
+    } catch (e) {
+      if (file) {
+        try { file.setTrashed(true); } catch (ignore) {}
+      }
+      throw e;
+    }
+
+    writeAudit_(
+      user,
+      'UPLOAD_EVENT_ATTACHMENT',
+      CONFIG.SHEETS.ATTACHMENTS,
+      attachmentId,
+      '',
+      JSON.stringify({eventId:eventId, fileName:fileName, mimeType:mimeType, sizeBytes:bytes.length})
+    );
+
+    return {
+      ok:true,
+      message:'แนบไฟล์เรียบร้อยแล้ว',
+      attachmentId:attachmentId,
+      revision:currentRevision + 1
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function downloadEventAttachment(sessionToken, attachmentId) {
+  requireAuth_(sessionToken, 'view');
+  var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
+  var found = findAttachmentRowById_(sheet, attachmentId, false);
+  var row = found.values;
+  var eventId = String(row[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, false);
+
+  var fileId = String(row[EVENT_ATTACHMENT_COL.FILE_ID - 1] || '').trim();
+  var file;
+  try { file = DriveApp.getFileById(fileId); }
+  catch (e) { throw new Error('ไม่พบไฟล์เอกสารแนบใน Google Drive'); }
+
+  var blob = file.getBlob();
+  var bytes = blob.getBytes();
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) {
+    throw new Error('ไฟล์เอกสารแนบมีขนาดเกินขีดจำกัดการดาวน์โหลดของระบบ');
+  }
+
+  return {
+    fileName:String(row[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || file.getName()),
+    mimeType:String(row[EVENT_ATTACHMENT_COL.MIME_TYPE - 1] || blob.getContentType() || 'application/octet-stream'),
+    sizeBytes:bytes.length,
+    base64:Utilities.base64Encode(bytes)
+  };
+}
+
+function removeEventAttachment(sessionToken, attachmentId, removeReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'delete');
+  var reason = String(removeReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนนำเอกสารแนบออก');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureEventAttachmentSheet_(ss);
+    var found = findAttachmentRowById_(sheet, attachmentId, true);
+    var row = found.values;
+    var status = String(row[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+    var eventId = String(row[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var eventRow = findEventRowById_(main, eventId, false);
+    var eventStatus = String(main.getRange(eventRow, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (eventStatus === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนนำเอกสารแนบออก');
+
+    var currentRevision = Number(main.getRange(eventRow, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนนำเอกสารแนบออก');
+    }
+    if (status === 'removed') return {ok:true, message:'เอกสารแนบนี้ถูกนำออกไว้แล้ว', revision:currentRevision};
+
+    var now = new Date();
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.STATUS).setValue('removed');
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVED_AT).setValue(now);
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVED_BY).setValue(user.email || '');
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVE_REASON).setValue(reason);
+
+    main.getRange(eventRow, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    main.getRange(eventRow, 27).setValue(user.email || '');
+    main.getRange(eventRow, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'REMOVE_EVENT_ATTACHMENT',
+      CONFIG.SHEETS.ATTACHMENTS,
+      attachmentId,
+      JSON.stringify({eventId:eventId, status:status}),
+      JSON.stringify({eventId:eventId, status:'removed', reason:reason})
+    );
+
+    return {ok:true, message:'นำเอกสารแนบออกจากเหตุการณ์แล้ว', revision:currentRevision + 1};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) {
   var actor = requireAuth_(sessionToken, 'assign');
   var expected = Number(expectedRevision);
@@ -1097,7 +1410,7 @@ function getFilteredEventRows_(filter) {
 
 function getDashboardData(sessionToken, filter) {
   requireAuth_(sessionToken, 'view');
-  return enrichEventOwners_(getFilteredEventRows_(filter || {}));
+  return enrichEventAttachments_(enrichEventOwners_(getFilteredEventRows_(filter || {})));
 }
 
 function getPublicDashboardData(filter) {
