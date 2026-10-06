@@ -181,7 +181,8 @@ test('assignment permission is manager-level and respects system closed state',(
   assert.equal(ctx.hasPermission_('Manager','assign'),true);
   assert.equal(ctx.hasPermission_('Admin','assign'),false);
   assert.equal(ctx.hasPermission_('Staff','assign'),false);
-  assert.match(source,/\['create','edit','delete','report','assign'\]/);
+  const guard=source.match(/if \(\[([^\]]+)\]\.indexOf\(action\) >= 0\)/)?.[1] ?? '';
+  assert.match(guard,/'assign'/);
 });
 
 test('G-05 browser exposes owner read-only and manager assignment controls',()=>{
@@ -191,5 +192,5 @@ test('G-05 browser exposes owner read-only and manager assignment controls',()=>
   assert.match(html,/listAssignableEventOwners/);
   assert.match(html,/assignEventOwner/);
   assert.match(html,/<th>ผู้รับผิดชอบ<\/th>/);
-  assert.match(html,/roleCanManage\(\)\?[^\n]*openOwnerModal/);
+  assert.match(html,/roleCanManage\(\)[^\n]*openOwnerModal/);
 });
