@@ -1792,7 +1792,8 @@ function getReportReadiness(sessionToken, eventId) {
     revision:event.revision,
     warnings:getReportReadinessWarnings_(event),
     configurationWarnings:configWarnings,
-    ready:configWarnings.length === 0
+    ready:configWarnings.length === 0 && getReportReadinessWarnings_(event).length === 0,
+    canGenerate:configWarnings.length === 0
   };
 }
 
