@@ -848,6 +848,47 @@ function buildDashboardAggregate_(rows) {
   };
 }
 
+function deriveEventLifecycle_(event) {
+  event = event || {};
+  var recordStatus = String(event.recordStatus || 'active').trim().toLowerCase();
+  var verification = String(event.col15 || '').trim();
+  var criteria = String(event.col17 || '').trim();
+  var investigationDate = String(event.col26 || '').trim();
+
+  if (recordStatus === 'void') {
+    return {code:'voided', label:'ยกเลิก'};
+  }
+
+  // A recorded investigation date is the strongest existing evidence that
+  // the investigation has already taken place. Earlier contradictory fields
+  // are surfaced later by G-04 rather than hidden by lifecycle derivation.
+  if (investigationDate) {
+    return {code:'investigated', label:'สอบสวนแล้ว'};
+  }
+
+  if (isInvestigationCriteriaMet_(criteria)) {
+    return {code:'investigation_required', label:'รอสอบสวน'};
+  }
+  if (criteria === 'ไม่เข้าเกณฑ์') {
+    return {code:'criteria_not_met', label:'ไม่เข้าเกณฑ์สอบสวน'};
+  }
+  if (criteria === 'รอดำเนินการ') {
+    return {code:'criteria_pending', label:'รอประเมินเกณฑ์'};
+  }
+
+  if (verification === 'ตรวจสอบแล้วไม่จริง') {
+    return {code:'verification_rejected', label:'ตรวจสอบแล้วไม่จริง'};
+  }
+  if (verification === 'ตรวจสอบแล้วจริง') {
+    return {code:'criteria_pending', label:'รอประเมินเกณฑ์'};
+  }
+  if (verification === 'รอตรวจสอบ') {
+    return {code:'verification_pending', label:'รอตรวจสอบ'};
+  }
+
+  return {code:'received', label:'รับแจ้งแล้ว'};
+}
+
 function rowToObject_(row) {
   var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
@@ -857,6 +898,9 @@ function rowToObject_(row) {
   obj.eventId = meta.eventId;
   obj.revision = meta.revision;
   obj.recordStatus = meta.recordStatus;
+  var lifecycle = deriveEventLifecycle_(obj);
+  obj.eventLifecycle = lifecycle.code;
+  obj.eventLifecycleLabel = lifecycle.label;
   return obj;
 }
 
