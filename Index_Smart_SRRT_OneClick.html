@@ -728,8 +728,33 @@
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
-    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+    try{
+      btn.disabled=true;
+      btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจสอบ';
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังตรวจสอบความพร้อมของข้อมูล...</p>');
+
+      const readiness=await gs('getReportReadiness',token,eventId);
+      if(Number(readiness.warningCount||0)>0){
+        const statusLabel=readiness.status==='limited'?'ข้อมูลหลักยังไม่ครบ':'มีข้อมูลที่ควรทบทวน';
+        const lines=(readiness.warnings||[]).map((x,i)=>`${i+1}. ${x.message}`).join('\n');
+        const proceed=confirm(`AI Report Readiness: ${statusLabel}\n\n${lines}\n\nสามารถสร้างรายงานต่อได้ แต่ AI อาจใช้ข้อความแทนข้อมูลที่ยังขาด ต้องการสร้างต่อหรือไม่?`);
+        if(!proceed){
+          if(w)w.close();
+          toast('ยกเลิกการสร้างรายงาน');
+          return
+        }
+      }
+
+      btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';
+      if(w){
+        w.document.body.innerHTML='<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>';
+      }
+      const url=await gs('generateReportFromWeb',token,eventId);
+      if(w)w.location=url;else window.open(url,'_blank');
+      toast('สร้างรายงานเรียบร้อยแล้ว')
+    }
+    catch(e){if(w)w.close();toast(e.message||e)}
+    finally{btn.disabled=false;btn.innerHTML=old}
   }
 
   function exportClientExcel(){
