@@ -797,17 +797,26 @@ function aggregateEventRows_(data) {
       pendingCriteria: pendingCriteria
     },
     charts: {
-      byVillage: countBy_(data, 'col29'),
+      byVillage: countMap_(data, 'col29'),
       byMonth: countByMonth_(data),
-      byDiseaseGroup: countBy_(data, 'col5'),
-      byRisk: countBy_(data, 'col19')
+      byDiseaseGroup: countMap_(data, 'col5'),
+      byRisk: countMap_(data, 'col19')
     },
     insight: {
-      topDisease: topKey_(countBy_(data, 'col6')),
-      topVillage: topKey_(countBy_(data, 'col29')),
+      topDisease: topKey_(countMap_(data, 'col6')),
+      topVillage: topKey_(countMap_(data, 'col29')),
       pendingCriteria: pendingCriteria
     }
   };
+}
+
+function countMap_(data, field) {
+  var map = {};
+  (data || []).forEach(function(r) {
+    var key = String(r && r[field] || '').trim() || 'ไม่ระบุ';
+    map[key] = (map[key] || 0) + 1;
+  });
+  return map;
 }
 
 function countByMonth_(data) {
