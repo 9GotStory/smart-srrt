@@ -93,14 +93,14 @@
       </div>
       <div class="authenticated-dashboard">
         <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ผู้รับผิดชอบ</th><th>สถานะงาน</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
 
     <section id="page-records" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
       <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
-      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>สถานะงาน</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
     </section>
 
     <section id="page-reporter" class="section">
@@ -236,7 +236,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],ownerOptions=[];
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -284,6 +284,7 @@
     try{
       const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
       applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      if(currentUser){try{ownerOptions=await gs('listAssignableUsers',token)}catch(ignore){ownerOptions=[]}}
       google.charts.setOnLoadCallback(loadDashboard)
     }catch(e){toast(e.message||e)}
   }
@@ -306,10 +307,12 @@
     try{
       const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
       if(!r.ok){toast(r.message);return}
-      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');await loadDashboard()
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();
+      try{ownerOptions=await gs('listAssignableUsers',token)}catch(ignore){ownerOptions=[]}
+      toast('เข้าสู่ระบบสำเร็จ');await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;ownerOptions=[];updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -370,8 +373,24 @@
 
   function renderTables(){
     const manage=roleCanRecord();
-    el('eventBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${manage?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
-    el('recordBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col27||'-')}</td><td><button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>${currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>';
+    el('eventBody').innerHTML=allData.map((r,i)=>{
+      const closed=String(r.workflowStatus||'').toUpperCase()==='CLOSED';
+      const warnings=r.consistencyWarnings||[];
+      const actions=!manage?'-':closed
+        ?`<button class="btn light" onclick='reopenEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดอีกครั้ง</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`
+        :`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn orange" onclick='closeEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิดเหตุการณ์</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`;
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(ownerName(r.ownerUserId))}</td><td title="${escapeHtml(warnings.join(' | '))}">${escapeHtml(workflowBadge(r.workflowStatus,warnings))}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${actions}</td></tr>`
+    }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
+
+    el('recordBody').innerHTML=allData.map((r,i)=>{
+      const closed=String(r.workflowStatus||'').toUpperCase()==='CLOSED';
+      const primary=closed
+        ?`<button class="btn light" onclick='reopenEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดอีกครั้ง</button>`
+        :`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn orange" onclick='closeEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิด</button>`;
+      const voidBtn=currentUser&&['Super Admin','Manager'].includes(currentUser.role)?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:'';
+      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(ownerName(r.ownerUserId))}</td><td>${escapeHtml(workflowBadge(r.workflowStatus,r.consistencyWarnings||[]))}</td><td>${escapeHtml(r.col27||'-')}</td><td>${primary}${voidBtn}</td></tr>`
+    }).join('')||'<tr><td colspan="6">ไม่มีข้อมูล</td></tr>';
+
     el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
@@ -385,9 +404,27 @@
       else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
       else input=`<input type="text" id="${id}">`;
       return`<div class="fg${span}"><label>${escapeHtml(f[1])}</label>${input}</div>`
-    }).join('');
-    refreshRecordAreaOptions()
+    }).join('')+`<div class="fg"><label>ผู้รับผิดชอบหลัก</label><select id="inOwner"><option value="">-- ยังไม่กำหนด --</option></select></div>`;
+    refreshRecordAreaOptions();refreshOwnerOptions()
   }
+  function refreshOwnerOptions(selected){
+    const x=el('inOwner');if(!x)return;
+    const current=selected!==undefined?selected:x.value;
+    x.innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+ownerOptions.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name)}${u.org?' · '+escapeHtml(u.org):''}</option>`).join('');
+    if(ownerOptions.some(u=>u.userId===current))x.value=current
+  }
+  function ownerName(userId){
+    if(!userId)return'ยังไม่กำหนด';
+    const u=ownerOptions.find(x=>x.userId===userId);
+    return u?u.name:userId
+  }
+  function workflowBadge(status,warnings){
+    const s=String(status||'OPEN').toUpperCase();
+    const map={OPEN:'เปิด',IN_PROGRESS:'กำลังดำเนินการ',CLOSED:'ปิดแล้ว',VOID:'ยกเลิก'};
+    const warn=(warnings||[]).length?` ⚠ ${warnings.length}`:'';
+    return `${map[s]||s}${warn}`
+  }
+
   function refreshRecordAreaOptions(){
     if(!el('in13'))return;
     const p=el('in13').value,a=el('in12').value,t=el('in11').value;
@@ -407,29 +444,43 @@
   }
   function toIso(thai){if(!thai)return'';const p=String(thai).split('-');if(p.length!==3)return thai;let y=+p[0];if(y>2400)y-=543;return`${y}-${p[1]}-${p[2]}`}
   function toThai(iso){if(!iso)return'';const p=String(iso).split('-');if(p.length!==3)return iso;return`${+p[0]+543}-${p[1]}-${p[2]}`}
-  function openRecordForm(mode,i){
+  async function openRecordForm(mode,i){
     if(!roleCanRecord()){openLogin();return}
+    if(!ownerOptions.length){try{ownerOptions=await gs('listAssignableUsers',token)}catch(ignore){ownerOptions=[]}}
     el('formMode').value=mode;el('recordTitle').textContent=mode==='add'?'เพิ่มข้อมูลเหตุการณ์ใหม่':'แก้ไขข้อมูลเหตุการณ์';
     el('editEventId').value='';el('editRevision').value='';
     fields.forEach(f=>{const x=el('in'+f[0]);if(x)x.value=''});
+    let selectedOwner=currentUser&&currentUser.userId?currentUser.userId:'';
     if(mode==='edit'){
       const r=allData[i];
       if(!r.eventId){toast('ข้อมูลเหตุการณ์ยังไม่มี EventID กรุณาให้ผู้ดูแลอัปเกรดโครงสร้างข้อมูลก่อน');return}
-      el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);
+      if(String(r.workflowStatus||'').toUpperCase()==='CLOSED'){toast('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไข');return}
+      el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);selectedOwner=r.ownerUserId||'';
       fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})
     }
-    refreshRecordAreaOptions();openModal('recordModal')
+    refreshRecordAreaOptions();refreshOwnerOptions(selectedOwner);openModal('recordModal')
   }
   async function saveRecord(){
     const btn=el('saveRecordBtn');try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
-      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
+      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});data.ownerUserId=el('inOwner')?el('inOwner').value:'';
       const msg=el('formMode').value==='add'
         ?await gs('addRecord',token,data)
         :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
       closeModal('recordModal');toast(msg);await loadDashboard()
     }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
   }
+  async function closeEventUi(eventId,revision){
+    const reason=prompt('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการปิดเหตุการณ์');return}
+    try{toast(await gs('closeEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+  async function reopenEventUi(eventId,revision){
+    if(!confirm('เปิดเหตุการณ์นี้กลับมาดำเนินการต่อ?'))return;
+    try{toast(await gs('reopenEvent',token,eventId,Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+
   async function deleteEvent(eventId,revision){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
