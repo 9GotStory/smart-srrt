@@ -447,14 +447,23 @@ function migrateP1EventIdentity() {
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var summary = ensureEventIdentityData_(sheet);
     var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
-    upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 2);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
     var message = [
       'อัปเกรด Event identity เรียบร้อยแล้ว',
       'จำนวน Event ที่ตรวจ: ' + summary.rows,
       'สร้าง EventID ใหม่: ' + summary.backfilledIds,
       'กำหนด Revision เริ่มต้น: ' + summary.initializedRevision,
       'กำหนด RecordStatus เริ่มต้น: ' + summary.initializedStatus,
-      'Schema version: ' + CONFIG.SCHEMA_VERSION
+      'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
     return message;
@@ -676,8 +685,8 @@ function getCurrentUserHint_() {
 
 function hasPermission_(role, action) {
   var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','users','settings','master','audit','export','approve'],
+    'Super Admin': ['view','create','edit','delete','report','assign','users','settings','master','audit','export','approve'],
+    'Manager': ['view','create','edit','delete','report','assign','users','settings','master','audit','export','approve'],
     'Admin': ['view','create','edit','report','export'],
     'Staff': ['view','export']
   };
@@ -688,7 +697,7 @@ function requireAuth_(sessionToken, action) {
   var user = getUserByToken_(sessionToken);
   if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
   if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report'].indexOf(action) >= 0) {
+  if (['create','edit','delete','report','assign'].indexOf(action) >= 0) {
     var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
     if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
   }
@@ -789,7 +798,7 @@ function enrichEventOwners_(rows) {
 }
 
 function listAssignableEventOwners(sessionToken) {
-  requireAuth_(sessionToken, 'users');
+  requireAuth_(sessionToken, 'assign');
   var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
   return values.map(function(r) {
     return {
@@ -808,7 +817,7 @@ function listAssignableEventOwners(sessionToken) {
 }
 
 function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) {
-  var actor = requireAuth_(sessionToken, 'users');
+  var actor = requireAuth_(sessionToken, 'assign');
   var expected = Number(expectedRevision);
   if (!expected || expected < 1 || Math.floor(expected) !== expected) {
     throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
