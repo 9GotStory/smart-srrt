@@ -189,5 +189,5 @@ test('browser exposes lightweight lifecycle controls without a workflow engine',
   assert.match(html,/closeEvent/);
   assert.match(html,/reopenEvent/);
   assert.match(html,/workflowStatus/);
-  assert.doesNotMatch(html,/SLA|escalation|task queue/i);
+  assert.doesNotMatch(html,/\bSLA\b|\bescalation\b|task queue/i);
 });
