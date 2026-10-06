@@ -106,7 +106,7 @@
 
     <section id="page-reporter" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
-      <div class="help">ระบบสร้างโฟลเดอร์รายงานและ Google Docs Template ให้อัตโนมัติตั้งแต่ติดตั้งครั้งแรก เหลือเพียงใส่ Gemini API Key ผ่านหน้า Admin</div>
+      <div class="help">AI ใช้เพื่อช่วยร่างรายงานเบื้องต้นเท่านั้น เกณฑ์สอบสวน ประเภทเหตุการณ์ และระดับความเสี่ยงยึดตามข้อมูลที่ทีม SRRT บันทึกไว้ ระบบจะแจ้งคำเตือนเมื่อข้อมูลยังไม่พร้อมแต่สามารถยืนยันสร้างรายงานเบื้องต้นได้</div>
       <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
     </section>
 
@@ -203,6 +203,13 @@
 </div></div>
 
 <div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
+
+<div class="modal" id="reportHistoryModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> รายงานที่สร้างแล้ว</div>
+  <input type="hidden" id="reportHistoryEventId">
+  <div id="reportHistoryList"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
+</div></div>
 
 <div class="modal" id="attachmentModal"><div class="modal-box">
   <div class="modal-title"><i class="fa-solid fa-paperclip"></i> ไฟล์แนบเหตุการณ์</div>
@@ -424,7 +431,7 @@
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(workflowLabel(r.workflowStatus))}</td><td>${escapeHtml(r.ownerName||r.ownerEmail||'-')}</td><td>${escapeHtml(r.col27||'-')}</td><td>${lifecycle}${attachmentBtn}${voidBtn}</td></tr>`
     }).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
 
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> <button class="btn light" onclick='openReportHistory(${JSON.stringify(r.eventId||"")})'>รายงานเดิม</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
@@ -557,11 +564,37 @@
     if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
     try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
+  async function openReportHistory(eventId){
+    if(!eventId)return;
+    el('reportHistoryEventId').value=eventId;
+    openModal('reportHistoryModal');
+    try{
+      const rows=await gs('listReportsForEvent',token,eventId);
+      el('reportHistoryList').innerHTML=rows.map(r=>`<div class="content-item"><h4><i class="fa-solid fa-file-medical"></i> ${escapeHtml(r.generatedAt||'รายงาน')}</h4><p>ผู้สร้าง: ${escapeHtml(r.generatedBy||'-')}<br>Model: ${escapeHtml(r.model||'-')} · Prompt: ${escapeHtml(r.promptVersion||'-')}<br>สถานะ: ${escapeHtml(r.status||'generated')}${(r.readinessWarnings||[]).length?'<br>สร้างขณะมีคำเตือน: '+escapeHtml((r.readinessWarnings||[]).join(' | ')):''}</p><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">เปิด Google Docs</a></div>`).join('')||'<div class="help">ยังไม่มีรายงานที่บันทึกใน ReportRegistry สำหรับเหตุการณ์นี้</div>'
+    }catch(e){toast(e.message||e)}
+  }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    let acknowledge=false;
+    try{
+      const readiness=await gs('getReportReadiness',token,eventId);
+      if((readiness.configurationWarnings||[]).length){
+        toast('ยังสร้างรายงานไม่ได้: '+readiness.configurationWarnings.join(' | '));return
+      }
+      if((readiness.warnings||[]).length){
+        const proceed=confirm('ข้อมูลสำหรับรายงานยังมีคำเตือน:\n- '+readiness.warnings.join('\n- ')+'\n\nต้องการสร้างรายงานเบื้องต้นต่อหรือไม่?');
+        if(!proceed)return;
+        acknowledge=true
+      }
+    }catch(e){toast(e.message||e);return}
     const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
-    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');
+      const result=await gs('generateReportFromWeb',token,eventId,acknowledge);
+      if(w)w.location=result.url;else window.open(result.url,'_blank');
+      toast('สร้างรายงานและบันทึก ReportRegistry เรียบร้อยแล้ว')
+    }catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
   }
 
   function exportClientExcel(){
