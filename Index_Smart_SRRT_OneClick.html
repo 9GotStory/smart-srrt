@@ -503,6 +503,17 @@
       }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>'
     }catch(e){el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>'}
   }
+  function attachmentMimeForFile(file){
+    if(file&&file.type)return file.type;
+    const name=String(file&&file.name||'').toLowerCase();
+    if(name.endsWith('.pdf'))return'application/pdf';
+    if(name.endsWith('.jpg')||name.endsWith('.jpeg'))return'image/jpeg';
+    if(name.endsWith('.png'))return'image/png';
+    if(name.endsWith('.webp'))return'image/webp';
+    if(name.endsWith('.docx'))return'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if(name.endsWith('.xlsx'))return'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return''
+  }
   function fileToBase64(file){
     return new Promise((resolve,reject)=>{
       const reader=new FileReader();
@@ -522,7 +533,7 @@
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังอัปโหลด';
       const base64=await fileToBase64(file);
       const result=await gs('uploadEventAttachment',token,el('attachmentEventId').value,{
-        name:file.name,mimeType:file.type,base64:base64,description:el('attachmentDescription').value
+        name:file.name,mimeType:attachmentMimeForFile(file),base64:base64,description:el('attachmentDescription').value
       },Number(el('attachmentRevision').value||0));
       el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
       toast(result.message||'แนบไฟล์เรียบร้อยแล้ว');
