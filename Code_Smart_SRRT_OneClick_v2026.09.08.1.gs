@@ -151,6 +151,7 @@ function installSmartSRRTCore_() {
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
+    ensureEventAttachmentSheet_(ss);
     ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
     ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','UserAgent']);
 
@@ -164,6 +165,7 @@ function installSmartSRRTCore_() {
     props.setProperty('SYSTEM_FOLDER_ID', assets.systemFolderId);
     props.setProperty('REPORT_FOLDER_ID', assets.reportFolderId);
     props.setProperty('LOGO_FOLDER_ID', assets.logoFolderId);
+    props.setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
     props.setProperty('TEMPLATE_DOC_ID', assets.templateDocId);
 
     var message = [
@@ -182,6 +184,7 @@ function installSmartSRRTCore_() {
       spreadsheetId: ss.getId(),
       systemFolderId: assets.systemFolderId,
       reportFolderId: assets.reportFolderId,
+      attachmentFolderId: assets.attachmentFolderId,
       templateDocId: assets.templateDocId,
       adminEmail: adminInfo.email,
       eventMigration: eventMigration
@@ -246,6 +249,11 @@ function ensureSystemAssets_(ss) {
     'โลโก้ระบบ',
     systemFolder
   );
+  var attachmentFolder = getOrCreateNamedChildFolder_(
+    directSettings.ATTACHMENT_FOLDER_ID || props.getProperty('ATTACHMENT_FOLDER_ID'),
+    'เอกสารแนบเหตุการณ์',
+    systemFolder
+  );
 
   var templateId = directSettings.TEMPLATE_DOC_ID || props.getProperty('TEMPLATE_DOC_ID');
   if (!isGoogleDocAvailable_(templateId)) {
@@ -256,8 +264,25 @@ function ensureSystemAssets_(ss) {
     systemFolderId: systemFolder.getId(),
     reportFolderId: reportFolder.getId(),
     logoFolderId: logoFolder.getId(),
+    attachmentFolderId: attachmentFolder.getId(),
     templateDocId: templateId
   };
+}
+
+function getOrCreateNamedChildFolder_(folderId, name, parentFolder) {
+  if (folderId) {
+    try {
+      var existing = DriveApp.getFolderById(String(folderId));
+      existing.getName();
+      return existing;
+    } catch (ignore) {}
+  }
+  if (parentFolder) {
+    var matches = parentFolder.getFoldersByName(name);
+    if (matches.hasNext()) return matches.next();
+    return parentFolder.createFolder(name);
+  }
+  return DriveApp.createFolder(name);
 }
 
 function getOrCreateFolder_(folderId, name, parentFolder) {
@@ -342,6 +367,52 @@ function ensureSheet_(ss, name, headers) {
   return sheet;
 }
 
+function ensureEventAttachmentSheet_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.ATTACHMENTS);
+    sheet.appendRow(EVENT_ATTACHMENT_HEADERS);
+    return sheet;
+  }
+
+  if (sheet.getMaxColumns() < EVENT_ATTACHMENT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), EVENT_ATTACHMENT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(EVENT_ATTACHMENT_HEADERS);
+    return sheet;
+  }
+
+  var current = sheet.getRange(1, 1, 1, EVENT_ATTACHMENT_HEADERS.length).getValues()[0];
+  for (var i = 0; i < EVENT_ATTACHMENT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = EVENT_ATTACHMENT_HEADERS[i];
+    if (actual && actual !== expected) {
+      throw new Error('ไม่สามารถเตรียม EventAttachments ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+    }
+    if (!actual && sheet.getLastRow() > 1) {
+      var values = sheet.getRange(2, i + 1, sheet.getLastRow() - 1, 1).getValues();
+      for (var r = 0; r < values.length; r++) {
+        if (String(values[r][0] || '').trim() !== '') {
+          throw new Error('ไม่สามารถเตรียม EventAttachments ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แม้หัวข้อจะว่าง');
+        }
+      }
+    }
+  }
+
+  var patched = current.slice();
+  var changed = false;
+  for (var j = 0; j < EVENT_ATTACHMENT_HEADERS.length; j++) {
+    if (!String(patched[j] || '').trim()) {
+      patched[j] = EVENT_ATTACHMENT_HEADERS[j];
+      changed = true;
+    }
+  }
+  if (changed) sheet.getRange(1, 1, 1, EVENT_ATTACHMENT_HEADERS.length).setValues([patched]);
+  return sheet;
+}
+
 function ensureEventOwnerSchema_(ss) {
   var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
   if (sheet.getMaxColumns() < EVENT_OWNER_COL) {
@@ -378,12 +449,45 @@ function migrateG05EventOwner() {
     var ss = getDb_();
     ensureEventOwnerSchema_(ss);
     var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
-    upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 3);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
     var message = [
       'อัปเกรด Event Owner เรียบร้อยแล้ว',
       'เพิ่มคอลัมน์: ' + EVENT_OWNER_HEADER,
       'คอลัมน์: ' + EVENT_OWNER_COL,
-      'Schema version: ' + CONFIG.SCHEMA_VERSION
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function migrateG11EventAttachments() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    ensureEventAttachmentSheet_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    var assets = ensureSystemAssets_(ss);
+    upsertSettingDirect_(settings, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'Google Drive Folder สำหรับเอกสารแนบเหตุการณ์', true);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', '4', 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    PropertiesService.getScriptProperties().setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+    var message = [
+      'อัปเกรด Event Attachments เรียบร้อยแล้ว',
+      'สร้าง/ตรวจสอบชีท: ' + CONFIG.SHEETS.ATTACHMENTS,
+      'โฟลเดอร์เอกสารแนบพร้อมใช้งาน',
+      'Schema version: 4'
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
     return message;
@@ -543,6 +647,7 @@ function seedSettings_(ss, assets) {
     ['MAIN_SHEET_ID', String(ss.getSheetByName(CONFIG.SHEETS.MAIN).getSheetId()), 'Sheet ID ของ MainData'],
     ['SYSTEM_FOLDER_ID', assets.systemFolderId, 'โฟลเดอร์หลักของระบบ'],
     ['LOGO_FOLDER_ID', assets.logoFolderId, 'โฟลเดอร์เก็บโลโก้'],
+    ['ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์'],
     ['GEMINI_API_KEY','','Gemini API Key ตั้งค่าผ่านหน้า Admin'],
     ['GEMINI_MODEL','AUTO','AUTO หรือชื่อโมเดล Gemini ที่รองรับ generateContent'],
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
@@ -552,7 +657,7 @@ function seedSettings_(ss, assets) {
     ['SCHEMA_VERSION',CONFIG.SCHEMA_VERSION,'รุ่นโครงสร้างข้อมูลถาวร']
   ];
   rows.forEach(function(r) {
-    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
+    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
   });
 }
 
@@ -1603,10 +1708,12 @@ function getInstallationStatus(sessionToken) {
     spreadsheetName: ss.getName(),
     systemFolderId: settings.SYSTEM_FOLDER_ID || '',
     reportFolderId: settings.REPORT_FOLDER_ID || '',
+    attachmentFolderId: settings.ATTACHMENT_FOLDER_ID || '',
     templateDocId: settings.TEMPLATE_DOC_ID || '',
     logoFileId: settings.LOGO_FILE_ID || '',
     areas: Math.max(getSheet_(CONFIG.SHEETS.AREAS).getLastRow() - 1, 0),
-    events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0)
+    events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0),
+    attachments: Math.max((ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS) || {getLastRow:function(){return 1;}}).getLastRow() - 1, 0)
   };
 }
 
