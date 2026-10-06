@@ -58,7 +58,7 @@ Targets EventID, not row number.
 
 When the browser supplies `expectedRevision`, a mismatch rejects the write and asks the user to refresh.
 
-Successful update increments Revision.
+Successful update increments Revision. Missing or stale expectedRevision is rejected.
 
 ### Delete action
 The existing browser delete action becomes a non-destructive **void** operation.
@@ -66,6 +66,7 @@ The existing browser delete action becomes a non-destructive **void** operation.
 It:
 
 - requires a reason,
+- requires the expected Revision and rejects stale views,
 - preserves the physical row,
 - increments Revision,
 - sets RecordStatus=void,
@@ -73,6 +74,8 @@ It:
 - writes audit action `VOID_RECORD`.
 
 Normal Dashboard/Event lists exclude void records.
+
+The browser projection exposes only EventID, Revision and RecordStatus from the new metadata. Created/void audit metadata stays server-side during P1.
 
 ## Report lookup
 
