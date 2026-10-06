@@ -233,6 +233,50 @@ test('soft-disabled values disappear from new selections but historical sheet va
   assert.equal(masterSheet.rows[1][1],'A');
 });
 
+
+test('new Event selections must use active MasterData while unchanged legacy values remain editable',()=>{
+  const ctx=makeContext();
+  const masterSheet=new FakeSheet([
+    masterHeader(),
+    ['disease_group','ACTIVE','Active',1,true,'',''],
+    ['disease_group','OLD','Old',2,false,'',''],
+    ['surveillance','EBS','EBS',1,true,'',''],
+    ['event_type','TYPE','Type',1,true,'',''],
+    ['verify_status','รอตรวจสอบ','รอตรวจสอบ',1,true,'',''],
+    ['criteria','เข้าเกณฑ์','เข้าเกณฑ์',1,true,'',''],
+    ['risk','ความเสี่ยงต่ำ','ความเสี่ยงต่ำ',1,true,'','']
+  ],7);
+  ctx.getSheet_=()=>masterSheet;
+
+  assert.doesNotThrow(()=>ctx.validateEventMasterData_({
+    col4:'EBS',col5:'ACTIVE',col7:'TYPE',col15:'รอตรวจสอบ',col17:'เข้าเกณฑ์',col19:'ความเสี่ยงต่ำ'
+  },null));
+
+  assert.throws(()=>ctx.validateEventMasterData_({col5:'OLD'},null),/ไม่อยู่ใน MasterData ที่เปิดใช้งาน/);
+
+  const before=Array(30).fill('');
+  before[4]='OLD';
+  assert.doesNotThrow(()=>ctx.validateEventMasterData_({col5:'OLD'},before));
+  assert.throws(()=>ctx.validateEventMasterData_({col5:'UNKNOWN'},before),/ไม่อยู่ใน MasterData ที่เปิดใช้งาน/);
+});
+
+test('record and content save paths enforce active MasterData server-side',()=>{
+  const add=source.match(/function addRecord[\s\S]*?(?=\nfunction )/)?.[0]??'';
+  const update=source.match(/function updateRecord[\s\S]*?(?=\nfunction )/)?.[0]??'';
+  const content=source.match(/function saveContent[\s\S]*?(?=\nfunction )/)?.[0]??'';
+
+  assert.match(add,/validateEventMasterData_\(formData \|\| \{\}, null\)/);
+  assert.match(update,/validateEventMasterData_\(formData \|\| \{\}, before\)/);
+  assert.match(content,/isActiveMasterValue_\('content_category', category\)/);
+  assert.match(content,/category !== existingCategory/);
+});
+
+test('MasterData admin computes usage map once per admin load',()=>{
+  const block=source.match(/function getMasterDataAdmin[\s\S]*?(?=\nfunction )/)?.[0]??'';
+  assert.match(block,/var usageMap = buildMasterDataUsageMap_\(\)/);
+  assert.match(block,/countMasterDataUsage_\(type, value, usageMap\)/);
+});
+
 test('G-24 does not add a hard-delete MasterData endpoint',()=>{
   assert.doesNotMatch(source,/function\s+(?:delete|remove)MasterData/);
   assert.doesNotMatch(html,/deleteMasterData|removeMasterData/);
