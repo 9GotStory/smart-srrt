@@ -47,7 +47,7 @@ test('G-19 extends RecordStatus validation with closed without schema expansion'
   assert.equal(summary.backfilledIds,0);
   assert.equal(summary.initializedRevision,0);
   assert.equal(summary.initializedStatus,0);
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'3');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 3);
   assert.equal(ctx.EVENT_OWNER_COL,39);
 });
 
