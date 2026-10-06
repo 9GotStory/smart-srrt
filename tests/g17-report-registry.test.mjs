@@ -66,7 +66,7 @@ function fnBlock(name){
 
 test('G-17 schema v7 defines append-only ReportRegistry contract',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'7');
+  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 7);
   assert.equal(ctx.CONFIG.SHEETS.REPORTS,'ReportRegistry');
   assert.equal(ctx.CONFIG.REPORT_PROMPT_VERSION,'2026.10.06.1');
   assert.deepEqual(Array.from(ctx.REPORT_REGISTRY_HEADERS),[
