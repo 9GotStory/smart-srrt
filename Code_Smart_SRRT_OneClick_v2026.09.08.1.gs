@@ -1613,34 +1613,56 @@ function getMasterPolicy_(type) {
   return policy;
 }
 
-function countMasterDataUsage_(type, value) {
-  var policy = getMasterPolicy_(type);
-  var wanted = String(value || '').trim();
-  if (!wanted) return 0;
+function buildMasterDataUsageMap_() {
+  var usage = {};
+  Object.keys(MASTER_DATA_POLICIES).forEach(function(type){ usage[type] = {}; });
 
-  var sheet;
-  if (policy.sourceSheet === 'main') {
-    sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  } else if (policy.sourceSheet === 'content') {
-    sheet = getSheet_(CONFIG.SHEETS.CONTENT);
-  } else {
-    return 0;
+  var mainPolicies = Object.keys(MASTER_DATA_POLICIES).filter(function(type){
+    return MASTER_DATA_POLICIES[type].sourceSheet === 'main';
+  });
+  if (mainPolicies.length) {
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var mainRows = main.getDataRange().getValues().slice(1);
+    mainRows.forEach(function(row) {
+      mainPolicies.forEach(function(type) {
+        var policy = MASTER_DATA_POLICIES[type];
+        var value = String(row[policy.sourceColumn - 1] || '').trim();
+        if (value) usage[type][value] = (usage[type][value] || 0) + 1;
+      });
+    });
   }
 
-  var rows = Math.max(sheet.getLastRow() - 1, 0);
-  if (!rows) return 0;
-  var values = sheet.getRange(2, policy.sourceColumn, rows, 1).getValues();
-  var count = 0;
-  values.forEach(function(r) {
-    if (String(r[0] || '').trim() === wanted) count++;
+  var contentPolicies = Object.keys(MASTER_DATA_POLICIES).filter(function(type){
+    return MASTER_DATA_POLICIES[type].sourceSheet === 'content';
   });
-  return count;
+  if (contentPolicies.length) {
+    var content = getSheet_(CONFIG.SHEETS.CONTENT);
+    var contentRows = content.getDataRange().getValues().slice(1);
+    contentRows.forEach(function(row) {
+      contentPolicies.forEach(function(type) {
+        var policy = MASTER_DATA_POLICIES[type];
+        var value = String(row[policy.sourceColumn - 1] || '').trim();
+        if (value) usage[type][value] = (usage[type][value] || 0) + 1;
+      });
+    });
+  }
+
+  return usage;
+}
+
+function countMasterDataUsage_(type, value, usageMap) {
+  getMasterPolicy_(type);
+  var wanted = String(value || '').trim();
+  if (!wanted) return 0;
+  var map = usageMap || buildMasterDataUsageMap_();
+  return map[type] && map[type][wanted] ? map[type][wanted] : 0;
 }
 
 function getMasterDataAdmin(sessionToken) {
   requireAuth_(sessionToken, 'master');
   var sheet = getSheet_(CONFIG.SHEETS.MASTER);
   var rows = sheet.getDataRange().getValues().slice(1);
+  var usageMap = buildMasterDataUsageMap_();
   var items = [];
 
   rows.forEach(function(r) {
@@ -1655,7 +1677,7 @@ function getMasterDataAdmin(sessionToken) {
       label:String(r[2] || value),
       sortOrder:Number(r[3] || 999),
       active:String(r[4]).toLowerCase() !== 'false',
-      usageCount:countMasterDataUsage_(type, value),
+      usageCount:countMasterDataUsage_(type, value, usageMap),
       allowCreate:policy.allowCreate,
       allowDeactivate:policy.allowDeactivate,
       semanticLocked:policy.semanticLocked
