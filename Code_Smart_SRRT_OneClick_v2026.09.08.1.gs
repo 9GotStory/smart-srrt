@@ -731,6 +731,136 @@ function findUserByEmail_(email) {
   return null;
 }
 
+function findUserById_(userId) {
+  userId = String(userId || '').trim();
+  if (!userId) return null;
+  var sheet = getSheet_(CONFIG.SHEETS.USERS);
+  var values = sheet.getDataRange().getValues();
+  for (var i=1; i<values.length; i++) {
+    if (String(values[i][0] || '').trim() === userId) {
+      return {
+        rowNumber: i + 1,
+        userId: values[i][0],
+        name: values[i][1],
+        email: values[i][2],
+        passwordHash: values[i][3],
+        role: values[i][4],
+        status: values[i][5],
+        org: values[i][6],
+        tambon: values[i][7],
+        amphoe: values[i][8],
+        province: values[i][9]
+      };
+    }
+  }
+  return null;
+}
+
+function getUserDirectoryById_() {
+  var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  var out = {};
+  values.forEach(function(r) {
+    var userId = String(r[0] || '').trim();
+    if (!userId) return;
+    out[userId] = {
+      userId:userId,
+      name:r[1] || '',
+      email:r[2] || '',
+      role:r[4] || '',
+      status:r[5] || '',
+      org:r[6] || ''
+    };
+  });
+  return out;
+}
+
+function enrichEventOwners_(rows) {
+  var users = getUserDirectoryById_();
+  return rows.map(function(r) {
+    var owner = r.ownerUserId ? users[r.ownerUserId] : null;
+    r.ownerName = owner ? owner.name : '';
+    r.ownerEmail = owner ? owner.email : '';
+    r.ownerRole = owner ? owner.role : '';
+    r.ownerStatus = owner ? owner.status : '';
+    r.ownerOrg = owner ? owner.org : '';
+    r.ownerMissing = !!(r.ownerUserId && !owner);
+    return r;
+  });
+}
+
+function listAssignableEventOwners(sessionToken) {
+  requireAuth_(sessionToken, 'users');
+  var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  return values.map(function(r) {
+    return {
+      userId:String(r[0] || '').trim(),
+      name:r[1] || '',
+      email:r[2] || '',
+      role:r[4] || '',
+      status:r[5] || '',
+      org:r[6] || ''
+    };
+  }).filter(function(u) {
+    return u.userId && u.status === 'active' && hasPermission_(u.role, 'edit');
+  }).sort(function(a,b) {
+    return String(a.name || a.email).localeCompare(String(b.name || b.email), 'th');
+  });
+}
+
+function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) {
+  var actor = requireAuth_(sessionToken, 'users');
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
+  }
+
+  ownerUserId = String(ownerUserId || '').trim();
+  var owner = null;
+  if (ownerUserId) {
+    owner = findUserById_(ownerUserId);
+    if (!owner) throw new Error('ไม่พบบัญชีผู้รับผิดชอบที่เลือก');
+    if (owner.status !== 'active') throw new Error('บัญชีผู้รับผิดชอบที่เลือกไม่ได้อยู่ในสถานะ active');
+    if (!hasPermission_(owner.role, 'edit')) throw new Error('บัญชีผู้รับผิดชอบที่เลือกไม่มีสิทธิ์แก้ไขเหตุการณ์');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureEventOwnerSchema_(ss);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
+    }
+
+    var beforeOwnerUserId = String(sheet.getRange(rowNumber, EVENT_OWNER_COL).getValue() || '').trim();
+    if (beforeOwnerUserId === ownerUserId) {
+      return ownerUserId ? 'ผู้รับผิดชอบเหตุการณ์ไม่เปลี่ยนแปลง' : 'เหตุการณ์นี้ยังไม่ได้กำหนดผู้รับผิดชอบ';
+    }
+
+    sheet.getRange(rowNumber, EVENT_OWNER_COL).setValue(ownerUserId);
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(actor.email || '');
+    sheet.getRange(rowNumber, 28).setValue(new Date());
+
+    writeAudit_(
+      actor,
+      'ASSIGN_EVENT_OWNER',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({ownerUserId:beforeOwnerUserId}),
+      JSON.stringify({ownerUserId:ownerUserId, ownerName:owner ? owner.name : ''})
+    );
+
+    return ownerUserId
+      ? 'กำหนดผู้รับผิดชอบเหตุการณ์เรียบร้อยแล้ว'
+      : 'ยกเลิกการกำหนดผู้รับผิดชอบเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function login(payload) {
   var email = String(payload.email || '').trim().toLowerCase();
   var password = String(payload.password || '');
@@ -827,7 +957,7 @@ function getFilteredEventRows_(filter) {
 
 function getDashboardData(sessionToken, filter) {
   requireAuth_(sessionToken, 'view');
-  return getFilteredEventRows_(filter || {});
+  return enrichEventOwners_(getFilteredEventRows_(filter || {}));
 }
 
 function getPublicDashboardData(filter) {
@@ -993,6 +1123,7 @@ function rowToObject_(row) {
   obj.eventId = meta.eventId;
   obj.revision = meta.revision;
   obj.recordStatus = meta.recordStatus;
+  obj.ownerUserId = String(row[EVENT_OWNER_COL - 1] || '').trim();
   var lifecycle = deriveEventLifecycle_(obj);
   obj.eventLifecycle = lifecycle.code;
   obj.eventLifecycleLabel = lifecycle.label;
