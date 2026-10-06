@@ -127,7 +127,7 @@ test('source and browser contracts use EventID rather than rowNumber for Event o
   assert.doesNotMatch(deleteBlock, /deleteRow\s*\(/);
   assert.doesNotMatch(html, /\browNumber\b/);
   assert.match(html, /editEventId/);
-  assert.match(html, /deleteEvent\(eventId\)/);
+  assert.match(html, /deleteEvent\(eventId,revision\)/);
   assert.match(html, /makeReport\(eventId,btn\)/);
 });
 
