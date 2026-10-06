@@ -1,0 +1,455 @@
+<script>
+  google.charts.load('current', {'packages':['corechart']});
+  let token=localStorage.getItem('SRRT_TOKEN')||'';
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],masterAdminCache=[];
+  const fields=[
+    [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
+    [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
+    [7,'ประเภทเหตุการณ์','select:event_type'],[8,'สถานที่เกิดเหตุ','text'],
+    [13,'จังหวัด','area:province'],[12,'อำเภอ','area:amphoe'],[11,'ตำบล','area:tambon'],[10,'หมู่ที่','area:moo'],
+    [29,'ชื่อหมู่บ้าน','area:village'],[30,'รหัสหมู่บ้าน','text'],
+    [14,'รายละเอียดเหตุการณ์','textarea'],[15,'การตรวจสอบ','select:verify_status'],[16,'วิธีการตรวจสอบ','text'],
+    [17,'เข้าเกณฑ์สอบสวนโรค','select:criteria'],[18,'ประเภทการสอบสวนโรค','text'],
+    [24,'ลงสอบสวนโรค','select_custom:ลงสอบสวน|ไม่ลงสอบสวน'],[26,'วันที่ลงสอบสวนโรค','date'],
+    [19,'ประเมินความเสี่ยงแจ้งเตือน','select:risk'],[20,'หน่วยงานแจ้งเตือน','text'],[23,'หน่วยงานรับแจ้ง','text'],
+    [21,'การดำเนินการตามมาตรการ','textarea'],[22,'วันที่ดำเนินการตามมาตรการ','date']
+  ];
+  const settingFields=['APP_NAME','APP_SUBTITLE','ORG_NAME','CONTACT_INFO','BANNER_TEXT','PRIMARY_COLOR','SECONDARY_COLOR','SYSTEM_STATUS','ALLOW_SELF_REGISTER','GEMINI_API_KEY','GEMINI_MODEL','TEMPLATE_DOC_ID','REPORT_FOLDER_ID'];
+
+  function el(id){return document.getElementById(id)}
+  function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
+  function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
+  function openModal(id){el(id).classList.add('open')} function closeModal(id){el(id).classList.remove('open')}
+  function toggleSidebar(show){el('sidebar').classList.toggle('open',show);el('overlay').classList.toggle('show',show)}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function unique(arr){return [...new Set(arr.filter(v=>String(v||'').trim()!=='').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'th'))}
+  function roleCanManage(){return currentUser&&['Super Admin','Manager'].includes(currentUser.role)}
+  function roleCanRecord(){return currentUser&&['Super Admin','Manager','Admin'].includes(currentUser.role)}
+
+  function showPage(page,btn){
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');toggleSidebar(false);
+    if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
+  }
+
+  function applyTheme(){
+    document.documentElement.style.setProperty('--primary',settings.PRIMARY_COLOR||'#0f766e');
+    document.documentElement.style.setProperty('--secondary',settings.SECONDARY_COLOR||'#2563eb');
+    const logo=settings.LOGO_URL||'https://lh3.googleusercontent.com/d/1ANG8ALHZASMzdI4MFLtZHwbWcwS0vMWQ';
+    el('logoImg').src=logo;el('adminLogoPreview').src=logo;
+    el('appName').textContent=settings.APP_NAME||'Smart SRRT Dashboard & AI Reporter';
+    el('appSubtitle').textContent=settings.APP_SUBTITLE||'ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่';
+    el('sideTitle').textContent=settings.APP_NAME||'Smart SRRT';
+    el('sideOrg').textContent=settings.ORG_NAME||'District Edition';
+    el('bannerText').innerHTML='<i class="fa-solid fa-bullhorn"></i> '+escapeHtml(settings.BANNER_TEXT||'ระบบพร้อมใช้งาน');
+    el('closedBox').style.display=String(settings.SYSTEM_STATUS||'open')==='closed'?'block':'none'
+  }
+
+  async function boot(){
+    try{
+      const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
+      applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      google.charts.setOnLoadCallback(loadDashboard)
+    }catch(e){toast(e.message||e)}
+  }
+
+  function updateAuthBox(){
+    const box=el('authBox');
+    document.querySelectorAll('.auth-only').forEach(x=>x.style.display=roleCanRecord()?'flex':'none');
+    document.querySelectorAll('.manager-only').forEach(x=>x.style.display=roleCanManage()?'flex':'none');
+    if(currentUser){
+      box.innerHTML=`<b>${escapeHtml(currentUser.name)}</b><span>${escapeHtml(currentUser.role)} | ${escapeHtml(currentUser.email)}</span><button onclick="doLogout()">ออกจากระบบ</button>`
+    }else{
+      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard สรุปได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
+    }
+    if(el('dashboardPrivateEvents'))el('dashboardPrivateEvents').style.display=currentUser?'block':'none';
+    if(el('dashboardPublicOnlyNote'))el('dashboardPublicOnlyNote').style.display=currentUser?'none':'block';
+  }
+
+  function openLogin(){openModal('loginModal')}
+  async function doLogin(){
+    try{
+      const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
+      if(!r.ok){toast(r.message);return}
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');await loadDashboard()
+    }catch(e){toast(e.message||e)}
+  }
+  async function doLogout(){try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
+
+  function setupDashboardFilters(){
+    const source=areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}));
+    fillSelect(el('filterProvince'),unique(source.map(x=>x.province)),'ทุกจังหวัด',el('filterProvince').value);
+    updateDashboardAreaFilters('province')
+  }
+  function fillSelect(select,values,placeholder,current){
+    select.innerHTML=`<option value="">${placeholder}</option>`+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(values.includes(current))select.value=current
+  }
+  function updateDashboardAreaFilters(level){
+    const p=el('filterProvince').value,a=level==='province'?'':el('filterAmphoe').value,t=level==='tambon'?el('filterTambon').value:'';
+    const source=(areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}))).filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    if(level==='province')fillSelect(el('filterAmphoe'),unique(source.map(x=>x.amphoe)),'ทุกอำเภอ','');
+    const amph=el('filterAmphoe').value;
+    const source2=source.filter(x=>!amph||x.amphoe===amph);
+    if(level==='province'||level==='amphoe')fillSelect(el('filterTambon'),unique(source2.map(x=>x.tambon)),'ทุกตำบล','');
+    const tamb=el('filterTambon').value;
+    const source3=source2.filter(x=>!tamb||x.tambon===tamb);
+    fillSelect(el('filterVillage'),unique(source3.map(x=>x.village||('หมู่ '+x.moo))),'ทุกหมู่บ้าน','')
+  }
+
+  async function loadDashboard(){
+    try{
+      const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
+      dashboardSummary=await gs('getDashboardData',filter);
+      allData=currentUser?await gs('getEventData',token,filter):[];
+      updateDashboard();renderTables();if(!areas.length)setupDashboardFilters()
+    }catch(e){toast(e.message||e)}
+  }
+  function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
+  function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
+  function locationLabel(r){return `${villageLabel(r)} ต.${r.col11||'-'} อ.${r.col12||'-'} จ.${r.col13||'-'}`}
+  function updateDashboard(){
+    const summary=dashboardSummary||{kpi:{},charts:{},insight:{}},kpi=summary.kpi||{};
+    el('kpiTotal').textContent=Number(kpi.events||0);
+    el('kpiCriteria').textContent=Number(kpi.criteria||0);
+    el('kpiInvestigated').textContent=Number(kpi.investigated||0);
+    el('kpiRate').textContent=Number(kpi.investigationRate||0)+'%';
+    el('smartInsight').innerHTML=makeInsight(summary);drawCharts(summary)
+  }
+  function makeInsight(summary){
+    const kpi=(summary&&summary.kpi)||{},insight=(summary&&summary.insight)||{};
+    const total=Number(kpi.events||0),pending=Number(insight.pendingInvestigation||0);
+    if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(insight.topDisease||'ไม่ระบุ')}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(insight.topVillage||'ไม่ระบุ')}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function chartRows(items){return(items||[]).map(x=>[x.name,Number(x.value||0)])}
+  function drawCharts(summary){
+    if(!google.visualization)return;
+    const charts=(summary&&summary.charts)||{};
+    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...chartRows(charts.byVillage)],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+    draw('lineChart','LineChart',[['เดือน','จำนวน'],...chartRows(charts.byMonth)],{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...chartRows(charts.byDiseaseGroup)],{pieHole:.42});
+    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...chartRows(charts.byRisk)],{pieHole:.42})
+  }
+  function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
+  function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
+
+  function workflowLabel(v){
+    if(v==='closed')return'ปิดแล้ว';
+    if(v==='in_progress')return'กำลังดำเนินการ';
+    return'เปิด';
+  }
+  function renderTables(){
+    const manage=roleCanRecord();
+    el('eventBody').innerHTML=allData.map((r,i)=>{
+      const closed=r.workflowStatus==='closed';
+      const actions=manage
+        ?(closed
+          ?`<button class="btn light" onclick='reopenEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดอีกครั้ง</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`
+          :`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`)
+        :'-';
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${actions}</td></tr>`
+    }).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
+
+    el('recordBody').innerHTML=allData.map((r,i)=>{
+      const closed=r.workflowStatus==='closed';
+      const lifecycle=closed
+        ?`<button class="btn light" onclick='reopenEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดอีกครั้ง</button>`
+        :`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn secondary" onclick='assignOwnerUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)},${JSON.stringify(r.ownerEmail||"")})'>มอบหมาย</button> <button class="btn gray" onclick='closeEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิด</button>`;
+      const attachmentBtn=manage?` <button class="btn light" onclick='openAttachments(${JSON.stringify(r.eventId||"")})'><i class="fa-solid fa-paperclip"></i> ไฟล์แนบ</button>`:'';
+      const voidBtn=currentUser&&['Super Admin','Manager'].includes(currentUser.role)
+        ?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:'';
+      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(workflowLabel(r.workflowStatus))}</td><td>${escapeHtml(r.ownerName||r.ownerEmail||'-')}</td><td>${escapeHtml(r.col27||'-')}</td><td>${lifecycle}${attachmentBtn}${voidBtn}</td></tr>`
+    }).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
+
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> <button class="btn light" onclick='openReportHistory(${JSON.stringify(r.eventId||"")})'>รายงานเดิม</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+  }
+
+  function buildRecordForm(){
+    el('recordForm').innerHTML=fields.map(f=>{
+      const span=f[2]==='textarea'?' span-3':'',id='in'+f[0];let input='';
+      if(f[2]==='textarea')input=`<textarea id="${id}" rows="3"></textarea>`;
+      else if(f[2]==='date')input=`<input type="date" id="${id}">`;
+      else if(f[2].startsWith('select:')){const key=f[2].split(':')[1];input=`<select id="${id}"><option value="">-- เลือก --</option>${(master[key]||[]).map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('select_custom:')){const opts=f[2].split(':')[1].split('|');input=`<select id="${id}"><option value="">-- เลือก --</option>${opts.map(o=>`<option>${escapeHtml(o)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
+      else input=`<input type="text" id="${id}">`;
+      return`<div class="fg${span}"><label>${escapeHtml(f[1])}</label>${input}</div>`
+    }).join('');
+    refreshRecordAreaOptions()
+  }
+  function refreshRecordAreaOptions(){
+    if(!el('in13'))return;
+    const p=el('in13').value,a=el('in12').value,t=el('in11').value;
+    const filtered=areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    setDatalist('in13List',unique(areas.map(x=>x.province)));setDatalist('in12List',unique(areas.filter(x=>!p||x.province===p).map(x=>x.amphoe)));
+    setDatalist('in11List',unique(areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)).map(x=>x.tambon)));
+    setDatalist('in10List',unique(filtered.map(x=>x.moo)));setDatalist('in29List',unique(filtered.map(x=>x.village)))
+  }
+  function setDatalist(id,values){el(id).innerHTML=values.map(v=>`<option value="${escapeHtml(v)}"></option>`).join('')}
+  function onRecordAreaChange(col){
+    refreshRecordAreaOptions();
+    if(col===29){
+      const v=el('in29').value,p=el('in13').value,a=el('in12').value,t=el('in11').value;
+      const found=areas.find(x=>x.village===v&&(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+      if(found){el('in13').value=found.province;el('in12').value=found.amphoe;el('in11').value=found.tambon;el('in10').value=found.moo;el('in30').value=found.villageCode||''}
+    }
+  }
+  function toIso(thai){if(!thai)return'';const p=String(thai).split('-');if(p.length!==3)return thai;let y=+p[0];if(y>2400)y-=543;return`${y}-${p[1]}-${p[2]}`}
+  function toThai(iso){if(!iso)return'';const p=String(iso).split('-');if(p.length!==3)return iso;return`${+p[0]+543}-${p[1]}-${p[2]}`}
+  function openRecordForm(mode,i){
+    if(!roleCanRecord()){openLogin();return}
+    el('formMode').value=mode;el('recordTitle').textContent=mode==='add'?'เพิ่มข้อมูลเหตุการณ์ใหม่':'แก้ไขข้อมูลเหตุการณ์';
+    el('editEventId').value='';el('editRevision').value='';
+    fields.forEach(f=>{const x=el('in'+f[0]);if(x)x.value=''});
+    if(mode==='edit'){
+      const r=allData[i];
+      if(!r.eventId){toast('ข้อมูลเหตุการณ์ยังไม่มี EventID กรุณาให้ผู้ดูแลอัปเกรดโครงสร้างข้อมูลก่อน');return}
+      if(r.workflowStatus==='closed'){toast('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไข');return}
+      el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);
+      fields.forEach(f=>{const x=el('in'+f[0]);if(!x)return;const v=r['col'+f[0]]||'';x.value=f[2]==='date'?toIso(v):v})
+    }
+    refreshRecordAreaOptions();openModal('recordModal')
+  }
+  async function saveRecord(){
+    const btn=el('saveRecordBtn');try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
+      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
+      const msg=el('formMode').value==='add'
+        ?await gs('addRecord',token,data)
+        :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
+      closeModal('recordModal');toast(msg);await loadDashboard()
+    }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
+  }
+  async function assignOwnerUi(eventId,revision,currentEmail){
+    const email=prompt('อีเมลผู้รับผิดชอบเหตุการณ์',currentEmail||currentUser?.email||'');
+    if(email===null)return;
+    if(!String(email).trim()){toast('กรุณาระบุอีเมลผู้รับผิดชอบ');return}
+    try{toast(await gs('assignEventOwner',token,eventId,String(email).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+
+  async function closeEventUi(eventId,revision){
+    try{
+      const readiness=await gs('getEventCloseReadiness',token,eventId);
+      if(Number(readiness.revision)!==Number(revision)){toast('ข้อมูลเหตุการณ์มีการเปลี่ยนแปลง กรุณาลองใหม่อีกครั้ง');await loadDashboard();return}
+      const reason=prompt('สรุปหรือเหตุผลในการปิดเหตุการณ์');
+      if(reason===null)return;
+      if(!String(reason).trim()){toast('กรุณาระบุเหตุผลหรือสรุปการปิดเหตุการณ์');return}
+      let override='';
+      const warnings=readiness.warnings||[];
+      if(warnings.length){
+        const proceed=confirm('ยังมีข้อมูลที่ควรตรวจสอบก่อนปิด:\n- '+warnings.join('\n- ')+'\n\nต้องการปิดต่อโดยระบุเหตุผล Override หรือไม่?');
+        if(!proceed)return;
+        override=prompt('เหตุผล Override สำหรับการปิดทั้งที่ยังมีคำเตือน')||'';
+        if(!String(override).trim()){toast('ต้องระบุเหตุผล Override เมื่อยังมีคำเตือน');return}
+      }
+      toast(await gs('closeEvent',token,eventId,Number(revision||0),String(reason).trim(),String(override).trim()));
+      await loadDashboard()
+    }catch(e){toast(e.message||e)}
+  }
+
+  async function reopenEventUi(eventId,revision){
+    const reason=prompt('เหตุผลในการเปิดเหตุการณ์อีกครั้ง');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');return}
+    try{toast(await gs('reopenEvent',token,eventId,Number(revision||0),String(reason).trim()));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+
+  async function openAttachments(eventId){
+    if(!eventId)return;
+    el('attachmentEventId').value=eventId;
+    el('attachmentFile').value='';
+    openModal('attachmentModal');
+    await loadAttachments()
+  }
+  async function loadAttachments(){
+    const eventId=el('attachmentEventId').value;
+    if(!eventId)return;
+    try{
+      const rows=await gs('listEventAttachments',token,eventId);
+      el('attachmentList').innerHTML=rows.map(r=>`<div class="content-item"><h4><i class="fa-solid fa-paperclip"></i> ${escapeHtml(r.fileName)}</h4><p>${escapeHtml(r.mimeType)} · ${Math.max(1,Math.round(Number(r.sizeBytes||0)/1024))} KB<br>อัปโหลดโดย ${escapeHtml(r.uploadedBy||'-')} · ${escapeHtml(r.uploadedAt||'-')}</p><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">เปิดไฟล์</a> <button class="btn red" onclick='disableAttachmentUi(${JSON.stringify(r.attachmentId)})'>ปิดใช้</button></div>`).join('')||'<div class="help">ยังไม่มีไฟล์แนบ</div>'
+    }catch(e){toast(e.message||e)}
+  }
+  async function uploadAttachmentUi(){
+    const eventId=el('attachmentEventId').value,file=el('attachmentFile').files[0];
+    if(!file){toast('กรุณาเลือกไฟล์');return}
+    if(file.size>10*1024*1024){toast('ไฟล์แนบต้องมีขนาดไม่เกิน 10 MB');return}
+    try{
+      const base64=await fileToBase64(file);
+      const result=await gs('uploadEventAttachment',token,eventId,{name:file.name,mimeType:file.type,base64});
+      toast(result.message||'อัปโหลดไฟล์แนบเรียบร้อยแล้ว');
+      el('attachmentFile').value='';
+      await loadAttachments()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableAttachmentUi(attachmentId){
+    if(!confirm('ปิดใช้งานไฟล์แนบนี้? ไฟล์จะไม่ถูกลบออกจาก Drive'))return;
+    try{toast(await gs('disableEventAttachment',token,attachmentId));await loadAttachments()}catch(e){toast(e.message||e)}
+  }
+
+  async function deleteEvent(eventId,revision){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
+    const reason=prompt('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
+    try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+  async function openReportHistory(eventId){
+    if(!eventId)return;
+    el('reportHistoryEventId').value=eventId;
+    openModal('reportHistoryModal');
+    try{
+      const rows=await gs('listReportsForEvent',token,eventId);
+      el('reportHistoryList').innerHTML=rows.map(r=>`<div class="content-item"><h4><i class="fa-solid fa-file-medical"></i> ${escapeHtml(r.generatedAt||'รายงาน')}</h4><p>ผู้สร้าง: ${escapeHtml(r.generatedBy||'-')}<br>Model: ${escapeHtml(r.model||'-')} · Prompt: ${escapeHtml(r.promptVersion||'-')}<br>สถานะ: ${escapeHtml(r.status||'generated')}${(r.readinessWarnings||[]).length?'<br>สร้างขณะมีคำเตือน: '+escapeHtml((r.readinessWarnings||[]).join(' | ')):''}</p><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">เปิด Google Docs</a></div>`).join('')||'<div class="help">ยังไม่มีรายงานที่บันทึกใน ReportRegistry สำหรับเหตุการณ์นี้</div>'
+    }catch(e){toast(e.message||e)}
+  }
+  async function makeReport(eventId,btn){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    let acknowledge=false;
+    try{
+      const readiness=await gs('getReportReadiness',token,eventId);
+      if((readiness.configurationWarnings||[]).length){
+        toast('ยังสร้างรายงานไม่ได้: '+readiness.configurationWarnings.join(' | '));return
+      }
+      if((readiness.warnings||[]).length){
+        const proceed=confirm('ข้อมูลสำหรับรายงานยังมีคำเตือน:\n- '+readiness.warnings.join('\n- ')+'\n\nต้องการสร้างรายงานเบื้องต้นต่อหรือไม่?');
+        if(!proceed)return;
+        acknowledge=true
+      }
+    }catch(e){toast(e.message||e);return}
+    const old=btn.innerHTML,w=window.open('','_blank');
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');
+      const result=await gs('generateReportFromWeb',token,eventId,acknowledge);
+      if(w)w.location=result.url;else window.open(result.url,'_blank');
+      toast('สร้างรายงานและบันทึก ReportRegistry เรียบร้อยแล้ว')
+    }catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+  }
+
+  function exportClientExcel(){
+    if(!currentUser){openLogin();return}
+    const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
+  }
+  async function exportServerFile(format){if(!currentUser){openLogin();return}try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
+  function captureDashboard(){html2canvas(el('captureArea'),{scale:2,backgroundColor:'#eef4f7',useCORS:true}).then(canvas=>{const a=document.createElement('a');a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';a.href=canvas.toDataURL('image/png');a.click()}).catch(e=>toast(e.message))}
+
+  async function loadAdmin(){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
+    try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
+    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadAreasAdmin(),loadUsers(),loadMasterAdmin(),loadContentAdmin(),loadAudit()])
+  }
+  async function loadInstallStatus(){
+    try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
+  }
+  async function repairSystem(){if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;try{toast(await gs('repairInstallation',token));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||[];applyTheme();setupDashboardFilters();loadInstallStatus()}catch(e){toast(e.message||e)}}
+
+  async function loadSettings(){
+    try{
+      const rows=await gs('getSystemSettings',token);const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveSettings(){
+    try{
+      const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
+      toast(await gs('saveSystemSettings',token,arr));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||areas;applyTheme();loadInstallStatus()
+    }catch(e){toast(e.message||e)}
+  }
+  async function uploadLogoFile(){
+    const file=el('logoFile').files[0];if(!file){toast('กรุณาเลือกไฟล์โลโก้');return}if(file.size>3*1024*1024){toast('ไฟล์ต้องไม่เกิน 3 MB');return}
+    el('logoProgress').classList.add('show');
+    try{
+      const base64=await fileToBase64(file);const r=await gs('uploadLogo',token,{name:file.name,mimeType:file.type,base64});
+      settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
+    }catch(e){toast(e.message||e)}finally{el('logoProgress').classList.remove('show')}
+  }
+  function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file)})}
+
+  async function loadAreasAdmin(){
+    try{areaAdminCache=await gs('listAreas',token,el('areaSearch').value);el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openAreaForm(i){
+    const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
+  }
+  async function saveAreaItem(){
+    try{
+      const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
+      toast(await gs('saveArea',token,item));closeModal('areaModal');await refreshAreas()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableArea(id){if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;try{toast(await gs('deleteArea',token,id));await refreshAreas()}catch(e){toast(e.message||e)}}
+  async function refreshAreas(){const b=await gs('getAppBoot',token);areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();loadAreasAdmin()}
+  async function importAreaFile(input){
+    const file=input.files[0];if(!file)return;
+    try{
+      const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const mapped=rows.map(r=>({province:r['จังหวัด']||r['province']||r['Province'],amphoe:r['อำเภอ']||r['amphoe']||r['Amphoe'],tambon:r['ตำบล']||r['tambon']||r['Tambon'],moo:r['หมู่']||r['หมู่ที่']||r['moo']||r['Moo'],village:r['ชื่อหมู่บ้าน']||r['หมู่บ้าน']||r['village']||r['Village'],villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''})).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
+      if(!mapped.length)throw new Error('ไม่พบคอลัมน์ข้อมูลพื้นที่ที่รองรับ');
+      for(let i=0;i<mapped.length;i+=200)toast(await gs('importAreas',token,mapped.slice(i,i+200)));
+      await refreshAreas()
+    }catch(e){toast(e.message||e)}finally{input.value=''}
+  }
+
+  async function loadUsers(){
+    try{usersCache=await gs('listUsers',token,el('userSearch').value);el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
+  async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
+
+  async function loadMasterAdmin(){
+    try{
+      masterAdminCache=await gs('listMasterDataAdmin',token,el('masterTypeFilter')?.value||'');
+      el('masterBody').innerHTML=masterAdminCache.map((r,i)=>`<tr><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.value)}</td><td>${escapeHtml(r.label)}</td><td>${Number(r.sort||0)}</td><td>${r.active?'ใช้งาน':'ปิด'}</td><td><button class="btn light" onclick="openMasterForm(${i})">แก้ไข</button>${r.active?` <button class="btn red" onclick='disableMasterUi(${JSON.stringify(r.type)},${JSON.stringify(r.value)})'>ปิดใช้</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">ไม่มี MasterData</td></tr>'
+    }catch(e){toast(e.message||e)}
+  }
+  function openMasterForm(i){
+    const edit=i!==undefined;
+    const r=edit?masterAdminCache[i]:{};
+    el('mType').value=r.type||el('masterTypeFilter').value||'surveillance';
+    el('mValue').value=r.value||'';
+    el('mLabel').value=r.label||'';
+    el('mSort').value=String(r.sort??999);
+    el('mActive').value=r.active===false?'false':'true';
+    el('mType').disabled=edit;
+    el('mValue').disabled=edit;
+    openModal('masterModal')
+  }
+  async function saveMasterUi(){
+    try{
+      const item={type:el('mType').value,value:el('mValue').value,label:el('mLabel').value,sort:Number(el('mSort').value||999),active:el('mActive').value==='true'};
+      toast(await gs('saveMasterDataItem',token,item));
+      closeModal('masterModal');
+      await loadMasterAdmin();
+      const b=await gs('getAppBoot',token);master=b.master||{};buildRecordForm()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableMasterUi(type,value){
+    if(!confirm('ปิดใช้งาน MasterData รายการนี้?'))return;
+    try{
+      toast(await gs('disableMasterDataItem',token,type,value));
+      await loadMasterAdmin();
+      const b=await gs('getAppBoot',token);master=b.master||{};buildRecordForm()
+    }catch(e){toast(e.message||e)}
+  }
+
+  async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
+  function openContentForm(){el('cId').value='';el('cCategory').value='';el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
+  function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;el('cCategory').value=r.category;el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
+  async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
+  async function loadAudit(){try{const rows=await gs('listAuditLogs',token,100);el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}}
+  async function archiveAuditUi(){
+    const raw=prompt('Archive Audit Logs ที่เก่ากว่ากี่วัน? (30-3650)','365');
+    if(raw===null)return;
+    const days=Number(raw);
+    if(!Number.isFinite(days)||days<30||days>3650){toast('กรุณาระบุจำนวนวัน 30-3650');return}
+    if(!confirm('ยืนยันย้าย Audit Logs ที่เก่ากว่า '+days+' วันไป AuditArchive?'))return;
+    try{toast(await gs('archiveAuditLogs',token,days));await loadAudit()}catch(e){toast(e.message||e)}
+  }
+  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
+
+  boot();
+</script>
