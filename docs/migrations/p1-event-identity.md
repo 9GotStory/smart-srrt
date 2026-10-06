@@ -13,7 +13,7 @@ P1 appends:
 |---:|---|---|
 | 31 | EventID | immutable UUID identity |
 | 32 | Revision | optimistic concurrency revision |
-| 33 | RecordStatus | `active` or `void` |
+| 33 | RecordStatus | P1: `active` or `void`; G-19 later extends this same field with reversible `closed` |
 | 34 | CreatedAt | creation time for records created after P1 |
 | 35 | CreatedBy | creator for records created after P1 |
 | 36 | VoidedAt | void timestamp |
@@ -31,7 +31,7 @@ Legacy rows intentionally keep CreatedAt/CreatedBy blank because the former sche
 3. fails on malformed or duplicate nonblank EventID;
 4. creates UUID only for blank EventID;
 5. initializes blank Revision to 1;
-6. initializes blank RecordStatus to `active`;
+6. initializes blank RecordStatus to `active`; current validation also accepts G-19 `closed` in addition to `active`/`void`;
 7. writes only columns 31–38;
 8. is safe to rerun.
 
