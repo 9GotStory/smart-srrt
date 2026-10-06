@@ -1,0 +1,227 @@
+
+</head>
+<body>
+<div class="mobile-overlay" id="overlay" onclick="toggleSidebar(false)"></div>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><img id="logoImg" src="" alt="logo"><div><h1 id="sideTitle">Smart SRRT</h1><p id="sideOrg">District Edition</p></div></div>
+    <div class="nav">
+      <button class="active" data-page="dashboard" onclick="showPage('dashboard',this)"><i class="fa-solid fa-chart-line"></i>Dashboard</button>
+      <button class="auth-only" data-page="records" onclick="showPage('records',this)"><i class="fa-solid fa-pen-to-square"></i>บันทึก/แก้ไขข้อมูล</button>
+      <button class="auth-only" data-page="reporter" onclick="showPage('reporter',this)"><i class="fa-solid fa-file-medical"></i>สร้างรายงานสอบสวนโรค</button>
+      <button class="manager-only" data-page="admin" onclick="showPage('admin',this)"><i class="fa-solid fa-gears"></i>การจัดการระบบ</button>
+      <button data-page="library" onclick="showPage('library',this)"><i class="fa-solid fa-book-medical"></i>ประกาศ/แนวทาง/คู่มือ</button>
+    </div>
+    <div class="auth-card" id="authBox"><b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard ได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="hamb" onclick="toggleSidebar(true)"><i class="fa-solid fa-bars"></i></button>
+      <div class="banner" style="flex:1"><div><h2 id="appName">Smart SRRT Dashboard & AI Reporter</h2><p id="appSubtitle">ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่</p></div><div class="pill" id="bannerText"><i class="fa-solid fa-bullhorn"></i> ระบบพร้อมใช้งาน</div></div>
+    </div>
+    <div id="closedBox" class="closed" style="display:none"><i class="fa-solid fa-triangle-exclamation"></i> ระบบถูกปิดการบันทึกและสร้างรายงานชั่วคราว ขณะนี้ยังดู Dashboard ได้</div>
+
+    <section id="page-dashboard" class="section active">
+      <div id="captureArea">
+        <div class="filter card">
+          <b><i class="fa-solid fa-filter"></i> ตัวกรอง</b>
+          <input class="input" type="date" id="startDate" title="วันที่เริ่มต้น">
+          <input class="input" type="date" id="endDate" title="วันที่สิ้นสุด">
+          <select class="input" id="filterProvince" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select>
+          <select class="input" id="filterAmphoe" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select>
+          <select class="input" id="filterTambon" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select>
+          <select class="input" id="filterVillage"><option value="">ทุกหมู่บ้าน</option></select>
+          <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
+          <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
+          <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
+        </div>
+        <div class="grid kpis">
+          <div class="card kpi"><i class="fa-solid fa-bell"></i><div class="num" id="kpiTotal">0</div><div class="label">เหตุการณ์ทั้งหมด</div></div>
+          <div class="card kpi"><i class="fa-solid fa-user-doctor"></i><div class="num" id="kpiCriteria">0</div><div class="label">เข้าเกณฑ์สอบสวนโรค</div></div>
+          <div class="card kpi"><i class="fa-solid fa-shield-virus"></i><div class="num" id="kpiInvestigated">0</div><div class="label">ลงสอบสวนโรคแล้ว</div></div>
+          <div class="card kpi"><i class="fa-solid fa-percent"></i><div class="num" id="kpiRate">0%</div><div class="label">ความครบถ้วนการสอบสวน</div></div>
+        </div>
+        <div class="card insight"><b style="color:#b45309"><i class="fa-solid fa-robot"></i> Smart Insights</b><div id="smartInsight" style="margin-top:8px;line-height:1.8">กำลังโหลดข้อมูล...</div></div>
+        <div class="grid charts">
+          <div class="card"><b>จำนวนเหตุการณ์รายหมู่บ้าน</b><div id="barChart" class="chart"></div></div>
+          <div class="card"><b>แนวโน้มรายเดือน</b><div id="lineChart" class="chart"></div></div>
+          <div class="card"><b>สัดส่วนตามกลุ่มโรค</b><div id="pieDisease" class="chart"></div></div>
+          <div class="card"><b>สัดส่วนตามระดับความเสี่ยง</b><div id="pieRisk" class="chart"></div></div>
+        </div>
+      </div>
+      <div id="dashboardPublicOnlyNote" class="help" style="margin-top:18px">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปรวม กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์และส่งออกข้อมูลระดับเหตุการณ์</div>
+      <div id="dashboardPrivateEvents" style="display:none">
+        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
+        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="page-records" class="section">
+      <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
+      <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะงาน</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+    </section>
+
+    <section id="page-reporter" class="section">
+      <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
+      <div class="help">AI ใช้เพื่อช่วยร่างรายงานเบื้องต้นเท่านั้น เกณฑ์สอบสวน ประเภทเหตุการณ์ และระดับความเสี่ยงยึดตามข้อมูลที่ทีม SRRT บันทึกไว้ ระบบจะแจ้งคำเตือนเมื่อข้อมูลยังไม่พร้อมแต่สามารถยืนยันสร้างรายงานเบื้องต้นได้</div>
+      <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
+    </section>
+
+    <section id="page-admin" class="section">
+      <div class="grid kpis">
+        <div class="card kpi"><i class="fa-solid fa-users"></i><div class="num" id="akUsers">0</div><div class="label">ผู้ใช้ทั้งหมด</div></div>
+        <div class="card kpi"><i class="fa-solid fa-user-check"></i><div class="num" id="akActive">0</div><div class="label">ผู้ใช้ Active</div></div>
+        <div class="card kpi"><i class="fa-solid fa-map-location-dot"></i><div class="num" id="akAreas">0</div><div class="label">หมู่บ้านในระบบ</div></div>
+        <div class="card kpi"><i class="fa-solid fa-database"></i><div class="num" id="akEvents">0</div><div class="label">เหตุการณ์ในระบบ</div></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-screwdriver-wrench"></i> สถานะการติดตั้ง</h3><button class="btn orange" onclick="repairSystem()"><i class="fa-solid fa-wand-magic-sparkles"></i>ตรวจสอบ/ซ่อมระบบอัตโนมัติ</button></div>
+        <div id="installStatus" class="help">กำลังตรวจสอบ...</div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
+        <div class="settings-grid">
+          <div class="setting-group">
+            <h4>ข้อมูลเว็บไซต์</h4>
+            <div class="fg"><label>ชื่อระบบ</label><input id="set_APP_NAME"></div>
+            <div class="fg"><label>คำอธิบายระบบ</label><input id="set_APP_SUBTITLE"></div>
+            <div class="fg"><label>ชื่อหน่วยงาน</label><input id="set_ORG_NAME"></div>
+            <div class="fg"><label>ข้อมูลติดต่อ</label><input id="set_CONTACT_INFO"></div>
+            <div class="fg"><label>ข้อความประกาศ</label><input id="set_BANNER_TEXT"></div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="fg"><label>สีหลัก</label><input type="color" id="set_PRIMARY_COLOR"></div>
+              <div class="fg"><label>สีรอง</label><input type="color" id="set_SECONDARY_COLOR"></div>
+            </div>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="fg"><label>สถานะระบบ</label><select id="set_SYSTEM_STATUS"><option value="open">เปิดใช้งาน</option><option value="closed">ปิดบันทึกชั่วคราว</option></select></div>
+              <div class="fg"><label>เปิดสมัครผู้ใช้</label><select id="set_ALLOW_SELF_REGISTER"><option value="true">เปิด</option><option value="false">ปิด</option></select></div>
+            </div>
+          </div>
+          <div class="setting-group">
+            <h4>โลโก้ระบบ</h4>
+            <div class="logo-preview"><img id="adminLogoPreview" src="" alt="preview"><div><b>อัปโหลดจากหน้าเว็บได้โดยตรง</b><div class="mini">PNG, JPG/JPEG หรือ WEBP ขนาดไม่เกิน 3 MB</div></div></div>
+            <input class="input" type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" style="width:100%">
+            <button class="btn" style="width:100%;margin-top:10px" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
+            <div id="logoProgress" class="progress">กำลังอัปโหลด...</div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+            <h4>AI Reporter</h4>
+            <div class="fg"><label>Gemini API Key</label><input type="password" id="set_GEMINI_API_KEY" autocomplete="off"></div>
+            <div class="fg"><label>Gemini Model</label><input id="set_GEMINI_MODEL" placeholder="AUTO"></div>
+            <div class="fg"><label>Template Google Doc ID</label><input id="set_TEMPLATE_DOC_ID"></div>
+            <div class="fg"><label>Report Folder ID</label><input id="set_REPORT_FOLDER_ID"></div>
+            <div class="mini">ระบบสร้าง Template และ Folder ให้แล้วอัตโนมัติ สามารถเปลี่ยนเป็นไฟล์/โฟลเดอร์อื่นได้จากหน้านี้</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
+        <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
+        <input class="input" id="areaSearch" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
+        <div class="table-wrap"><table><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3>จัดการผู้ใช้งาน</h3><button class="btn" onclick="loadUsers()"><i class="fa-solid fa-rotate"></i>โหลดผู้ใช้</button></div>
+        <input class="input" id="userSearch" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
+        <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-list-check"></i> MasterData</h3><div><select class="input" id="masterTypeFilter" onchange="loadMasterAdmin()"><option value="">ทุกประเภท</option><option value="surveillance">surveillance</option><option value="disease_group">disease_group</option><option value="event_type">event_type</option><option value="verify_status">verify_status</option><option value="criteria">criteria</option><option value="risk">risk</option><option value="content_category">content_category</option></select> <button class="btn" onclick="openMasterForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div></div>
+        <div class="help">แก้ไข Label/ลำดับ/สถานะได้ โดย Type + Value เป็นรหัสอ้างอิงหลักของรายการเดิม</div>
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterBody"></tbody></table></div>
+      </div>
+
+      <div class="grid charts" style="margin-top:16px">
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><div id="contentAdminList"></div></div>
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>Audit Logs</h3><div><button class="btn gray" onclick="loadAudit()">โหลดประวัติ</button> <button class="btn orange" onclick="archiveAuditUi()">Archive</button></div></div><div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div></div>
+      </div>
+    </section>
+
+    <section id="page-library" class="section"><div class="panel-head"><h3><i class="fa-solid fa-book-medical"></i> ประกาศ แนวทาง และคู่มือ</h3></div><div id="libraryList" class="content-list"></div></section>
+  </main>
+</div>
+
+<div class="modal" id="loginModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</div>
+  <input class="input" id="loginEmail" placeholder="Email" style="width:100%;margin-bottom:10px">
+  <input class="input" id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:10px">
+  <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button>
+  <button class="btn light" style="width:100%;margin-top:8px" onclick="closeModal('loginModal')">ปิด</button>
+  <hr><b>สมัครผู้ใช้ใหม่</b>
+  <input class="input" id="regName" placeholder="ชื่อ-สกุล" style="width:100%;margin:8px 0">
+  <input class="input" id="regEmail" placeholder="Email" style="width:100%;margin-bottom:8px">
+  <input class="input" id="regPass" type="password" placeholder="Password อย่างน้อย 4 ตัว" style="width:100%;margin-bottom:8px">
+  <input class="input" id="regOrg" placeholder="หน่วยงาน" style="width:100%;margin-bottom:8px">
+  <button class="btn secondary" style="width:100%" onclick="register()">สมัครใช้งาน</button>
+</div></div>
+
+<div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
+
+<div class="modal" id="reportHistoryModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> รายงานที่สร้างแล้ว</div>
+  <input type="hidden" id="reportHistoryEventId">
+  <div id="reportHistoryList"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
+</div></div>
+
+<div class="modal" id="attachmentModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-paperclip"></i> ไฟล์แนบเหตุการณ์</div>
+  <input type="hidden" id="attachmentEventId">
+  <div class="help">ไฟล์แนบเก็บใน Google Drive ของระบบแบบไม่เปิดสาธารณะ รองรับ PDF, รูปภาพ, TXT/CSV, Word และ Excel ขนาดไม่เกิน 10 MB</div>
+  <div class="filter" style="margin:14px 0"><input class="input" type="file" id="attachmentFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"><button class="btn" onclick="uploadAttachmentUi()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลด</button></div>
+  <div id="attachmentList"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
+</div></div>
+
+<div class="modal" id="userModal"><div class="modal-box modal-sm">
+  <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
+  <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
+  <label>Role</label><select class="input" id="uRole" style="width:100%;margin-bottom:8px"><option>Super Admin</option><option>Manager</option><option>Admin</option><option>Staff</option></select>
+  <label>Status</label><select class="input" id="uStatus" style="width:100%;margin-bottom:8px"><option>active</option><option>pending</option><option>blocked</option></select>
+  <label>หน่วยงาน</label><input class="input" id="uOrg" style="width:100%;margin-bottom:8px">
+  <label>ตำบล</label><input class="input" id="uTambon" style="width:100%;margin-bottom:8px">
+  <label>อำเภอ</label><input class="input" id="uAmphoe" style="width:100%;margin-bottom:8px">
+  <label>จังหวัด</label><input class="input" id="uProvince" style="width:100%;margin-bottom:8px">
+  <label>เปลี่ยนรหัสผ่านใหม่ (ไม่กรอก = ไม่เปลี่ยน)</label><input class="input" id="uPassword" type="password" style="width:100%;margin-bottom:8px">
+  <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" onclick="saveUser()">บันทึกผู้ใช้</button></div>
+</div></div>
+
+<div class="modal" id="areaModal"><div class="modal-box modal-sm">
+  <div class="modal-title">ข้อมูลหมู่บ้าน</div><input type="hidden" id="aId">
+  <label>จังหวัด</label><input class="input" id="aProvince" style="width:100%;margin-bottom:8px">
+  <label>อำเภอ</label><input class="input" id="aAmphoe" style="width:100%;margin-bottom:8px">
+  <label>ตำบล</label><input class="input" id="aTambon" style="width:100%;margin-bottom:8px">
+  <label>หมู่ที่</label><input class="input" id="aMoo" style="width:100%;margin-bottom:8px">
+  <label>ชื่อหมู่บ้าน</label><input class="input" id="aVillage" style="width:100%;margin-bottom:8px">
+  <label>รหัสหมู่บ้าน</label><input class="input" id="aVillageCode" style="width:100%;margin-bottom:8px">
+  <label>สถานะ</label><select class="input" id="aActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" onclick="saveAreaItem()">บันทึก</button></div>
+</div></div>
+
+<div class="modal" id="masterModal"><div class="modal-box modal-sm">
+  <div class="modal-title">MasterData</div>
+  <label>Type</label><select class="input" id="mType" style="width:100%;margin-bottom:8px"><option value="surveillance">surveillance</option><option value="disease_group">disease_group</option><option value="event_type">event_type</option><option value="verify_status">verify_status</option><option value="criteria">criteria</option><option value="risk">risk</option><option value="content_category">content_category</option></select>
+  <label>Value</label><input class="input" id="mValue" style="width:100%;margin-bottom:8px">
+  <label>Label</label><input class="input" id="mLabel" style="width:100%;margin-bottom:8px">
+  <label>ลำดับ</label><input class="input" id="mSort" type="number" min="0" style="width:100%;margin-bottom:8px">
+  <label>สถานะ</label><select class="input" id="mActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('masterModal')">ปิด</button><button class="btn green" onclick="saveMasterUi()">บันทึก</button></div>
+</div></div>
+
+<div class="modal" id="contentModal"><div class="modal-box modal-sm">
+  <div class="modal-title">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
+  <label>หมวดหมู่</label><input class="input" id="cCategory" style="width:100%;margin-bottom:8px" placeholder="ประกาศ / คู่มือ / แนวทาง">
+  <label>หัวข้อ</label><input class="input" id="cTitle" style="width:100%;margin-bottom:8px">
+  <label>รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
+  <label>URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
+  <label>Status</label><select class="input" id="cStatus" style="width:100%;margin-bottom:8px"><option>published</option><option>draft</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('contentModal')">ปิด</button><button class="btn green" onclick="saveContentItem()">บันทึก</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
