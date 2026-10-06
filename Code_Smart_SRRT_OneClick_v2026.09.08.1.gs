@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '4',
+  SCHEMA_VERSION: '5',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -34,7 +34,8 @@ var CONFIG = {
     STAFF: 'Staff'
   },
   MAX_LOGO_BYTES: 3 * 1024 * 1024,
-  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024
+  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024,
+  DEFAULT_AUDIT_RETENTION_DAYS: 365
 };
 
 var MAIN_HEADERS = [
@@ -82,6 +83,23 @@ var EVENT_ATTACHMENT_COL = {
   REMOVE_REASON: 13
 };
 
+var AUDIT_HEADERS = [
+  'Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','AuditID'
+];
+
+var AUDIT_COL = {
+  TIMESTAMP: 1,
+  USER_EMAIL: 2,
+  ROLE: 3,
+  ACTION: 4,
+  TARGET_SHEET: 5,
+  TARGET_ID: 6,
+  BEFORE: 7,
+  AFTER: 8,
+  IP_HINT: 9,
+  AUDIT_ID: 10
+};
+
 function doGet(e) {
   var title = CONFIG.APP_TITLE;
   try {
@@ -108,6 +126,8 @@ function onOpen() {
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
       .addItem('อัปเกรด Event Owner', 'migrateG05EventOwner')
       .addItem('อัปเกรด Event Attachments', 'migrateG11EventAttachments')
+      .addItem('อัปเกรด Audit Retention', 'migrateG21AuditRetention')
+      .addItem('จัดเก็บ Audit เก่า', 'archiveAuditLogsFromSheetMenu')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
