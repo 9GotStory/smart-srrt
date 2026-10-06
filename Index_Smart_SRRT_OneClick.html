@@ -172,9 +172,15 @@
         <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
       </div>
 
+      <div class="card" style="margin-top:16px">
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-list-check"></i> MasterData</h3><div><select class="input" id="masterTypeFilter" onchange="loadMasterAdmin()"><option value="">ทุกประเภท</option><option value="surveillance">surveillance</option><option value="disease_group">disease_group</option><option value="event_type">event_type</option><option value="verify_status">verify_status</option><option value="criteria">criteria</option><option value="risk">risk</option><option value="content_category">content_category</option></select> <button class="btn" onclick="openMasterForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div></div>
+        <div class="help">แก้ไข Label/ลำดับ/สถานะได้ โดย Type + Value เป็นรหัสอ้างอิงหลักของรายการเดิม</div>
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterBody"></tbody></table></div>
+      </div>
+
       <div class="grid charts" style="margin-top:16px">
         <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><div id="contentAdminList"></div></div>
-        <div class="card"><div class="panel-head" style="margin-top:0"><h3>Audit Logs</h3><button class="btn gray" onclick="loadAudit()">โหลดประวัติ</button></div><div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div></div>
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>Audit Logs</h3><div><button class="btn gray" onclick="loadAudit()">โหลดประวัติ</button> <button class="btn orange" onclick="archiveAuditUi()">Archive</button></div></div><div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div></div>
       </div>
     </section>
 
@@ -197,6 +203,15 @@
 </div></div>
 
 <div class="modal" id="recordModal"><div class="modal-box"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision"><div class="form-grid" id="recordForm"></div><div class="actions"><button class="btn light" onclick="closeModal('recordModal')">ยกเลิก</button><button class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk"></i>บันทึก</button></div></div></div>
+
+<div class="modal" id="attachmentModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-paperclip"></i> ไฟล์แนบเหตุการณ์</div>
+  <input type="hidden" id="attachmentEventId">
+  <div class="help">ไฟล์แนบเก็บใน Google Drive ของระบบแบบไม่เปิดสาธารณะ รองรับ PDF, รูปภาพ, TXT/CSV, Word และ Excel ขนาดไม่เกิน 10 MB</div>
+  <div class="filter" style="margin:14px 0"><input class="input" type="file" id="attachmentFile" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"><button class="btn" onclick="uploadAttachmentUi()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลด</button></div>
+  <div id="attachmentList"></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
+</div></div>
 
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
@@ -223,6 +238,16 @@
   <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" onclick="saveAreaItem()">บันทึก</button></div>
 </div></div>
 
+<div class="modal" id="masterModal"><div class="modal-box modal-sm">
+  <div class="modal-title">MasterData</div>
+  <label>Type</label><select class="input" id="mType" style="width:100%;margin-bottom:8px"><option value="surveillance">surveillance</option><option value="disease_group">disease_group</option><option value="event_type">event_type</option><option value="verify_status">verify_status</option><option value="criteria">criteria</option><option value="risk">risk</option><option value="content_category">content_category</option></select>
+  <label>Value</label><input class="input" id="mValue" style="width:100%;margin-bottom:8px">
+  <label>Label</label><input class="input" id="mLabel" style="width:100%;margin-bottom:8px">
+  <label>ลำดับ</label><input class="input" id="mSort" type="number" min="0" style="width:100%;margin-bottom:8px">
+  <label>สถานะ</label><select class="input" id="mActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <div class="actions"><button class="btn light" onclick="closeModal('masterModal')">ปิด</button><button class="btn green" onclick="saveMasterUi()">บันทึก</button></div>
+</div></div>
+
 <div class="modal" id="contentModal"><div class="modal-box modal-sm">
   <div class="modal-title">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
   <label>หมวดหมู่</label><input class="input" id="cCategory" style="width:100%;margin-bottom:8px" placeholder="ประกาศ / คู่มือ / แนวทาง">
@@ -237,7 +262,7 @@
 <script>
   google.charts.load('current', {'packages':['corechart']});
   let token=localStorage.getItem('SRRT_TOKEN')||'';
-  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[];
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],masterAdminCache=[];
   const fields=[
     [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
     [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
@@ -393,9 +418,10 @@
       const lifecycle=closed
         ?`<button class="btn light" onclick='reopenEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดอีกครั้ง</button>`
         :`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> <button class="btn secondary" onclick='assignOwnerUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)},${JSON.stringify(r.ownerEmail||"")})'>มอบหมาย</button> <button class="btn gray" onclick='closeEventUi(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิด</button>`;
+      const attachmentBtn=manage?` <button class="btn light" onclick='openAttachments(${JSON.stringify(r.eventId||"")})'><i class="fa-solid fa-paperclip"></i> ไฟล์แนบ</button>`:'';
       const voidBtn=currentUser&&['Super Admin','Manager'].includes(currentUser.role)
         ?` <button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`:'';
-      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(workflowLabel(r.workflowStatus))}</td><td>${escapeHtml(r.ownerName||r.ownerEmail||'-')}</td><td>${escapeHtml(r.col27||'-')}</td><td>${lifecycle}${voidBtn}</td></tr>`
+      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${escapeHtml(workflowLabel(r.workflowStatus))}</td><td>${escapeHtml(r.ownerName||r.ownerEmail||'-')}</td><td>${escapeHtml(r.col27||'-')}</td><td>${lifecycle}${attachmentBtn}${voidBtn}</td></tr>`
     }).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';
 
     el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
@@ -491,6 +517,38 @@
     try{toast(await gs('reopenEvent',token,eventId,Number(revision||0),String(reason).trim()));await loadDashboard()}catch(e){toast(e.message||e)}
   }
 
+  async function openAttachments(eventId){
+    if(!eventId)return;
+    el('attachmentEventId').value=eventId;
+    el('attachmentFile').value='';
+    openModal('attachmentModal');
+    await loadAttachments()
+  }
+  async function loadAttachments(){
+    const eventId=el('attachmentEventId').value;
+    if(!eventId)return;
+    try{
+      const rows=await gs('listEventAttachments',token,eventId);
+      el('attachmentList').innerHTML=rows.map(r=>`<div class="content-item"><h4><i class="fa-solid fa-paperclip"></i> ${escapeHtml(r.fileName)}</h4><p>${escapeHtml(r.mimeType)} · ${Math.max(1,Math.round(Number(r.sizeBytes||0)/1024))} KB<br>อัปโหลดโดย ${escapeHtml(r.uploadedBy||'-')} · ${escapeHtml(r.uploadedAt||'-')}</p><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">เปิดไฟล์</a> <button class="btn red" onclick='disableAttachmentUi(${JSON.stringify(r.attachmentId)})'>ปิดใช้</button></div>`).join('')||'<div class="help">ยังไม่มีไฟล์แนบ</div>'
+    }catch(e){toast(e.message||e)}
+  }
+  async function uploadAttachmentUi(){
+    const eventId=el('attachmentEventId').value,file=el('attachmentFile').files[0];
+    if(!file){toast('กรุณาเลือกไฟล์');return}
+    if(file.size>10*1024*1024){toast('ไฟล์แนบต้องมีขนาดไม่เกิน 10 MB');return}
+    try{
+      const base64=await fileToBase64(file);
+      const result=await gs('uploadEventAttachment',token,eventId,{name:file.name,mimeType:file.type,base64});
+      toast(result.message||'อัปโหลดไฟล์แนบเรียบร้อยแล้ว');
+      el('attachmentFile').value='';
+      await loadAttachments()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableAttachmentUi(attachmentId){
+    if(!confirm('ปิดใช้งานไฟล์แนบนี้? ไฟล์จะไม่ถูกลบออกจาก Drive'))return;
+    try{toast(await gs('disableEventAttachment',token,attachmentId));await loadAttachments()}catch(e){toast(e.message||e)}
+  }
+
   async function deleteEvent(eventId,revision){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
@@ -517,7 +575,7 @@
   async function loadAdmin(){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
     try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
-    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit()])
+    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadAreasAdmin(),loadUsers(),loadMasterAdmin(),loadContentAdmin(),loadAudit()])
   }
   async function loadInstallStatus(){
     try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
@@ -577,12 +635,56 @@
   function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
   async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
 
+  async function loadMasterAdmin(){
+    try{
+      masterAdminCache=await gs('listMasterDataAdmin',token,el('masterTypeFilter')?.value||'');
+      el('masterBody').innerHTML=masterAdminCache.map((r,i)=>`<tr><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.value)}</td><td>${escapeHtml(r.label)}</td><td>${Number(r.sort||0)}</td><td>${r.active?'ใช้งาน':'ปิด'}</td><td><button class="btn light" onclick="openMasterForm(${i})">แก้ไข</button>${r.active?` <button class="btn red" onclick='disableMasterUi(${JSON.stringify(r.type)},${JSON.stringify(r.value)})'>ปิดใช้</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6">ไม่มี MasterData</td></tr>'
+    }catch(e){toast(e.message||e)}
+  }
+  function openMasterForm(i){
+    const edit=i!==undefined;
+    const r=edit?masterAdminCache[i]:{};
+    el('mType').value=r.type||el('masterTypeFilter').value||'surveillance';
+    el('mValue').value=r.value||'';
+    el('mLabel').value=r.label||'';
+    el('mSort').value=String(r.sort??999);
+    el('mActive').value=r.active===false?'false':'true';
+    el('mType').disabled=edit;
+    el('mValue').disabled=edit;
+    openModal('masterModal')
+  }
+  async function saveMasterUi(){
+    try{
+      const item={type:el('mType').value,value:el('mValue').value,label:el('mLabel').value,sort:Number(el('mSort').value||999),active:el('mActive').value==='true'};
+      toast(await gs('saveMasterDataItem',token,item));
+      closeModal('masterModal');
+      await loadMasterAdmin();
+      const b=await gs('getAppBoot',token);master=b.master||{};buildRecordForm()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableMasterUi(type,value){
+    if(!confirm('ปิดใช้งาน MasterData รายการนี้?'))return;
+    try{
+      toast(await gs('disableMasterDataItem',token,type,value));
+      await loadMasterAdmin();
+      const b=await gs('getAppBoot',token);master=b.master||{};buildRecordForm()
+    }catch(e){toast(e.message||e)}
+  }
+
   async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
   function openContentForm(){el('cId').value='';el('cCategory').value='';el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
   function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;el('cCategory').value=r.category;el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
   async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
   async function loadAudit(){try{const rows=await gs('listAuditLogs',token,100);el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}}
-  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
+  async function archiveAuditUi(){
+    const raw=prompt('Archive Audit Logs ที่เก่ากว่ากี่วัน? (30-3650)','365');
+    if(raw===null)return;
+    const days=Number(raw);
+    if(!Number.isFinite(days)||days<30||days>3650){toast('กรุณาระบุจำนวนวัน 30-3650');return}
+    if(!confirm('ยืนยันย้าย Audit Logs ที่เก่ากว่า '+days+' วันไป AuditArchive?'))return;
+    try{toast(await gs('archiveAuditLogs',token,days));await loadAudit()}catch(e){toast(e.message||e)}
+  }
+  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
 
   boot();
 </script>
