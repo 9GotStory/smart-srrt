@@ -14,6 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
+  SCHEMA_VERSION: '2',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -38,6 +39,23 @@ var MAIN_HEADERS = [
   'ลำดับ','วันรับแจ้ง','ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','การเฝ้าระวัง','กลุ่มโรค','โรค/ภัย/เหตุการณ์','ประเภทเหตุการณ์','สถานที่เกิดเหตุ','วันที่เริ่มป่วย','หมู่','ตำบล','อำเภอ','จังหวัด','รายละเอียดเหตุการณ์','การตรวจสอบ','วิธีการตรวจสอบ','เข้าเกณฑ์สอบสวนโรค','ประเภทการสอบสวนโรค','ประเมินความเสี่ยงแจ้งเตือน','หน่วยงานแจ้งเตือน','การดำเนินการตามมาตรการ','วันที่ดำเนินการตามมาตรการ','หน่วยงานรับแจ้ง','ลงสอบสวนโรค','หมายเหตุ','วันที่ลงสอบสวนโรค','ผู้บันทึก','วันที่บันทึก/แก้ไขล่าสุด','ชื่อหมู่บ้าน','รหัสหมู่บ้าน'
 ];
 
+var EVENT_META_HEADERS = [
+  'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason'
+];
+
+var MAIN_SCHEMA_HEADERS = MAIN_HEADERS.concat(EVENT_META_HEADERS);
+
+var EVENT_META_COL = {
+  EVENT_ID: 31,
+  REVISION: 32,
+  RECORD_STATUS: 33,
+  CREATED_AT: 34,
+  CREATED_BY: 35,
+  VOIDED_AT: 36,
+  VOIDED_BY: 37,
+  VOID_REASON: 38
+};
+
 function doGet(e) {
   var title = CONFIG.APP_TITLE;
   try {
@@ -61,6 +79,7 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('Smart SRRT')
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
+      .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -96,7 +115,8 @@ function installSmartSRRTCore_() {
     if (!ss) throw new Error('กรุณาเปิด Apps Script จาก Google Sheet ที่ต้องการใช้เป็นฐานข้อมูล');
     props.setProperty('DATABASE_SPREADSHEET_ID', ss.getId());
 
-    ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_HEADERS);
+    var mainSheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+    var eventMigration = ensureEventIdentityData_(mainSheet);
     ensureSheet_(ss, CONFIG.SHEETS.USERS, ['UserID','ชื่อ-สกุล','Email','PasswordHash','Role','Status','หน่วยงาน','ตำบล','อำเภอ','จังหวัด','วันที่ลงทะเบียน','อนุมัติโดย','วันที่อนุมัติ','LastLogin']);
     ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
@@ -121,6 +141,7 @@ function installSmartSRRTCore_() {
       'ติดตั้ง/ตรวจสอบ Smart SRRT เรียบร้อยแล้ว',
       'ฐานข้อมูล: ' + ss.getName(),
       'โฟลเดอร์ระบบและ Template รายงานถูกสร้างให้อัตโนมัติ',
+      'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -133,7 +154,8 @@ function installSmartSRRTCore_() {
       systemFolderId: assets.systemFolderId,
       reportFolderId: assets.reportFolderId,
       templateDocId: assets.templateDocId,
-      adminEmail: adminInfo.email
+      adminEmail: adminInfo.email,
+      eventMigration: eventMigration
     };
   } finally {
     lock.releaseLock();
@@ -274,6 +296,9 @@ function createDefaultReportTemplate_(systemFolder) {
 
 function ensureSheet_(ss, name, headers) {
   var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
   } else {
@@ -286,6 +311,131 @@ function ensureSheet_(ss, name, headers) {
     if (changed || current.join('') === '') sheet.getRange(1, 1, 1, headers.length).setValues([patched]);
   }
   return sheet;
+}
+
+function isUuid_(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+function ensureEventIdentityData_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var count = Math.max(lastRow - 1, 0);
+  var summary = {
+    rows: count,
+    backfilledIds: 0,
+    initializedRevision: 0,
+    initializedStatus: 0
+  };
+  if (!count) return summary;
+
+  var receivedDates = sheet.getRange(2, 2, count, 1).getValues();
+  var meta = sheet.getRange(2, EVENT_META_COL.EVENT_ID, count, EVENT_META_HEADERS.length).getValues();
+  var seen = {};
+
+  for (var i = 0; i < count; i++) {
+    if (!receivedDates[i][0]) continue;
+    var existingId = String(meta[i][0] || '').trim();
+    if (!existingId) continue;
+    if (!isUuid_(existingId)) throw new Error('พบ EventID รูปแบบไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + existingId);
+    if (seen[existingId]) throw new Error('พบ EventID ซ้ำที่แถว ' + seen[existingId] + ' และ ' + (i + 2) + ': ' + existingId);
+    seen[existingId] = i + 2;
+
+    if (meta[i][1] !== '' && meta[i][1] !== null) {
+      var existingRevision = Number(meta[i][1]);
+      if (!isFinite(existingRevision) || existingRevision < 1 || Math.floor(existingRevision) !== existingRevision) {
+        throw new Error('พบ Revision ไม่ถูกต้องที่แถว ' + (i + 2));
+      }
+    }
+    var existingStatus = String(meta[i][2] || '').trim().toLowerCase();
+    if (existingStatus && ['active','void'].indexOf(existingStatus) < 0) {
+      throw new Error('พบ RecordStatus ไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + existingStatus);
+    }
+  }
+
+  var changed = false;
+  for (var j = 0; j < count; j++) {
+    if (!receivedDates[j][0]) continue;
+
+    if (!String(meta[j][0] || '').trim()) {
+      var generatedId = Utilities.getUuid();
+      while (seen[generatedId]) generatedId = Utilities.getUuid();
+      meta[j][0] = generatedId;
+      seen[generatedId] = j + 2;
+      summary.backfilledIds++;
+      changed = true;
+    }
+    if (meta[j][1] === '' || meta[j][1] === null) {
+      meta[j][1] = 1;
+      summary.initializedRevision++;
+      changed = true;
+    }
+    if (!String(meta[j][2] || '').trim()) {
+      meta[j][2] = 'active';
+      summary.initializedStatus++;
+      changed = true;
+    }
+    // CreatedAt/CreatedBy stay blank for legacy rows because the original
+    // creation actor/time cannot be reconstructed reliably from the old schema.
+  }
+
+  if (changed) {
+    sheet.getRange(2, EVENT_META_COL.EVENT_ID, count, EVENT_META_HEADERS.length).setValues(meta);
+  }
+  return summary;
+}
+
+function migrateP1EventIdentity() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+    var summary = ensureEventIdentityData_(sheet);
+    var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', CONFIG.SCHEMA_VERSION, 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var message = [
+      'อัปเกรด Event identity เรียบร้อยแล้ว',
+      'จำนวน Event ที่ตรวจ: ' + summary.rows,
+      'สร้าง EventID ใหม่: ' + summary.backfilledIds,
+      'กำหนด Revision เริ่มต้น: ' + summary.initializedRevision,
+      'กำหนด RecordStatus เริ่มต้น: ' + summary.initializedStatus,
+      'Schema version: ' + CONFIG.SCHEMA_VERSION
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function findEventRowById_(sheet, eventId, includeVoided) {
+  eventId = String(eventId || '').trim();
+  if (!isUuid_(eventId)) throw new Error('EventID ไม่ถูกต้อง');
+  var count = Math.max(sheet.getLastRow() - 1, 0);
+  if (!count) throw new Error('ไม่พบข้อมูลเหตุการณ์');
+  var ids = sheet.getRange(2, EVENT_META_COL.EVENT_ID, count, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() === eventId) {
+      var rowNumber = i + 2;
+      var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+      if (!includeVoided && status === 'void') throw new Error('เหตุการณ์นี้ถูกยกเลิกแล้ว');
+      return rowNumber;
+    }
+  }
+  throw new Error('ไม่พบ EventID: ' + eventId);
+}
+
+function getEventMetaFromRow_(row) {
+  return {
+    eventId: String(row[EVENT_META_COL.EVENT_ID - 1] || ''),
+    revision: Number(row[EVENT_META_COL.REVISION - 1] || 1),
+    recordStatus: String(row[EVENT_META_COL.RECORD_STATUS - 1] || 'active').toLowerCase(),
+    createdAt: row[EVENT_META_COL.CREATED_AT - 1] || '',
+    createdBy: row[EVENT_META_COL.CREATED_BY - 1] || '',
+    voidedAt: row[EVENT_META_COL.VOIDED_AT - 1] || '',
+    voidedBy: row[EVENT_META_COL.VOIDED_BY - 1] || '',
+    voidReason: row[EVENT_META_COL.VOID_REASON - 1] || ''
+  };
 }
 
 function seedSettings_(ss, assets) {
@@ -310,10 +460,11 @@ function seedSettings_(ss, assets) {
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
     ['REPORT_FOLDER_ID',assets.reportFolderId,'Google Drive Folder สำหรับจัดเก็บรายงาน'],
     ['ALLOW_SELF_REGISTER','true','เปิดให้ผู้ใช้สมัครเองหรือไม่'],
-    ['INSTALL_VERSION',CONFIG.VERSION,'รุ่นโครงสร้างระบบ']
+    ['INSTALL_VERSION',CONFIG.VERSION,'รุ่นโครงสร้างระบบ'],
+    ['SCHEMA_VERSION',CONFIG.SCHEMA_VERSION,'รุ่นโครงสร้างข้อมูลถาวร']
   ];
   rows.forEach(function(r) {
-    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION'].indexOf(r[0]) >= 0);
+    upsertSettingDirect_(sheet, r[0], r[1], r[2], ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','TEMPLATE_DOC_ID','REPORT_FOLDER_ID','INSTALL_VERSION','SCHEMA_VERSION'].indexOf(r[0]) >= 0);
   });
 }
 
@@ -600,9 +751,9 @@ function getDashboardData(filter) {
   var data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return [];
   var rows = data.slice(1);
-  var result = rows.map(function(row, index) {
-    return rowToObject_(row, index + 2);
-  }).filter(function(r) { return r.col2 !== ''; });
+  var result = rows.map(function(row) {
+    return rowToObject_(row);
+  }).filter(function(r) { return r.col2 !== '' && String(r.recordStatus || 'active').toLowerCase() !== 'void'; });
 
   filter = filter || {};
   if (filter.startDate || filter.endDate) {
@@ -619,9 +770,11 @@ function getDashboardData(filter) {
   return result;
 }
 
-function rowToObject_(row, rowNumber) {
-  var obj = {rowNumber: rowNumber};
+function rowToObject_(row) {
+  var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
+  var meta = getEventMetaFromRow_(row);
+  Object.keys(meta).forEach(function(k){ obj[k] = meta[k]; });
   return obj;
 }
 
@@ -643,30 +796,81 @@ function thaiDateToIso_(dateText) {
 
 function addRecord(sessionToken, formData) {
   var user = requireAuth_(sessionToken, 'create');
-  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  var newRow = sheet.getLastRow() + 1;
-  sheet.getRange(newRow, 1).setValue(newRow - 1);
-  saveRowData_(sheet, newRow, formData, user);
-  writeAudit_(user, 'CREATE_RECORD', CONFIG.SHEETS.MAIN, String(newRow), '', JSON.stringify(formData));
-  return 'บันทึกข้อมูลใหม่เรียบร้อยแล้ว';
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    ensureSheet_(getDb_(), CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+    var newRow = sheet.getLastRow() + 1;
+    var eventId = Utilities.getUuid();
+    var now = new Date();
+
+    sheet.getRange(newRow, 1).setValue(newRow - 1);
+    saveRowData_(sheet, newRow, formData, user);
+    sheet.getRange(newRow, EVENT_META_COL.EVENT_ID, 1, EVENT_META_HEADERS.length).setValues([[
+      eventId, 1, 'active', now, user.email, '', '', ''
+    ]]);
+
+    writeAudit_(user, 'CREATE_RECORD', CONFIG.SHEETS.MAIN, eventId, '', JSON.stringify(formData));
+    return 'บันทึกข้อมูลใหม่เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-function updateRecord(sessionToken, rowNumber, formData) {
+function updateRecord(sessionToken, eventId, formData, expectedRevision) {
   var user = requireAuth_(sessionToken, 'edit');
-  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  var before = sheet.getRange(Number(rowNumber), 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
-  saveRowData_(sheet, Number(rowNumber), formData, user);
-  writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, String(rowNumber), JSON.stringify(before), JSON.stringify(formData));
-  return 'อัปเดตข้อมูลเรียบร้อยแล้ว';
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    var expected = Number(expectedRevision || 0);
+    if (expected && expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
+    }
+
+    saveRowData_(sheet, rowNumber, formData, user);
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify(formData));
+    return 'อัปเดตข้อมูลเรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-function deleteRecord(sessionToken, rowNumber) {
+function deleteRecord(sessionToken, eventId, voidReason) {
   var user = requireAuth_(sessionToken, 'delete');
-  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  var before = sheet.getRange(Number(rowNumber), 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
-  sheet.deleteRow(Number(rowNumber));
-  writeAudit_(user, 'DELETE_RECORD', CONFIG.SHEETS.MAIN, String(rowNumber), JSON.stringify(before), '');
-  return 'ลบข้อมูลเรียบร้อยแล้ว';
+  var reason = String(voidReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, true);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'void') return 'เหตุการณ์นี้ถูกยกเลิกไว้แล้ว';
+
+    var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    var now = new Date();
+
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('void');
+    sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_AT).setValue(now);
+    sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_BY).setValue(user.email);
+    sheet.getRange(rowNumber, EVENT_META_COL.VOID_REASON).setValue(reason);
+    sheet.getRange(rowNumber, 27).setValue(user.email);
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(user, 'VOID_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify({recordStatus:'void',voidReason:reason}));
+    return 'ยกเลิกข้อมูลเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function saveRowData_(sheet, row, data, user) {
@@ -906,6 +1110,7 @@ function getInstallationStatus(sessionToken) {
   var settings = getSettingsMap_();
   return {
     version: CONFIG.VERSION,
+    schemaVersion: CONFIG.SCHEMA_VERSION,
     spreadsheetId: ss.getId(),
     spreadsheetName: ss.getName(),
     systemFolderId: settings.SYSTEM_FOLDER_ID || '',
@@ -961,7 +1166,7 @@ function getSystemSettings(sessionToken) {
 function saveSystemSettings(sessionToken, settingsArray) {
   var user = requireAuth_(sessionToken, 'settings');
   var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
-  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION'];
+  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION','SCHEMA_VERSION'];
   settingsArray.forEach(function(s) {
     if (!s.key || blockedKeys.indexOf(String(s.key)) >= 0) return;
     upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
@@ -1004,7 +1209,7 @@ function exportData(sessionToken, format) {
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
 
-function generateReportFromWeb(sessionToken, activeRow) {
+function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var settings = getSettingsMap_();
@@ -1012,7 +1217,8 @@ function generateReportFromWeb(sessionToken, activeRow) {
   var folderId = settings.REPORT_FOLDER_ID;
   if (!templateId || !folderId) throw new Error('กรุณาตั้งค่า Template และโฟลเดอร์รายงานในหน้า Admin ก่อน');
 
-  var rowData = sheet.getRange(Number(activeRow), 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
   var disease = rowData[5] || '..........';
   var place = rowData[7] || '..........';
   var villageName = rowData[28] || '';
@@ -1053,7 +1259,7 @@ function generateReportFromWeb(sessionToken, activeRow) {
   }
 });
   document.saveAndClose();
-  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, String(activeRow), '', newDocFile.getId());
+  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, eventId, '', newDocFile.getId());
   return newDocFile.getUrl();
 }
 
