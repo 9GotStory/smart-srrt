@@ -253,6 +253,18 @@
   <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
 </div></div>
 
+<div class="modal" id="reportReadinessModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ความพร้อมก่อนสร้างรายงาน AI</div>
+  <input type="hidden" id="pendingReportEventId">
+  <div id="reportReadinessSummary" class="help" style="margin-bottom:10px"></div>
+  <div id="reportReadinessWarnings" class="content-list"></div>
+  <div class="help" style="margin-top:10px">คำเตือนนี้ใช้ช่วยตรวจคุณภาพข้อมูลเท่านั้น ระบบยังอนุญาตให้สร้างรายงานต่อได้ และ AI จะใช้จุดไข่ปลา/ระบุข้อจำกัดเมื่อข้อมูลไม่ครบตาม prompt contract</div>
+  <div class="actions">
+    <button class="btn light" onclick="closeModal('reportReadinessModal')">กลับไปตรวจข้อมูล</button>
+    <button class="btn green" id="continueReportBtn" onclick="continueReportFromWarning()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานต่อ</button>
+  </div>
+</div></div>
+
 <div class="modal" id="userModal"><div class="modal-box modal-sm">
   <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
   <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
@@ -610,6 +622,15 @@
     }catch(e){toast(e.message||e)}
   }
 
+  function reportReadinessBadge(r){
+    const rd=r&&r.aiReportReadiness?r.aiReportReadiness:null;
+    if(!rd)return'';
+    if(rd.level==='ready')return'<span class="status st-low" title="ข้อมูลหลักพร้อมสำหรับรายงาน AI"><i class="fa-solid fa-circle-check"></i> AI พร้อม</span>';
+    const title=(rd.warnings||[]).map(w=>w.message||w.code).join('\n');
+    if(rd.level==='limited')return`<span class="status st-high" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ข้อมูลจำกัด ${Number(rd.warningCount||0)}</span>`;
+    return`<span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ตรวจสอบ ${Number(rd.warningCount||0)}</span>`
+  }
+
   function eventLifecycleActions(r,i){
     const status=String(r&&r.recordStatus||'active').toLowerCase();
     const buttons=[];
@@ -644,14 +665,14 @@
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
-      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button>`:'-'}</td></tr>`
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
     }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
     el('recordBody').innerHTML=allData.map((r,i)=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button></td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> ${reportReadinessBadge(r)}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
@@ -725,11 +746,63 @@
     if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
     try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
+  function renderReportReadinessModal(readiness,eventId){
+    el('pendingReportEventId').value=eventId||'';
+    const level=String(readiness&&readiness.level||'review');
+    const count=Number(readiness&&readiness.warningCount||0);
+    const headline=level==='limited'
+      ?'ข้อมูลหลักยังไม่ครบ รายงานที่สร้างอาจมีจุดไข่ปลาหรือข้อจำกัดหลายส่วน'
+      :'พบข้อมูลที่ควรตรวจสอบก่อนสร้างรายงาน';
+    el('reportReadinessSummary').innerHTML=`<b>${escapeHtml(readiness&&readiness.label||headline)}</b><br>${escapeHtml(headline)} · คำเตือน ${count} รายการ`;
+    const warnings=Array.isArray(readiness&&readiness.warnings)?readiness.warnings:[];
+    el('reportReadinessWarnings').innerHTML=warnings.map(w=>{
+      const prefix=w.severity==='core'?'ข้อมูลหลัก':(w.severity==='consistency'?'ความสอดคล้อง':'ควรเพิ่มเติม');
+      return`<div class="content-item"><b>${escapeHtml(prefix)}</b><p>${escapeHtml(w.message||w.code||'ควรตรวจสอบข้อมูล')}</p></div>`
+    }).join('')||'<div class="help">ไม่พบคำเตือน</div>';
+    openModal('reportReadinessModal')
+  }
+  async function executeReport(eventId,btn,w){
+    const old=btn?btn.innerHTML:'';
+    try{
+      if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง'}
+      if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');
+      const url=await gs('generateReportFromWeb',token,eventId);
+      if(w)w.location=url;else window.open(url,'_blank');
+      toast('สร้างรายงานเรียบร้อยแล้ว')
+    }catch(e){
+      if(w)w.close();
+      toast(e.message||e)
+    }finally{
+      if(btn){btn.disabled=false;btn.innerHTML=old}
+    }
+  }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
-    const old=btn.innerHTML,w=window.open('','_blank');
-    try{btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง';if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');const url=await gs('generateReportFromWeb',token,eventId);if(w)w.location=url;else window.open(url,'_blank');toast('สร้างรายงานเรียบร้อยแล้ว')}
-    catch(e){if(w)w.close();toast(e.message||e)}finally{btn.disabled=false;btn.innerHTML=old}
+    const old=btn.innerHTML;
+    const probe=window.open('','_blank');
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
+      if(probe)probe.document.write('<p style="font-family:sans-serif">กำลังตรวจสอบความพร้อมของข้อมูล...</p>');
+      const readiness=await gs('getAIReportReadiness',token,eventId);
+      if(readiness&&readiness.level==='ready'){
+        return await executeReport(eventId,btn,probe)
+      }
+      if(probe)probe.close();
+      renderReportReadinessModal(readiness,eventId)
+    }catch(e){
+      if(probe)probe.close();
+      toast(e.message||e)
+    }finally{
+      if(btn.disabled){btn.disabled=false;btn.innerHTML=old}
+    }
+  }
+  async function continueReportFromWarning(){
+    const eventId=el('pendingReportEventId').value;
+    if(!eventId){toast('ไม่พบ EventID');return}
+    const btn=el('continueReportBtn');
+    const w=window.open('','_blank');
+    closeModal('reportReadinessModal');
+    await executeReport(eventId,btn,w)
   }
 
   function exportClientExcel(){
