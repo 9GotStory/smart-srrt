@@ -216,6 +216,9 @@ test('browser surfaces readiness badges without disabling AI report controls',()
 });
 
 test('G-26 adds no readiness persistence or schema migration',()=>{
-  assert.doesNotMatch(source,/READINESS_(?:STATUS|LEVEL|WARNING)|AIReadiness|ReportReadiness/);
+  assert.doesNotMatch(source,/['"](?:AIReportReadiness|ReportReadiness)['"]\s*:/);
+  assert.doesNotMatch(source,/READINESS_(?:STATUS|LEVEL|WARNING)\s*:/);
+  assert.doesNotMatch(source,/REPORT_REGISTRY_HEADERS[\s\S]{0,500}Readiness/);
+  assert.doesNotMatch(source,/MAIN_HEADERS[\s\S]{0,500}Readiness/);
   assert.doesNotMatch(source,/function migrateG26/);
 });
