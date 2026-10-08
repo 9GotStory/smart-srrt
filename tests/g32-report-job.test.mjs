@@ -67,6 +67,7 @@ test('G-32 creates a private queued job and returns same job to same owner witho
   assert.equal(h.map.get('SRRT_G32_ACTIVE'),a.id);
   assert.ok(!JSON.stringify(a).includes('fake-key'));
   assert.ok(!JSON.stringify(a).includes('test1@example.test'));
+  assert.ok(!h.map.get('SRRT_G32_JOB_'+a.id).includes('test1@example.test'),'private ledger must not store owner email');
   assert.throws(()=>create(h,'u2'),/กำลังทำงาน/);
 });
 
@@ -78,6 +79,49 @@ test('G-32 owner-only status and cancel denies another authenticated user',()=>{
   assert.throws(()=>h.ctx.dismissReportJob('u2',job.id),/ไม่มีสิทธิ์/);
   assert.equal(h.ctx.getReportJobStatus('u1',job.id).status,'queued');
   assert.equal(h.ctx.getCurrentReportJob('u2'),null);
+});
+
+
+test('G-32 unauthorized read of another owner stale job cannot mutate or release slot',()=>{
+  const h=harness(),job=create(h),key='SRRT_G32_JOB_'+job.id;
+  const stored=JSON.parse(h.map.get(key));
+  stored.createdAt=Date.now()-9*60*1000;
+  h.map.set(key,JSON.stringify(stored));
+  assert.throws(()=>h.ctx.getReportJobStatus('u2',job.id),/ไม่มีสิทธิ์/);
+  assert.equal(JSON.parse(h.map.get(key)).status,'queued','unauthorized status call must not expire job');
+  assert.equal(h.map.get('SRRT_G32_ACTIVE'),job.id);
+  assert.equal(h.ctx.getReportJobStatus('u1',job.id).status,'unknown');
+  assert.equal(h.map.has('SRRT_G32_ACTIVE'),false);
+});
+
+test('G-32 a committed registry and Doc are success even when audit backend fails',()=>{
+  const h=harness(),job=create(h);
+  let copies=0,commits=0,auditCalls=0;
+  h.ctx.DriveApp={
+    getFileById(){return {makeCopy(){copies++;return {
+      getId:()=> 'doc-test-id',getUrl:()=> 'https://docs.google.com/document/d/doc-test-id/edit',
+      setTrashed(){throw Error('committed Doc must not be trashed')}
+    }}}},
+    getFolderById(){return {}}
+  };
+  h.ctx.DocumentApp={openById(){return {getBody(){return {replaceText(){}}},saveAndClose(){}}}};
+  h.ctx.replacePlaceholderWithParagraphs_=()=>{};
+  h.ctx.appendReportRegistry_=()=>{commits++};
+  h.ctx.writeAudit_=()=>{auditCalls++;throw Error('simulated audit storage outage')};
+  const result=h.ctx.runReportJob('u1',job.id);
+  assert.equal(result.status,'completed','once registry committed do not invite retry and duplicate Docs');
+  assert.equal(copies,1);
+  assert.equal(commits,1);
+  assert.equal(auditCalls,1);
+  assert.equal(result.documentUrl,'https://docs.google.com/document/d/doc-test-id/edit');
+});
+
+test('G-32 recovering a browser job uses current authenticated server pointer and checks login race',()=>{
+  const recover=browser.match(/async function recoverReportJob\(\)[\s\S]*?(?=\n  async function runReportJobClient)/)?.[0]||'';
+  assert.match(recover,/const session=token/);
+  assert.match(recover,/gs\('getCurrentReportJob',session\)/);
+  assert.match(recover,/token!==session/);
+  assert.doesNotMatch(recover,/gs\('getReportJobStatus',token,old\)/);
 });
 
 test('G-32 cancel while queued stops before any Gemini call or document',()=>{
