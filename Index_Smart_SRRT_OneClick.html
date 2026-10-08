@@ -35,6 +35,8 @@
     .toast{position:fixed;right:18px;bottom:18px;z-index:90;background:#0f172a;color:#fff;padding:14px 16px;border-radius:14px;display:none;box-shadow:var(--shadow);max-width:430px}.toast.show{display:block}
     .content-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.content-item{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff}.content-item h4{margin:0 0 5px;color:var(--primary)}.content-item p{margin:0 0 10px;color:var(--muted);font-size:12px}.content-item a{color:var(--secondary);font-weight:700;text-decoration:none}
     .closed{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;border-radius:16px;padding:14px;margin-bottom:14px;font-weight:700}.help{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:14px;padding:12px;font-size:12px;line-height:1.65}.logo-preview{display:flex;align-items:center;gap:14px;padding:12px;border:1px dashed var(--line);border-radius:14px;margin:10px 0}.logo-preview img{width:80px;height:80px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.setting-group{border:1px solid var(--line);border-radius:16px;padding:14px}.setting-group h4{margin:0 0 12px;color:var(--primary)}.mini{font-size:11px;color:var(--muted)}.progress{display:none;margin-top:10px;color:var(--primary);font-weight:700}.progress.show{display:block}
+    .report-task-indicator{position:fixed;bottom:78px;right:18px;z-index:59;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--primary);box-shadow:var(--shadow);max-width:min(420px,calc(100vw - 36px));padding:12px 15px;font-weight:700;cursor:pointer;align-items:center;gap:8px;text-align:left}
+    .report-task-indicator span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .mobile-overlay{display:none}
     @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.settings-grid{grid-template-columns:1fr}}
     @media(max-width:980px){.sidebar{transform:translateX(-105%);transition:.25s}.sidebar.open{transform:none}.mobile-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}.main{margin-left:0;width:100%;padding:16px}.hamb{display:block}.topbar{align-items:stretch}.banner{flex-direction:column;align-items:flex-start}.charts{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span-3{grid-column:span 1}.chart{height:285px}}
@@ -262,12 +264,16 @@
   <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
 </div></div>
 
+<button type="button" class="report-task-indicator" id="reportTaskIndicator" onclick="reopenReportTask()" aria-live="polite" aria-label="ดูสถานะงานสร้างรายงาน" style="display:none"><i class="fa-solid fa-file-medical"></i> <span id="reportTaskStatus">กำลังสร้างรายงาน AI</span> <i class="fa-solid fa-chevron-up"></i></button>
+
 <div class="modal" id="reportResultModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-file-medical"></i> ผลการสร้างรายงาน AI</div>
   <div id="reportResultStatus" class="help" role="status" aria-live="polite">กำลังเตรียมสร้างรายงาน...</div>
   <div class="mini" style="margin-top:12px">รายงาน AI เป็นฉบับร่าง ต้องตรวจทานก่อนใช้จริง หากคำขอหมดเวลาหรือไม่แน่ใจว่าสำเร็จหรือไม่ ให้ตรวจประวัติรายงานก่อนสั่งสร้างใหม่</div>
   <div class="actions">
-    <button class="btn light" onclick="closeModal('reportResultModal')">ปิด</button>
+    <button class="btn light" onclick="closeReportTaskModal()"><i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ</button>
+    <button class="btn red" id="cancelReportJobBtn" onclick="cancelCurrentReportTask()" style="display:none"><i class="fa-solid fa-ban"></i> ยกเลิกการสร้าง</button>
+    <button class="btn light" id="dismissReportJobBtn" onclick="dismissReportTask()" style="display:none">รับทราบ</button>
     <a id="reportResultLink" class="btn green" href="#" target="_blank" rel="noopener noreferrer" style="display:none"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>
   </div>
 </div></div>
@@ -384,6 +390,7 @@
     try{
       const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
       applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      if(currentUser)void recoverReportJob();
       google.charts.setOnLoadCallback(loadDashboard)
     }catch(e){toast(e.message||e)}
   }
@@ -406,10 +413,10 @@
     try{
       const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
       if(!r.ok){toast(r.message);return}
-      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');await loadDashboard()
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){stopReportPolling();activeReportJob=null;localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -827,6 +834,28 @@
   }
   const reportReadinessInFlight = new Set();
   const reportGenerationInFlight = new Set();
+  const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
+  const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
+  let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
+
+  function reportJobTerminal(job){return !!job&&REPORT_TERMINAL_STATES.has(job.status)}
+  function reportStageLabel(job){
+    if(!job)return 'ไม่มีงานสร้างรายงาน';
+    if(job.status==='completed')return 'สร้างรายงานสำเร็จ';
+    if(job.status==='cancelled')return 'ยกเลิกการสร้างรายงานแล้ว';
+    if(job.status==='failed')return 'สร้างรายงานไม่สำเร็จ';
+    if(job.status==='unknown')return 'ไม่สามารถยืนยันผล กรุณาตรวจประวัติรายงาน';
+    if(job.status==='cancel_requested')return 'กำลังขอยกเลิก · รอให้ขั้นตอนปัจจุบันสิ้นสุด';
+    if(job.status==='finalizing')return 'กำลังบันทึก Google Docs และทะเบียนรายงาน';
+    const steps={
+      queued:'รอเริ่มสร้างรายงาน',
+      preparing:'กำลังเตรียมข้อมูลรายงาน',
+      gemini_1:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 1–3',
+      gemini_2:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 4–6',
+      post_gemini:'กำลังเตรียมบันทึกเอกสาร'
+    };
+    return steps[job.stage]||'กำลังสร้างรายงานด้วย Gemini 3.8 Flash';
+  }
   function showReportGenerationStatus(message,url){
     el('reportResultStatus').textContent=String(message||'');
     const link=el('reportResultLink');
@@ -837,44 +866,142 @@
     link.style.display=valid?'inline-flex':'none';
     return valid;
   }
+  function paintReportTask(job){
+    if(!job)return;
+    if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob))return;
+    if(activeReportJob&&activeReportJob.id===job.id){
+      if(reportJobTerminal(activeReportJob)&&!reportJobTerminal(job))return;
+      if(activeReportJob.status==='cancel_requested'&&job.status==='running')return;
+    }
+    activeReportJob=job;
+    localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
+    const label=reportStageLabel(job);
+    const detail=job.message ? ' · '+String(job.message) : '';
+    const possibleDoc=job.status==='completed'?job.documentUrl:null;
+    showReportGenerationStatus(label+detail,possibleDoc);
+    const indicator=el('reportTaskIndicator');
+    indicator.style.display='inline-flex';
+    el('reportTaskStatus').textContent=label;
+    const terminal=reportJobTerminal(job);
+    const cancel=el('cancelReportJobBtn');
+    cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
+    cancel.disabled=job.status==='cancel_requested';
+    const close=el('dismissReportJobBtn');
+    close.style.display=terminal?'inline-flex':'none';
+    if(terminal){
+      reportGenerationInFlight.clear();
+      stopReportPolling();
+      if(!el('reportResultModal').classList.contains('open'))toast(label);
+    }else{
+      reportGenerationInFlight.add(job.eventId);
+      startReportPolling();
+    }
+  }
+  function reopenReportTask(){
+    if(!activeReportJob)return;
+    openModal('reportResultModal');
+    showReportGenerationStatus(reportStageLabel(activeReportJob)+(activeReportJob.message?' · '+activeReportJob.message:''),activeReportJob.status==='completed'?activeReportJob.documentUrl:null);
+  }
+  function closeReportTaskModal(){
+    closeModal('reportResultModal');
+    if(activeReportJob&&!reportJobTerminal(activeReportJob))toast('ปิดหน้าต่างแล้ว งานยังดำเนินต่อขณะที่หน้าเว็บนี้เปิดอยู่');
+  }
+  function dismissReportTask(){
+    if(!reportJobTerminal(activeReportJob))return;
+    stopReportPolling();
+    const dismissId=activeReportJob.id;
+    const session=token;
+    activeReportJob=null;
+    localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    void gs('dismissReportJob',session,dismissId).catch(()=>{});
+    el('reportTaskIndicator').style.display='none';
+    closeModal('reportResultModal');
+  }
+  function stopReportPolling(){if(reportPollTimer){clearInterval(reportPollTimer);reportPollTimer=null}}
+  function startReportPolling(){
+    if(reportPollTimer||!activeReportJob||reportJobTerminal(activeReportJob))return;
+    reportPollTimer=setInterval(()=>{void pollReportTask()},7000);
+  }
+  async function pollReportTask(){
+    if(reportPollBusy||!activeReportJob||reportJobTerminal(activeReportJob)||!currentUser)return;
+    reportPollBusy=true;
+    const id=activeReportJob.id,session=token;
+    try{
+      const state=await gs('getReportJobStatus',session,id);
+      if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
+    }catch(error){
+      // A transient status-lookup failure is not proof that generation stopped.
+      if(activeReportJob&&activeReportJob.id===id){
+        el('reportTaskStatus').textContent='ตรวจสอบสถานะไม่ได้ · งานอาจยังทำอยู่';
+      }
+    }finally{reportPollBusy=false}
+  }
+  async function cancelCurrentReportTask(){
+    if(!activeReportJob||reportJobTerminal(activeReportJob)||activeReportJob.status==='finalizing')return;
+    if(!confirm('ต้องการขอยกเลิกการสร้างรายงานนี้หรือไม่? หาก Gemini กำลังตอบ ระบบจะรอจนถึงจุดที่หยุดได้ก่อน'))return;
+    const id=activeReportJob.id,session=token;
+    const btn=el('cancelReportJobBtn');
+    btn.disabled=true;
+    try{
+      const state=await gs('cancelReportJob',session,id);
+      if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
+    }catch(e){toast('ไม่สามารถส่งคำขอยกเลิก: '+String(e.message||e))}
+    finally{btn.disabled=false}
+  }
+  async function recoverReportJob(){
+    if(!currentUser||!token)return;
+    const old=localStorage.getItem(REPORT_JOB_LOCAL_KEY);
+    try{
+      // Owner-only backend pointer permits recovery after browser reload.
+      const state=old ? await gs('getReportJobStatus',token,old) : await gs('getCurrentReportJob',token);
+      if(state){
+        paintReportTask(state);
+        if(state.status==='queued') void runReportJobClient(state.id,token);
+      }
+    }catch(error){
+      // Do not assert cancellation/success if page was closed during RPC.
+      localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    }
+  }
+  async function runReportJobClient(jobId,session){
+    try{
+      const state=await gs('runReportJob',session,jobId);
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId)paintReportTask(state);
+    }catch(e){
+      // The server may still be executing despite a disconnected client callback.
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId){
+        await pollReportTask();
+        toast('ตรวจสอบคำขอไม่สำเร็จ กรุณาเปิดสถานะรายงาน ห้ามสั่งสร้างซ้ำ');
+      }
+    }
+  }
   async function executeReport(eventId,btn){
-    if(reportGenerationInFlight.size > 0){
-      toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');
-      openModal('reportResultModal');
+    if(reportGenerationInFlight.size > 0 || reportReadinessInFlight.size > 1){
+      toast('มีงานสร้างรายงานอยู่แล้ว เปิดสถานะงานเดิมแทนการส่งซ้ำ');
+      if(activeReportJob)reopenReportTask();
       return;
     }
-    reportGenerationInFlight.add(eventId);
     const old=btn?btn.innerHTML:'';
-    const sessionAtStart=token;
-    showReportGenerationStatus('กำลังสร้างรายงานด้วย Gemini 3.8 Flash... อาจใช้เวลาหลายนาที อย่ากดสร้างซ้ำ',null);
-    openModal('reportResultModal');
+    const session=token;
     try{
-      if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง'}
-      const url=await gs('generateReportFromWeb',sessionAtStart,eventId);
-      if(token!==sessionAtStart||!currentUser){
-        showReportGenerationStatus('คำขอเสร็จสิ้นหลังออกจากระบบ กรุณาเข้าสู่ระบบใหม่และตรวจประวัติรายงาน',null);
-        return;
+      if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังเริ่มงาน'}
+      const job=await gs('createReportJob',session,eventId);
+      if(session!==token||!currentUser)return;
+      if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob)){
+        toast('มีงานเดิมอยู่แล้ว กรุณารอตรวจสถานะก่อน');return;
       }
-      if(showReportGenerationStatus('สร้างรายงานสำเร็จแล้ว กดปุ่มเปิด Google Doc เพื่อดูรายงาน',url)){
-        toast('สร้างรายงานเรียบร้อยแล้ว');
-      }else{
-        showReportGenerationStatus('ระบบตอบกลับว่าทำงานเสร็จ แต่ลิงก์เอกสารไม่ถูกต้อง กรุณาตรวจประวัติรายงานก่อนสร้างซ้ำ',null);
-      }
-    }catch(e){
-      if(token===sessionAtStart&&currentUser){
-        showReportGenerationStatus('สร้างรายงานไม่สำเร็จ: '+String(e.message||e)+' กรุณาตรวจประวัติรายงานก่อนลองใหม่',null);
-      }else{
-        showReportGenerationStatus('คำขอสิ้นสุดหลังออกจากระบบ กรุณาตรวจประวัติรายงานหลังเข้าสู่ระบบใหม่',null);
-      }
-    }finally{
-      reportGenerationInFlight.delete(eventId);
-      if(btn){btn.disabled=false;btn.innerHTML=old}
-    }
+      paintReportTask(job);
+      openModal('reportResultModal');
+      if(job.status==='queued')void runReportJobClient(job.id,session);
+    }catch(e){toast('เริ่มสร้างรายงานไม่สำเร็จ: '+String(e.message||e))}
+    finally{if(btn){btn.disabled=false;btn.innerHTML=old}}
   }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     if(reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
-      toast('มีคำขอรายงานสำหรับเหตุการณ์นี้อยู่แล้ว กรุณารอผล');return;
+      toast('มีคำขอรายงานอยู่แล้ว กรุณาเปิดสถานะงานเดิม');
+      if(activeReportJob)reopenReportTask();
+      return;
     }
     reportReadinessInFlight.add(eventId);
     const old=btn.innerHTML;
@@ -895,7 +1022,7 @@
     const eventId=el('pendingReportEventId').value;
     if(!eventId){toast('ไม่พบ EventID');return}
     if(reportGenerationInFlight.size > 0){
-      toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');return;
+      toast('มีคำขอรายงานอยู่แล้ว กรุณารอผลก่อน');return;
     }
     closeModal('reportReadinessModal');
     await executeReport(eventId,el('continueReportBtn'));
