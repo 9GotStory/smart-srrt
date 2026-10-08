@@ -3473,19 +3473,26 @@ function generateReportFromWeb(sessionToken, eventId) {
     });
     registered = true;
 
-    writeAudit_(
-      user,
-      'GENERATE_REPORT',
-      CONFIG.SHEETS.REPORTS,
-      reportId,
-      '',
-      JSON.stringify({
-        eventId:eventId,
-        sourceRevision:sourceRevision,
-        documentId:newDocFile.getId(),
-        promptVersion:CONFIG.REPORT_PROMPT_VERSION
-      })
-    );
+    // Once ReportRegistry is committed, the report is durable. An audit
+    // transport failure cannot truthfully turn an already-created Doc into
+    // "generation failed" and invite a duplicate retry.
+    try {
+      writeAudit_(
+        user,
+        'GENERATE_REPORT',
+        CONFIG.SHEETS.REPORTS,
+        reportId,
+        '',
+        JSON.stringify({
+          eventId:eventId,
+          sourceRevision:sourceRevision,
+          documentId:newDocFile.getId(),
+          promptVersion:CONFIG.REPORT_PROMPT_VERSION
+        })
+      );
+    } catch (auditError) {
+      Logger.log('G-32 WARNING: ReportRegistry committed but report audit logging failed; investigate using ReportID=' + reportId);
+    }
 
     return newDocFile.getUrl();
   } catch (error) {
@@ -3539,12 +3546,13 @@ function expireStaleReportJob_(props, job) {
   return job;
 }
 function reportJobOwned_(props, jobId, user) {
-  var job = expireStaleReportJob_(props, readReportJob_(props, jobId));
-  if (String(job.ownerId) !== String(user.userId) ||
-      String(job.ownerEmail).toLowerCase() !== String(user.email).toLowerCase()) {
+  // Check ownership BEFORE any stale-state cleanup, so a foreign user cannot
+  // mutate another owner's status or release the global job slot.
+  var job = readReportJob_(props, jobId);
+  if (String(job.ownerId) !== String(user.userId)) {
     throw new Error('ไม่มีสิทธิ์ดูหรือจัดการคำขอรายงานนี้');
   }
-  return job;
+  return expireStaleReportJob_(props, job);
 }
 function publicReportJob_(job) {
   return {
@@ -3561,6 +3569,10 @@ function cleanupOldReportJobs_(props) {
       var job = JSON.parse(all[key]);
       if (Date.now() - Number(job.createdAt || 0) > REPORT_JOB_TTL_MS_) props.deleteProperty(key);
     } catch(ignore) { props.deleteProperty(key); }
+  });
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf('SRRT_G32_USER_') !== 0) return;
+    if (!props.getProperty(REPORT_JOB_PREFIX_ + all[key])) props.deleteProperty(key);
   });
 }
 function createReportJob(sessionToken, eventId) {
@@ -3586,7 +3598,7 @@ function createReportJob(sessionToken, eventId) {
     }
     var job = {
       id:Utilities.getUuid(),eventId:stableEventId,
-      ownerId:String(user.userId),ownerEmail:String(user.email).toLowerCase(),
+      ownerId:String(user.userId),
       status:'queued',stage:'queued',createdAt:Date.now(),updatedAt:Date.now(),
       message:'รอเริ่มสร้างรายงาน',documentUrl:''
     };
@@ -3605,10 +3617,15 @@ function getReportJobStatus(sessionToken, jobId) {
 function getCurrentReportJob(sessionToken) {
   var user = requireAuth_(sessionToken, 'report');
   return withReportJobLock_(function(props) {
-    var id = props.getProperty('SRRT_G32_USER_' + user.userId);
+    var pointer = 'SRRT_G32_USER_' + user.userId;
+    var id = props.getProperty(pointer);
     if (!id) return null;
     try { return publicReportJob_(reportJobOwned_(props, id, user)); }
-    catch(ignore) { return null; }
+    catch(ignore) {
+      // Clear an expired/unreadable pointer instead of retaining stale keys.
+      props.deleteProperty(pointer);
+      return null;
+    }
   });
 }
 function cancelReportJob(sessionToken, jobId) {
