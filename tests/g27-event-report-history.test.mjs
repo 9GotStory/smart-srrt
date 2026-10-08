@@ -168,10 +168,10 @@ test('Event and Reporter views have read-only history controls without public re
   assert.match(html,/id="reportHistoryModal"/);
   assert.match(html,/function openEventReportHistoryByIndex\(index\)/);
   assert.match(html,/gs\('listReportsForEvent',authToken,eventId\)/);
-  const eventRow=html.match(/el\('eventBody'\)[\s\S]*?el\('recordBody'\)/)?.[0]??'';
-  const reporterRow=html.match(/el\('reportBody'\)[\s\S]*?function buildRecordForm/)?.[0]??'';
-  assert.match(eventRow,/openEventReportHistoryByIndex\(\$\{i\}\)/);
-  assert.match(reporterRow,/openEventReportHistoryByIndex\(\$\{i\}\)/);
+  const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
+  assert.match(render,/el\('eventBody'\)\.innerHTML=allData\.map/);
+  assert.match(render,/el\('reportBody'\)\.innerHTML=allData\.map/);
+  assert.equal((render.match(/openEventReportHistoryByIndex\(\$\{i\}\)/g)||[]).length,2);
   assert.match(html,/if\(!currentUser\|\|!roleCanRecord\(\)/);
   assert.match(html,/rel="noopener noreferrer"/);
   assert.match(html,/escapeHtml\(url\)/);
