@@ -137,46 +137,20 @@ test('appendReportRegistry writes the complete immutable evidence row',()=>{
   ]);
 });
 
-test('successful Gemini fallback records the model/API that actually produced output',()=>{
+test('G-31 Gemini 503 fails without cross-model fallback or phantom metadata',()=>{
   const ctx=makeContext();
   const meta={models:[],apiVersions:[]};
-
-  ctx.getGeminiRetryModelQueue_=()=>[
-    {modelName:'models/gemini-first',apiVersion:'v1beta'},
-    {modelName:'models/gemini-fallback',apiVersion:'v1'}
-  ];
-  let call=0;
-  ctx.UrlFetchApp={
-    fetch(){
-      call++;
-      if(call===1){
-        return {
-          getResponseCode:()=>503,
-          getContentText:()=>JSON.stringify({error:{message:'temporary'}})
-        };
-      }
-      return {
-        getResponseCode:()=>200,
-        getContentText:()=>JSON.stringify({
-          candidates:[{finishReason:'STOP',content:{parts:[{text:'สำเร็จ'}]}}]
-        })
-      };
-    }
-  };
-  ctx.CacheService={getScriptCache:()=>({put(){},remove(){},get(){return null}})};
-  ctx.clearGeminiModelCache_=()=>{};
-
-  const text=ctx.callGeminiForReport_(
-    'key',
-    {modelName:'models/gemini-first',apiVersion:'v1beta'},
-    'prompt',
-    'test',
-    meta
-  );
-
-  assert.equal(text,'สำเร็จ');
-  assert.deepEqual(Array.from(meta.models),['models/gemini-fallback']);
-  assert.deepEqual(Array.from(meta.apiVersions),['v1']);
+  let calls=0;
+  ctx.UrlFetchApp={fetch(url){
+    calls++;
+    assert.match(url,/\/models\/gemini-3\.8-flash:generateContent/);
+    return {getResponseCode:()=>503,getContentText:()=>JSON.stringify({error:{message:'temporary'}})};
+  }};
+  assert.throws(()=>ctx.callGeminiForReport_('mock-key',
+    {modelName:'models/gemini-3.8-flash',apiVersion:'v1'},'prompt','test',meta),/503/);
+  assert.equal(calls,1);
+  assert.deepEqual(meta.models,[]);
+  assert.deepEqual(meta.apiVersions,[]);
 });
 
 function setupGenerationContext({registryFails=false}={}){
