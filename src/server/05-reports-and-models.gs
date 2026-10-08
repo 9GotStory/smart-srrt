@@ -413,7 +413,7 @@ function runReportJob(sessionToken, jobId) {
     var internalError = String(error.message || error);
     var safeMessage = internalError === 'REPORT_JOB_CANCELLED'
       ? 'ยกเลิกการสร้างรายงานแล้ว'
-      : (/^Gemini 3\\.8 Flash/.test(internalError)
+      : (/^Gemini 3\.8 Flash/.test(internalError)
         ? internalError
         : 'สร้างรายงานไม่สำเร็จ กรุณาตรวจ Execution Logs และประวัติรายงาน');
     var final = finalizeReportJob_(job.id,'failed','',safeMessage);
