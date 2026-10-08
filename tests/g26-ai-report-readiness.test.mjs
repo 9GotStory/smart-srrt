@@ -304,3 +304,17 @@ test('readiness response remains warning metadata only, without Event narrative 
     'canGenerate','consistencyWarningCount','coreMissingCount','importantMissingCount','label','level','warningCount','warnings'
   ].sort());
 });
+
+test('Reporter create action matches report permission and AI-ready tooltip is explicitly non-certifying',()=>{
+  const render=html.match(/function renderTables\(\)[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
+  assert.match(render,/el\('reportBody'\)[\s\S]*?\$\{manage\?/);
+  assert.match(html,/ไม่ใช่การรับรองความถูกต้องของข้อมูลหรือรายงาน AI/);
+  assert.match(html,/รายงานที่สร้างเป็นฉบับร่าง ต้องให้ผู้รับผิดชอบตรวจทาน/);
+});
+
+test('G-26 preserves G-17 generation URL API and does not introduce readiness enforcement in generation',()=>{
+  const block=fnBlock('generateReportFromWeb');
+  assert.match(block,/return newDocFile\.getUrl\(\)/);
+  assert.match(block,/appendReportRegistry_\(/);
+  assert.doesNotMatch(block,/getAIReportReadiness|deriveAIReportReadiness_|canGenerate|REPORT_RISK_MISSING/);
+});
