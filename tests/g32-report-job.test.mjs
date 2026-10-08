@@ -201,6 +201,14 @@ test('G-32 cancel during second Gemini request blocks Docs and report registry c
   assert.equal(registry,0);
 });
 
+test('G-32 rejects stale direct generation RPC without job credentials',()=>{
+  const h=harness();
+  assert.throws(()=>h.ctx.generateReportFromWeb('u1',eventId),/G-32/);
+  const job=create(h);
+  assert.throws(()=>h.ctx.generateReportFromWeb('u1',eventId,job.id,'bad-nonce'),/ไม่สามารถใช้สิทธิ์/);
+  assert.equal(h.calls.length,0);
+});
+
 test('G-32 UI has task minimize, reopen, cancel and recovered terminal state, not fake immediate success',()=>{
   for(const s of ['id="reportTaskIndicator"','id="cancelReportJobBtn"','id="dismissReportJobBtn"',
     'closeReportTaskModal()','cancelCurrentReportTask()',"gs('createReportJob'", "gs('runReportJob'",
