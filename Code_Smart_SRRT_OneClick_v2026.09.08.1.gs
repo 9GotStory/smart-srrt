@@ -2247,7 +2247,8 @@ function deriveAIReportReadiness_(event) {
   var warnings = [];
 
   function has_(value) {
-    return String(value || '').trim() !== '';
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    return !!text && !/^(?:\.{3,}|…+|[-—]+|ไม่ระบุ|ไม่ทราบ|ไม่มีข้อมูล|ข้อมูลไม่ปรากฏ)$/i.test(text);
   }
   function add_(code, severity, field, message) {
     warnings.push({code:code, severity:severity, field:field, message:message});
@@ -2281,8 +2282,18 @@ function deriveAIReportReadiness_(event) {
   if (!has_(event.col9)) {
     add_('REPORT_ONSET_DATE_MISSING', 'important', 'col9', 'ยังไม่มีวันที่เริ่มป่วยของเหตุการณ์');
   }
+  if (!has_(event.col15)) {
+    add_('REPORT_VERIFICATION_MISSING', 'important', 'col15', 'ยังไม่มีผลการตรวจสอบความจริงของเหตุการณ์');
+  } else if (String(event.col15).trim() === 'รอตรวจสอบ') {
+    add_('REPORT_VERIFICATION_PENDING', 'important', 'col15', 'เหตุการณ์ยังอยู่ระหว่างตรวจสอบความจริง');
+  }
   if (!has_(event.col17)) {
     add_('REPORT_CRITERIA_MISSING', 'important', 'col17', 'ยังไม่มีผลประเมินเกณฑ์สอบสวนโรค');
+  } else if (String(event.col17).trim() === 'รอดำเนินการ') {
+    add_('REPORT_CRITERIA_PENDING', 'important', 'col17', 'การประเมินเกณฑ์สอบสวนโรคยังไม่แล้วเสร็จ');
+  }
+  if (!has_(event.col19)) {
+    add_('REPORT_RISK_MISSING', 'important', 'col19', 'ยังไม่มีข้อมูลประเมินความเสี่ยงแจ้งเตือนให้ใช้ตรวจทานการประเมินของ AI');
   }
   if (!has_(event.col21)) {
     add_('REPORT_MEASURES_MISSING', 'important', 'col21', 'ยังไม่มีมาตรการหรือกิจกรรมควบคุมโรคที่ดำเนินการ');
@@ -2291,15 +2302,19 @@ function deriveAIReportReadiness_(event) {
     add_('REPORT_AGENCY_MISSING', 'important', 'col20|col23', 'ยังไม่มีหน่วยงานแจ้งเตือนหรือหน่วยงานรับแจ้งสำหรับอ้างอิงในรายงาน');
   }
 
-  var lifecycle = String(event.eventLifecycle || deriveEventLifecycle_(event).code || '');
-  var investigationDecision = String(event.col24 || '').trim();
-  if ((lifecycle === 'investigated' || investigationDecision === 'ลงสอบสวน') && !has_(event.col26)) {
-    add_('REPORT_INVESTIGATION_DATE_MISSING', 'important', 'col26', 'เหตุการณ์ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค');
-  }
-
   var consistency = Array.isArray(event.eventConsistencyWarnings)
     ? event.eventConsistencyWarnings
     : deriveEventConsistencyWarnings_(event);
+  var hasG04InvestigationDateWarning = consistency.some(function(w) {
+    return String(w.code || '') === 'INVESTIGATION_MARKED_WITHOUT_DATE';
+  });
+  var lifecycle = String(event.eventLifecycle || deriveEventLifecycle_(event).code || '');
+  var investigationDecision = String(event.col24 || '').trim();
+  if ((lifecycle === 'investigated' || investigationDecision === 'ลงสอบสวน') &&
+      !has_(event.col26) && !hasG04InvestigationDateWarning) {
+    add_('REPORT_INVESTIGATION_DATE_MISSING', 'important', 'col26', 'เหตุการณ์ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค');
+  }
+
   consistency.forEach(function(w) {
     add_(
       'REPORT_CONSISTENCY_' + String(w.code || 'WARNING'),
