@@ -97,6 +97,14 @@ test('G-30 rejects tampered or missing release artifacts and preserves read-only
     assert.equal(rebuilt.status,0,rebuilt.stderr);
     assert.equal(run('--check').status,0,'rebuild must restore exact deterministic parity');
 
+    const changedSource = path.join(fixture, ONE_CLICK_TARGETS[1].sources[1]);
+    fs.appendFileSync(changedSource,'\n/* source-only drift */\n');
+    const mismatchFromSource=run('--check');
+    assert.equal(mismatchFromSource.status,1,mismatchFromSource.stdout+' '+mismatchFromSource.stderr);
+    assert.match(mismatchFromSource.stderr,/DRIFT: Index_Smart_SRRT_OneClick\.html/);
+    assert.equal(run('--write').status,0,'rebuilding source-only drift must update the generated fixture');
+    assert.equal(run('--check').status,0,'rebuilt HTML fixture must match changed modular source');
+
     const missing = path.join(fixture,ONE_CLICK_TARGETS[1].target);
     fs.rmSync(missing);
     const absent = run('--check');
