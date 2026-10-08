@@ -8,7 +8,7 @@ Schema version: **7 (unchanged)**
 
 G-26 helps users understand whether an Event has enough information for a useful AI-assisted preliminary report before generation.
 
-Readiness is deliberately advisory.
+Readiness is deliberately advisory. It checks for missing or pending information, not the correctness of clinical or epidemiological conclusions.
 
 It does not become a mandatory data-completeness workflow, approval gate, or report-generation blocker.
 
@@ -28,7 +28,9 @@ Every readiness result returns:
 
 `canGenerate: true`
 
-G-26 must not change this into a hidden hard gate.
+G-26 must not change this into a hidden hard gate. 
+
+Even when the level is `ready`, the result only means no warnings were found by these specific deterministic checks. It **does not certify completeness, correctness, or suitability for official publication**. AI-generated drafts require human review.
 
 ## Core report inputs
 
@@ -42,7 +44,9 @@ Source:
 
 Reason:
 
-The report background and event timeline depend on the received date.
+The report background and event timeline depend on the received date. 
+
+For every checked field, an empty value, only dots/ellipsis/dashes, or an explicit placeholder such as `ไม่ทราบ`, `ไม่ระบุ`, `ไม่มีข้อมูล`, or `ข้อมูลไม่ปรากฏ` counts as unavailable. This prevents placeholder text from creating misleading `ready` results.
 
 Warning code:
 
@@ -109,7 +113,19 @@ Source: col9
 
 Warning:
 
-`REPORT_ONSET_DATE_MISSING`
+`REPORT_ONSET_DATE_MISSING` 
+
+### Verification result
+
+Source: col15
+
+Missing verification produces `REPORT_VERIFICATION_MISSING`; `รอตรวจสอบ` produces `REPORT_VERIFICATION_PENDING`.
+
+### Risk assessment context
+
+Source: col19
+
+Missing risk context produces `REPORT_RISK_MISSING` so users can verify AI risk analysis against actual evidence rather than treat generated conclusions as recorded facts.
 
 ### Investigation criteria
 
@@ -117,7 +133,9 @@ Source: col17
 
 Warning:
 
-`REPORT_CRITERIA_MISSING`
+`REPORT_CRITERIA_MISSING` 
+
+When col17 is `รอดำเนินการ`, warning `REPORT_CRITERIA_PENDING` is returned instead of treating the pending decision as completed.
 
 ### Control measures
 
@@ -156,7 +174,9 @@ Each G-04 warning is surfaced as a readiness warning using:
 
 with severity:
 
-`consistency`
+`consistency` 
+
+If G-04 already reports `INVESTIGATION_MARKED_WITHOUT_DATE`, G-26 suppresses its overlapping general investigation-date warning, preventing two warnings for one underlying inconsistency.
 
 Examples include:
 
@@ -246,7 +266,9 @@ The browser opens the readiness modal and shows:
 The user can:
 
 - **กลับไปตรวจข้อมูล** — stop and edit/check the Event; or
-- **สร้างรายงานต่อ** — explicitly continue generation.
+- **สร้างรายงานต่อ** — explicitly continue generation. 
+
+The Reporter view shows the generation control only to roles already permitted to generate reports. Staff have no report action; server-side `report` authorization remains authoritative.
 
 The continue path calls the normal:
 
