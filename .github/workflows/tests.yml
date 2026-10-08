@@ -7,6 +7,7 @@ on:
       - 'feat/**'
       - 'fix/**'
       - 'chore/**'
+      - 'refactor/**'
   pull_request:
 
 permissions:
@@ -22,5 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Run tests
+      - name: Verify deterministic One-Click build parity
+        run: npm run build:check
+      - name: Verify syntax, RPC and duplicate declarations
+        run: npm run check:contracts
+      - name: Run complete regression tests
         run: npm test
