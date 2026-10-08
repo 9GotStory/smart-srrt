@@ -92,3 +92,46 @@ test('P6 preflight rejects a mutated migration floor even if build parity is pre
     assert.equal(report.releaseDecision,'HOLD');
   }finally{fs.rmSync(tmp,{recursive:true,force:true});}
 });
+
+
+test('P6 preflight fails closed when report permission is removed despite perfect artifact parity',()=>{
+  const modulePath='src/server/05-reports-and-models.gs';
+  const cases=[
+    {fn:'getAIReportReadiness',check:'readiness-report-auth'},
+    {fn:'generateReportFromWeb',check:'generation-report-auth'}
+  ];
+  for(const scenario of cases){
+    const tmp=isolatedFixture();
+    try{
+      const original=`function ${scenario.fn}(sessionToken, eventId) {
+  ${scenario.fn==='generateReportFromWeb'?'var user = ':''}requireAuth_(sessionToken, 'report');`;
+      const altered=`function ${scenario.fn}(sessionToken, eventId) {
+  // Intentional fixture-only authorization regression.`;
+      for(const file of [modulePath,ONE_CLICK_TARGETS[0].target]){
+        const full=path.join(tmp,file);
+        const contents=fs.readFileSync(full,'utf8');
+        assert.equal(contents.split(original).length-1,1,scenario.fn+' fixture anchor '+file);
+        fs.writeFileSync(full,contents.replace(original,altered));
+      }
+      const report=runOfflinePreflight(tmp);
+      assert.equal(report.codeGate,'FAIL',scenario.fn);
+      assert.equal(report.releaseDecision,'HOLD');
+      assert.ok(report.checks.some(x=>x.id===scenario.check&&x.status==='FAIL'),scenario.check);
+      assert.ok(report.checks.some(x=>x.id==='artifact:'+ONE_CLICK_TARGETS[0].target&&x.status==='PASS'),
+        'broken permission must not be concealed by source/artifact parity');
+    }finally{fs.rmSync(tmp,{recursive:true,force:true});}
+  }
+});
+
+test('P6 preflight explicitly enforces all read/report privacy boundaries on current source',()=>{
+  const report=runOfflinePreflight();
+  for(const id of [
+    'report-history-auth','report-history-void',
+    'readiness-report-auth','readiness-void-boundary',
+    'generation-report-auth','generation-void-boundary',
+    'generation-registry-commit'
+  ]){
+    assert.ok(report.checks.some(x=>x.id===id&&x.status==='PASS'),id);
+  }
+  assert.equal(report.releaseDecision,'HOLD');
+});
