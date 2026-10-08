@@ -258,7 +258,7 @@
   <input type="hidden" id="pendingReportEventId">
   <div id="reportReadinessSummary" class="help" style="margin-bottom:10px"></div>
   <div id="reportReadinessWarnings" class="content-list"></div>
-  <div class="help" style="margin-top:10px">คำเตือนนี้ใช้ช่วยตรวจคุณภาพข้อมูลเท่านั้น ระบบยังอนุญาตให้สร้างรายงานต่อได้ และ AI จะใช้จุดไข่ปลา/ระบุข้อจำกัดเมื่อข้อมูลไม่ครบตาม prompt contract</div>
+  <div class="help" style="margin-top:10px">คำเตือนนี้เป็นเพียงการตรวจข้อมูลเบื้องต้น ไม่ใช่การรับรองความถูกต้องของรายงาน AI รายงานที่สร้างเป็นฉบับร่าง ต้องให้ผู้รับผิดชอบตรวจทานข้อเท็จจริง การประเมินความเสี่ยง และข้อเสนอ ก่อนนำไปใช้ โดยสามารถเลือกสร้างรายงานต่อแม้ข้อมูลยังไม่ครบได้</div>
   <div class="actions">
     <button class="btn light" onclick="closeModal('reportReadinessModal')">กลับไปตรวจข้อมูล</button>
     <button class="btn green" id="continueReportBtn" onclick="continueReportFromWarning()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานต่อ</button>
@@ -625,7 +625,7 @@
   function reportReadinessBadge(r){
     const rd=r&&r.aiReportReadiness?r.aiReportReadiness:null;
     if(!rd)return'';
-    if(rd.level==='ready')return'<span class="status st-low" title="ข้อมูลหลักพร้อมสำหรับรายงาน AI"><i class="fa-solid fa-circle-check"></i> AI พร้อม</span>';
+    if(rd.level==='ready')return'<span class="status st-low" title="ไม่พบคำเตือนจากการตรวจเบื้องต้น ไม่ใช่การรับรองความถูกต้องของข้อมูลหรือรายงาน AI"><i class="fa-solid fa-circle-check"></i> AI พร้อม</span>';
     const title=(rd.warnings||[]).map(w=>w.message||w.code).join('\n');
     if(rd.level==='limited')return`<span class="status st-high" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ข้อมูลจำกัด ${Number(rd.warningCount||0)}</span>`;
     return`<span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ตรวจสอบ ${Number(rd.warningCount||0)}</span>`
@@ -672,7 +672,7 @@
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td><button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> ${reportReadinessBadge(r)}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
