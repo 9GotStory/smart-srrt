@@ -202,7 +202,9 @@ test('browser checks latest server readiness before generation and provides expl
   assert.match(html,/สร้างรายงานต่อ/);
   assert.match(html,/กลับไปตรวจข้อมูล/);
   assert.match(html,/readiness&&readiness\.level==='ready'/);
-  assert.match(html,/executeReport\(eventId,btn,probe\)/);
+  assert.match(html,/executeReport\(eventId,btn\)/);
+  assert.match(html,/id="reportResultModal"/);
+  assert.match(html,/id="reportResultLink"/);
 });
 
 test('browser surfaces readiness badges without disabling AI report controls',()=>{
