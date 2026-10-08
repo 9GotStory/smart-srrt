@@ -838,7 +838,7 @@
     return valid;
   }
   async function executeReport(eventId,btn){
-    if(reportGenerationInFlight.has(eventId)){
+    if(reportGenerationInFlight.size > 0){
       toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');
       openModal('reportResultModal');
       return;
@@ -873,7 +873,7 @@
   }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
-    if(reportGenerationInFlight.has(eventId)||reportReadinessInFlight.has(eventId)){
+    if(reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
       toast('มีคำขอรายงานสำหรับเหตุการณ์นี้อยู่แล้ว กรุณารอผล');return;
     }
     reportReadinessInFlight.add(eventId);
@@ -894,7 +894,7 @@
   async function continueReportFromWarning(){
     const eventId=el('pendingReportEventId').value;
     if(!eventId){toast('ไม่พบ EventID');return}
-    if(reportGenerationInFlight.has(eventId)){
+    if(reportGenerationInFlight.size > 0){
       toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');return;
     }
     closeModal('reportReadinessModal');
