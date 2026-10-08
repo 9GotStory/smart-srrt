@@ -33,5 +33,5 @@ This adds owner-only task tracking and cancellation to the existing **G-31 Gemin
 
 - Script Properties have documented storage limits; this is a lightweight serialized task ledger, not high-throughput queue infrastructure.
 - Client polling provides approximate stage statuses and does not imply percent completion.
-- A previously opened V4 browser tab may still use the old RPC until refreshed. Check whether legacy `generateReportFromWeb` direct calls should be sunset in a separately reviewed compatibility gate.
+- G-32 **rejects** legacy direct `generateReportFromWeb` calls without a server-only execution nonce. A previously opened V4 browser tab must be refreshed after the approved V5 deployment; stale legacy calls fail explicitly rather than creating uncancellable reports. The private nonce is never returned to the browser and cannot be reused after a job leaves `running`.
 - Script instance termination may leave a stale `unknown` job until next status read. Do not infer absence of a registered document from an unknown client state; always use G-27 history.
