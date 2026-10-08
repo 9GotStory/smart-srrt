@@ -17,7 +17,7 @@ This change implements Smart SRRT's explicit **Gemini 3.8 Flash ONLY** requireme
 - Both the direct-ready route and G-26 advisory **สร้างรายงานต่อ** route use the same in-page result modal.
 - Loading message is explicitly non-final, and after success offers a verified-format clickable **เปิด Google Doc** link. No blank popup or automatic navigation is relied upon.
 - Failures remain visible until closed and advise inspecting G-27 history before retrying, because a disconnected request could have completed server-side.
-- Per-page in-flight guards block overlapping requests for the same EventID. This is **not durable server-side idempotency** across multiple tabs, browser crashes or retries; that requires separate design/approval.
+- Page-wide in-flight guards block overlapping report generation while a request is active, including different EventIDs sharing the same result modal. This is **not durable server-side idempotency** across multiple tabs, browser crashes or retries; that requires separate design/approval.
 - Avoid showing the document link if the user logs out during an in-flight request.
 
 ## Validation requirements
