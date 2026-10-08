@@ -153,6 +153,54 @@ test('G-32 state tracking distinguishes success from HTTP 503 and uses bounded r
   assert.equal(h.ctx.getReportJobStatus('u1',job.id).status,'failed');
 });
 
+
+test('G-32 two successful Gemini 3.8 parts create one Doc, registry entry and success audit',()=>{
+  const h=harness(),job=create(h);
+  let copies=0,registry=0,audits=0,trashed=0;
+  h.ctx.DriveApp={
+    getFileById(){return {makeCopy(){
+      copies++;
+      return {getId:()=> 'doc-test-id',
+        getUrl:()=> 'https://docs.google.com/document/d/doc-test-id/edit',
+        setTrashed(){trashed++;}};
+    }}},
+    getFolderById(){return {}}
+  };
+  h.ctx.DocumentApp={openById(){return {getBody(){return {replaceText(){}}},saveAndClose(){}}}};
+  h.ctx.replacePlaceholderWithParagraphs_=()=>{};
+  h.ctx.appendReportRegistry_=()=>{registry++};
+  h.ctx.writeAudit_=()=>{audits++};
+  const output=h.ctx.runReportJob('u1',job.id);
+  assert.equal(output.status,'completed');
+  assert.equal(output.documentUrl,'https://docs.google.com/document/d/doc-test-id/edit');
+  assert.equal(copies,1);
+  assert.equal(registry,1);
+  assert.equal(audits,1);
+  assert.equal(trashed,0);
+  assert.equal(h.calls.length,2);
+  assert.ok(h.calls.every(x=>x.url.includes('models/gemini-3.8-flash:generateContent')));
+  assert.equal(h.map.has('SRRT_G32_ACTIVE'),false);
+});
+
+test('G-32 cancel during second Gemini request blocks Docs and report registry commit',()=>{
+  let jobId,docs=0,registry=0;
+  const h=harness((ctx,url,opts,n)=>{
+    if(n===2)ctx.cancelReportJob('u1',jobId);
+    return {
+      getResponseCode:()=>200,
+      getContentText:()=>JSON.stringify({candidates:[{content:{parts:[{text:'sample'}]}}]})
+    };
+  });
+  jobId=create(h).id;
+  h.ctx.DriveApp={getFileById(){docs++;throw Error('unexpected document')}};
+  h.ctx.appendReportRegistry_=()=>{registry++};
+  const result=h.ctx.runReportJob('u1',jobId);
+  assert.equal(result.status,'cancelled');
+  assert.equal(h.calls.length,2);
+  assert.equal(docs,0);
+  assert.equal(registry,0);
+});
+
 test('G-32 UI has task minimize, reopen, cancel and recovered terminal state, not fake immediate success',()=>{
   for(const s of ['id="reportTaskIndicator"','id="cancelReportJobBtn"','id="dismissReportJobBtn"',
     'closeReportTaskModal()','cancelCurrentReportTask()',"gs('createReportJob'", "gs('runReportJob'",
