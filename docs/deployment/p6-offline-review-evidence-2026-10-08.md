@@ -52,7 +52,7 @@ Complete the following only when staging execution is separately authorized; do 
 | Initial live Apps Script deployment/version recorded | ______ | NOT RUN |
 | Verified spreadsheet, configuration, Docs and Drive backups | ______ | NOT RUN |
 | Baseline sheet/event/report counts and schema recorded | ______ | NOT RUN |
-| Migration dry-run and per-version idempotent re-run | ______ | NOT RUN |
+| Migration rehearsal on an isolated staging copy and per-version idempotent re-run (migration entrypoints are mutating; no built-in dry-run) | ______ | NOT RUN |
 | EventID/Revision integrity and non-destructive void checks | ______ | NOT RUN |
 | Public Dashboard cannot return private Event/ReportRegistry data | ______ | NOT RUN |
 | RBAC denied/allowed RPCs, including report/readiness/history | ______ | NOT RUN |
@@ -67,3 +67,17 @@ Complete the following only when staging execution is separately authorized; do 
 Do not close #53 as accepted, merge any of the stacked Draft PRs, infer a deployed schema v7, or operate on production data from this evidence alone. The old divergent P6 PR #17 is **not** an approved merge source.
 
 For the detailed step-by-step operator checklist see `docs/deployment/p6-release-readiness-checklist.md`.
+
+## Follow-up — Offline release preflight (2026-10-08)
+
+Implemented in `tools/p6-release-preflight.mjs` with a new npm command `npm run release:preflight`. The command reads only repository-local files; it cannot query a live Apps Script installation and does not execute any migration. It returns structured JSON with distinct `codeGate` and `releaseDecision` fields. Its intentionally conservative result is **codeGate=PASS; releaseDecision=HOLD**.
+
+- **Verified commit:** `02daeb8d84bf920d6c546a51e2aff370d4a5449d`
+- **CI:** [Run #242](https://github.com/9GotStory/smart-srrt/actions/runs/37736095061) **SUCCESS**.
+- **Full regression:** 151 passed / 0 failed (five new offline-preflight tests).
+- **Static checks:** migration sequence and schema floors 2–7, Script Lock contracts, v7 headers, read-only build parity, report-access RPCs, public aggregate boundary, unique function names and RPC targets.
+- **Negative tests:** missing compiled artifact, modified v7 migration floor with artifact parity still intact, rejected write-mode CLI argument, no source-file timestamps changed.
+- **Operational boundary confirmed:** `installSmartSRRT()`, `setupDatabase()` and all migration entrypoints can write Google Sheets/Drive/Docs state; none is a dry-run. Restricted backups and supervised staging exercises remain mandatory before any deployment.
+- **Artifact hashes:** identical to the earlier reviewed code, because this follow-up adds tooling/tests/docs only.
+
+**No live migration, installer, Google Workspace API, real credential, Apps Script deployment or rollback has been executed in this follow-up.** Historic review evidence above is retained rather than silently overwritten.
