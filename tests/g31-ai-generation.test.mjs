@@ -109,6 +109,8 @@ test('G-31 browser presents persistent result link, no popup redirect, and in-fl
   assert.match(html,/id="reportResultStatus"[^>]+aria-live="polite"/);
   assert.match(html,/id="reportResultLink"/);
   assert.match(html,/reportGenerationInFlight = new Set\(\)/);
+  assert.match(html,/reportGenerationInFlight\.size > 0/);
+  assert.match(html,/reportReadinessInFlight\.size > 0/);
   assert.match(html,/showReportGenerationStatus\('สร้างรายงานสำเร็จแล้ว/);
   assert.match(html,/showReportGenerationStatus\('สร้างรายงานไม่สำเร็จ:/);
   assert.match(html,/docs\\\.google\\\.com/);
