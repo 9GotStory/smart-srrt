@@ -28,6 +28,7 @@ function completeEvent(){
     col14:'พบผู้ป่วยสงสัย 1 ราย ลงพื้นที่สอบสวนและประเมินสิ่งแวดล้อม',
     col15:'ตรวจสอบแล้วจริง',
     col17:'เข้าเกณฑ์',
+    col19:'ปานกลาง',
     col20:'สสอ.ทดสอบ',
     col21:'ค้นหาผู้ป่วยเพิ่มเติมและกำจัดแหล่งเพาะพันธุ์ยุง',
     col23:'รพ.สต.ทดสอบ',
@@ -158,6 +159,7 @@ test('authenticated readiness RPC resolves the latest Event row and requires rep
   row[13]='รายละเอียดเหตุการณ์';
   row[14]='ตรวจสอบแล้วจริง';
   row[16]='เข้าเกณฑ์';
+  row[18]='ปานกลาง';
   row[19]='สสอ.ทดสอบ';
   row[20]='มาตรการควบคุม';
   row[22]='รพ.สต.ทดสอบ';
@@ -221,4 +223,84 @@ test('G-26 adds no readiness persistence or schema migration',()=>{
   assert.doesNotMatch(source,/REPORT_REGISTRY_HEADERS[\s\S]{0,500}Readiness/);
   assert.doesNotMatch(source,/MAIN_HEADERS[\s\S]{0,500}Readiness/);
   assert.doesNotMatch(source,/function migrateG26/);
+});
+
+test('placeholder and explicit unknown values are treated as missing, not complete evidence',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.col6='..........';
+  event.col14='…';
+  event.col3='ไม่ทราบ';
+  event.col19='ไม่ระบุ';
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.equal(rd.level,'limited');
+  assert.equal(rd.canGenerate,true);
+  for(const code of [
+    'REPORT_CORE_EVENT_MISSING','REPORT_CORE_NARRATIVE_MISSING',
+    'REPORT_REPORTER_MISSING','REPORT_RISK_MISSING'
+  ]) assert.ok(rd.warnings.some(w=>w.code===code),code);
+});
+
+test('pending verification and investigation criteria generate advisory context warnings',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.col15='รอตรวจสอบ';
+  event.col17='รอดำเนินการ';
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.equal(rd.level,'review');
+  assert.equal(rd.canGenerate,true);
+  assert.ok(rd.warnings.some(w=>w.code==='REPORT_VERIFICATION_PENDING'));
+  assert.ok(rd.warnings.some(w=>w.code==='REPORT_CRITERIA_PENDING'));
+});
+
+test('blank verification, criteria and risk trigger warnings, not a report gate',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.col15='';event.col17='';event.col19='';
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.equal(rd.level,'review');
+  assert.equal(rd.canGenerate,true);
+  for(const code of ['REPORT_VERIFICATION_MISSING','REPORT_CRITERIA_MISSING','REPORT_RISK_MISSING']){
+    assert.ok(rd.warnings.some(w=>w.code===code),code);
+  }
+});
+
+test('G-04 investigation-date contradiction is not double-counted',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.col24='ลงสอบสวน';event.col26='';
+  event.eventLifecycle='investigated';
+  event.eventConsistencyWarnings=[{
+    code:'INVESTIGATION_MARKED_WITHOUT_DATE',
+    message:'ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค'
+  }];
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.ok(rd.warnings.some(w=>w.code==='REPORT_CONSISTENCY_INVESTIGATION_MARKED_WITHOUT_DATE'));
+  assert.equal(rd.warnings.some(w=>w.code==='REPORT_INVESTIGATION_DATE_MISSING'),false);
+  assert.equal(rd.consistencyWarningCount,1);
+});
+
+test('closed Event is still advisory-reportable and schema stays v7',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  event.recordStatus='closed';
+  event.eventLifecycle='closed';
+  event.col21='';
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.equal(rd.canGenerate,true);
+  assert.equal(rd.level,'review');
+  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'7');
+});
+
+test('readiness response remains warning metadata only, without Event narrative or source values',()=>{
+  const ctx=makeContext();
+  const event=completeEvent();
+  const rd=ctx.deriveAIReportReadiness_(event);
+  assert.equal(Object.hasOwn(rd,'col14'),false);
+  assert.equal(Object.hasOwn(rd,'sourceRow'),false);
+  assert.equal(Object.hasOwn(rd,'details'),false);
+  assert.equal(Object.hasOwn(rd,'recordStatus'),false);
+  assert.deepEqual(Object.keys(rd).sort(),[
+    'canGenerate','consistencyWarningCount','coreMissingCount','importantMissingCount','label','level','warningCount','warnings'
+  ].sort());
 });
