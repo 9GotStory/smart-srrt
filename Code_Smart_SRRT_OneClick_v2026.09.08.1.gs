@@ -3381,8 +3381,21 @@ function getAIReportReadiness(sessionToken, eventId) {
 
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
-  // Legacy two-argument RPC remains supported; G-32 passes an authenticated job ID.
+  // G-32 intentionally fails closed for stale V4 pages and direct RPC bypass.
+  // The private execution nonce is minted only by runReportJob, not returned to the UI.
   var reportJobId = arguments.length > 2 ? arguments[2] : '';
+  var executionNonce = arguments.length > 3 ? arguments[3] : '';
+  if (!reportJobId || !executionNonce) {
+    throw new Error('กรุณารีเฟรชหน้า Smart SRRT เพื่อสร้างรายงานด้วยระบบงาน G-32');
+  }
+  withReportJobLock_(function(props) {
+    var authorizedJob = reportJobOwned_(props,reportJobId,user);
+    if (authorizedJob.eventId !== String(eventId || '').trim() ||
+        authorizedJob.status !== 'running' ||
+        authorizedJob.executionNonce !== executionNonce) {
+      throw new Error('ไม่สามารถใช้สิทธิ์คำขอรายงานนี้ซ้ำหรือข้ามขั้นตอน');
+    }
+  });
   reportJobCheckpoint_(reportJobId, 'preparing');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var settings = getSettingsMap_();
@@ -3665,12 +3678,13 @@ function runReportJob(sessionToken, jobId) {
       throw new Error('คำขอรายงานไม่ใช่งานที่กำลังรออยู่');
     }
     current.status = 'running';current.stage = 'preparing';current.message = '';
+    current.executionNonce = Utilities.getUuid();
     saveReportJob_(props,current);
     return current;
   });
   if (job.status === 'cancelled') return publicReportJob_(job);
   try {
-    var url = generateReportFromWeb(sessionToken,job.eventId,job.id);
+    var url = generateReportFromWeb(sessionToken,job.eventId,job.id,job.executionNonce);
     return finalizeReportJob_(job.id,'completed',url,'สร้างรายงานเรียบร้อยแล้ว');
   } catch(error) {
     var internalError = String(error.message || error);
