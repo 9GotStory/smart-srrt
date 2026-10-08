@@ -81,3 +81,22 @@ Implemented in `tools/p6-release-preflight.mjs` with a new npm command `npm run 
 - **Artifact hashes:** identical to the earlier reviewed code, because this follow-up adds tooling/tests/docs only.
 
 **No live migration, installer, Google Workspace API, real credential, Apps Script deployment or rollback has been executed in this follow-up.** Historic review evidence above is retained rather than silently overwritten.
+
+
+## Follow-up — AI report authorization regression gates (2026-10-08)
+
+The offline preflight now independently checks that these current application entry points retain the `report` permission and exclude void Event identity:
+
+- `getAIReportReadiness(sessionToken,eventId)`
+- `generateReportFromWeb(sessionToken,eventId)`
+- existing `listReportsForEvent(sessionToken,eventId)`
+
+It additionally checks that report generation still saves the Google Doc before appending ReportRegistry and retains orphan-Doc compensation on failure. These are **static checks**, not live authorization or Google Workspace tests.
+
+The new negative regression intentionally removes the `report` authorization check from an isolated fixture's modular source **and** its compiled One-Click artifact. Byte parity still passes, while the release preflight must fail closed. No working repository files, user data or Google service are mutated by this test.
+
+- **Implementation:** `d8947f2bc048bd08a4f726966766b8edba684c27`
+- **Negative regression:** `239f6e5e1ff7e4817b68bc9b0ed40afe3165ac6d`
+- **GitHub Actions run:** [Run #37738182444](https://github.com/9GotStory/smart-srrt/actions/runs/37738182444) — **SUCCESS**
+- **Full Node regression:** **153 passed / 0 failed**
+- **Release decision remains: HOLD.** Actual Apps Script roles, deployment, migrations, backups, Gemini/Docs and recovery checks are still human-controlled and NOT RUN.
