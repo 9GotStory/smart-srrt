@@ -611,17 +611,21 @@
   }
   async function recoverReportJob(){
     if(!currentUser||!token)return;
-    const old=localStorage.getItem(REPORT_JOB_LOCAL_KEY);
+    const session=token;
     try{
-      // Owner-only backend pointer permits recovery after browser reload.
-      const state=old ? await gs('getReportJobStatus',token,old) : await gs('getCurrentReportJob',token);
+      // The authenticated server pointer, not a prior user's browser key,
+      // is authoritative after login or full page reload.
+      const state=await gs('getCurrentReportJob',session);
+      if(token!==session||!currentUser)return;
       if(state){
         paintReportTask(state);
-        if(state.status==='queued') void runReportJobClient(state.id,token);
+        if(state.status==='queued') void runReportJobClient(state.id,session);
+      }else{
+        localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
       }
     }catch(error){
-      // Do not assert cancellation/success if page was closed during RPC.
-      localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+      // A network failure is not proof the previous task has stopped.
+      if(token===session&&currentUser)toast('ยังตรวจสอบงานรายงานเดิมไม่ได้ โปรดตรวจประวัติก่อนสร้างซ้ำ');
     }
   }
   async function runReportJobClient(jobId,session){
