@@ -14,7 +14,7 @@ This adds owner-only task tracking and cancellation to the existing **G-31 Gemin
 
 ## Server and safety model
 
-- `PropertiesService.getScriptProperties()` maintains small report-job metadata (random UUID, EventID, owner ID/email, state, timestamps, sanitized result URL/message). No API keys, prompts, health narrative, session tokens or raw model responses are stored.
+- `PropertiesService.getScriptProperties()` maintains small report-job metadata (random UUID, EventID, opaque owner ID, state, timestamps, sanitized result URL/message). No API keys, prompts, health narrative, session tokens or raw model responses are stored.
 - Every public RPC calls `requireAuth_(sessionToken,'report')` and status/cancel actions enforce exact matching owner ID and email. `createReportJob` checks non-void Event identity.
 - A script-level lock protects state changes. **Only one report-generation job runs at a time across this Apps Script project** to prevent interleaving commits and heavy Gemini use under low free-tier limits. Same-owner repeated `createReportJob` returns the existing active job instead of making a second job.
 - States: `queued`, `running`, `cancel_requested`, `finalizing`, `completed`, `cancelled`, `failed`, `unknown`. Stale non-terminal jobs are marked `unknown` after ~8 minutes. Job property retention ~24h and lazy cleanup on next creation; ReportRegistry is independent and remains append-only.
