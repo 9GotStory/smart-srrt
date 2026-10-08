@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -64,4 +65,45 @@ test('G-30 preserves schema v7 and G-17/G-26/G-27 contracts', () => {
   assert.match(html,/id="reportHistoryModal"/);
   assert.match(server,/function generateReportFromWeb\(sessionToken, eventId\)/);
   assert.doesNotMatch(server,/function migrateG30/);
+});
+
+test('G-30 rejects tampered or missing release artifacts and preserves read-only verification', () => {
+  // Isolated fixture exercises the real command without writing in the checkout.
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'smart-srrt-g30-'));
+  try {
+    const scriptPath = path.join(fixture, 'tools', 'build-one-click.mjs');
+    fs.mkdirSync(path.dirname(scriptPath), {recursive:true});
+    fs.copyFileSync(path.join(root, 'tools', 'build-one-click.mjs'), scriptPath);
+    for (const entry of ONE_CLICK_TARGETS) {
+      for (const file of entry.sources) {
+        const destination = path.join(fixture,file);
+        fs.mkdirSync(path.dirname(destination),{recursive:true});
+        fs.copyFileSync(path.join(root,file),destination);
+      }
+      fs.copyFileSync(path.join(root,entry.target),path.join(fixture,entry.target));
+    }
+    const run = flag => spawnSync(process.execPath, [scriptPath,flag], {cwd:fixture,encoding:'utf8'});
+    assert.equal(run('--check').status,0,'intact copied fixtures should match');
+
+    const mutated = path.join(fixture,ONE_CLICK_TARGETS[0].target);
+    fs.appendFileSync(mutated,'\nUnexpected release artifact mutation\n');
+    const altered = fs.readFileSync(mutated);
+    const failed = run('--check');
+    assert.equal(failed.status,1,failed.stdout+' '+failed.stderr);
+    assert.match(failed.stderr,/DRIFT: Code_Smart_SRRT_OneClick_v2026\.09\.08\.1\.gs/);
+    assert.deepEqual(fs.readFileSync(mutated),altered,'read-only check must not overwrite drifted artifact');
+
+    const rebuilt=run('--write');
+    assert.equal(rebuilt.status,0,rebuilt.stderr);
+    assert.equal(run('--check').status,0,'rebuild must restore exact deterministic parity');
+
+    const missing = path.join(fixture,ONE_CLICK_TARGETS[1].target);
+    fs.rmSync(missing);
+    const absent = run('--check');
+    assert.equal(absent.status,1,absent.stdout+' '+absent.stderr);
+    assert.match(absent.stderr,/DRIFT: Index_Smart_SRRT_OneClick\.html/);
+    assert.equal(fs.existsSync(missing),false,'read-only check must not recreate missing artifact');
+  } finally {
+    fs.rmSync(fixture,{recursive:true,force:true});
+  }
 });
