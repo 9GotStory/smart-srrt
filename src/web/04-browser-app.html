@@ -491,48 +491,80 @@
     }).join('')||'<div class="help">ไม่พบคำเตือน</div>';
     openModal('reportReadinessModal')
   }
-  async function executeReport(eventId,btn,w){
+  const reportReadinessInFlight = new Set();
+  const reportGenerationInFlight = new Set();
+  function showReportGenerationStatus(message,url){
+    el('reportResultStatus').textContent=String(message||'');
+    const link=el('reportResultLink');
+    const target=String(url||'');
+    const valid=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(target);
+    if(valid)link.href=target;
+    else link.removeAttribute('href');
+    link.style.display=valid?'inline-flex':'none';
+    return valid;
+  }
+  async function executeReport(eventId,btn){
+    if(reportGenerationInFlight.has(eventId)){
+      toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');
+      openModal('reportResultModal');
+      return;
+    }
+    reportGenerationInFlight.add(eventId);
     const old=btn?btn.innerHTML:'';
+    const sessionAtStart=token;
+    showReportGenerationStatus('กำลังสร้างรายงานด้วย Gemini 3.8 Flash... อาจใช้เวลาหลายนาที อย่ากดสร้างซ้ำ',null);
+    openModal('reportResultModal');
     try{
       if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง'}
-      if(w)w.document.write('<p style="font-family:sans-serif">กำลังสร้างรายงาน...</p>');
-      const url=await gs('generateReportFromWeb',token,eventId);
-      if(w)w.location=url;else window.open(url,'_blank');
-      toast('สร้างรายงานเรียบร้อยแล้ว')
+      const url=await gs('generateReportFromWeb',sessionAtStart,eventId);
+      if(token!==sessionAtStart||!currentUser){
+        showReportGenerationStatus('คำขอเสร็จสิ้นหลังออกจากระบบ กรุณาเข้าสู่ระบบใหม่และตรวจประวัติรายงาน',null);
+        return;
+      }
+      if(showReportGenerationStatus('สร้างรายงานสำเร็จแล้ว กดปุ่มเปิด Google Doc เพื่อดูรายงาน',url)){
+        toast('สร้างรายงานเรียบร้อยแล้ว');
+      }else{
+        showReportGenerationStatus('ระบบตอบกลับว่าทำงานเสร็จ แต่ลิงก์เอกสารไม่ถูกต้อง กรุณาตรวจประวัติรายงานก่อนสร้างซ้ำ',null);
+      }
     }catch(e){
-      if(w)w.close();
-      toast(e.message||e)
+      if(token===sessionAtStart&&currentUser){
+        showReportGenerationStatus('สร้างรายงานไม่สำเร็จ: '+String(e.message||e)+' กรุณาตรวจประวัติรายงานก่อนลองใหม่',null);
+      }else{
+        showReportGenerationStatus('คำขอสิ้นสุดหลังออกจากระบบ กรุณาตรวจประวัติรายงานหลังเข้าสู่ระบบใหม่',null);
+      }
     }finally{
+      reportGenerationInFlight.delete(eventId);
       if(btn){btn.disabled=false;btn.innerHTML=old}
     }
   }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(reportGenerationInFlight.has(eventId)||reportReadinessInFlight.has(eventId)){
+      toast('มีคำขอรายงานสำหรับเหตุการณ์นี้อยู่แล้ว กรุณารอผล');return;
+    }
+    reportReadinessInFlight.add(eventId);
     const old=btn.innerHTML;
-    const probe=window.open('','_blank');
     try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
-      if(probe)probe.document.write('<p style="font-family:sans-serif">กำลังตรวจสอบความพร้อมของข้อมูล...</p>');
       const readiness=await gs('getAIReportReadiness',token,eventId);
       if(readiness&&readiness.level==='ready'){
-        return await executeReport(eventId,btn,probe)
+        return await executeReport(eventId,btn);
       }
-      if(probe)probe.close();
-      renderReportReadinessModal(readiness,eventId)
-    }catch(e){
-      if(probe)probe.close();
-      toast(e.message||e)
-    }finally{
+      renderReportReadinessModal(readiness,eventId);
+    }catch(e){toast(e.message||e)}
+    finally{
+      reportReadinessInFlight.delete(eventId);
       if(btn.disabled){btn.disabled=false;btn.innerHTML=old}
     }
   }
   async function continueReportFromWarning(){
     const eventId=el('pendingReportEventId').value;
     if(!eventId){toast('ไม่พบ EventID');return}
-    const btn=el('continueReportBtn');
-    const w=window.open('','_blank');
+    if(reportGenerationInFlight.has(eventId)){
+      toast('กำลังสร้างรายงานเหตุการณ์นี้อยู่ กรุณารอผลก่อน');return;
+    }
     closeModal('reportReadinessModal');
-    await executeReport(eventId,btn,w)
+    await executeReport(eventId,el('continueReportBtn'));
   }
 
   function exportClientExcel(){
