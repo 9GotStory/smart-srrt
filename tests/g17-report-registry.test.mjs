@@ -210,6 +210,10 @@ function setupGenerationContext({registryFails=false}={}){
   };
   ctx.writeAudit_=(...args)=>audits.push(args);
 
+  // G-32 private job execution gate is mocked only for G-17 registry-contract tests.
+  ctx.withReportJobLock_=(fn)=>fn({});
+  ctx.reportJobOwned_=()=>({eventId:'11111111-1111-4111-8111-111111111111',status:'running',executionNonce:'fixture-nonce'});
+  ctx.reportJobCheckpoint_=()=>{};
   return {ctx,get registryRecord(){return registryRecord},audits,get trashed(){return trashed}};
 }
 
@@ -217,7 +221,8 @@ test('generateReportFromWeb registers EventID, source Revision, actual model met
   const env=setupGenerationContext();
   const url=env.ctx.generateReportFromWeb(
     'token',
-    '11111111-1111-4111-8111-111111111111'
+    '11111111-1111-4111-8111-111111111111',
+    'fixture-job','fixture-nonce'
   );
 
   assert.equal(url,'https://docs.google.com/document/d/doc-created/edit');
@@ -241,7 +246,7 @@ test('registry failure compensates by trashing the newly created Doc and emits n
   const env=setupGenerationContext({registryFails:true});
 
   assert.throws(
-    ()=>env.ctx.generateReportFromWeb('token','11111111-1111-4111-8111-111111111111'),
+    ()=>env.ctx.generateReportFromWeb('token','11111111-1111-4111-8111-111111111111','fixture-job','fixture-nonce'),
     /registry failed/
   );
   assert.equal(env.trashed,true);
