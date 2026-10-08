@@ -233,10 +233,10 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
     throw new Error('ยังไม่ได้ตั้งค่า Gemini API Key กรุณาใส่ในหน้า Admin ก่อนสร้างรายงาน AI');
   }
 
-  var modelInfo = resolveGeminiModelInfo_(apiKey, settings, false);
+  var modelInfo = resolveReportGeminiModelInfo_(apiKey);
 
   if (!modelInfo || !modelInfo.modelName) {
-    throw new Error('ไม่พบโมเดล Gemini ที่รองรับ generateContent สำหรับ API Key นี้ กรุณาตรวจสอบ API Key, Gemini API และ Quota/Billing แล้ว Run testGeminiConnection() อีกครั้ง');
+    throw new Error('ไม่พบ Gemini 3.8 Flash ที่รองรับ generateContent สำหรับ API Key นี้ ระบบจะไม่สลับไปโมเดลอื่น กรุณาตรวจสอบสิทธิ์หรือสถานะ API แล้วลองใหม่ภายหลัง');
   }
 
   Logger.log('AI Reporter split mode: start');
@@ -246,12 +246,17 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   var promptPart1 = buildReportPromptPart_(rowData, locationInfo, '1-3');
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
+  var startedAt = Date.now();
   var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
-  Utilities.sleep(500);
+  // Synchronous UrlFetchApp.fetch cannot be interrupted; avoid STARTING part 2
+  // if the first call has already consumed the safe request budget.
+  if (Date.now() - startedAt > 120000) {
+    throw new Error('Gemini 3.8 Flash ตอบช้าเกินไป ระบบยุติก่อนเริ่มส่วนที่สองเพื่อเลี่ยง Apps Script Timeout กรุณาลองใหม่ภายหลัง');
+  }
 
   var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
   if (String(part2 || '').indexOf('🚨') === 0) {
@@ -265,6 +270,25 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   Logger.log('AI Reporter final length: ' + finalText.length);
 
   return finalText.replace(/\*/g, '').replace(/```/g, '').trim();
+}
+
+var REPORT_GEMINI_MODEL = 'models/gemini-3.8-flash';
+
+// AI reports are pinned, regardless of AUTO settings or a stale cache entry.
+// Do not silently substitute another model when Gemini 3.8 is unavailable.
+function resolveReportGeminiModelInfo_(apiKey) {
+  var cache = CacheService.getScriptCache();
+  var cachedName = cache.get('GEMINI_AVAILABLE_MODEL');
+  var cachedVersion = cache.get('GEMINI_AVAILABLE_ENDPOINT');
+  if (cachedName === REPORT_GEMINI_MODEL && (cachedVersion === 'v1' || cachedVersion === 'v1beta')) {
+    return {modelName:REPORT_GEMINI_MODEL, apiVersion:cachedVersion};
+  }
+  // Ignoring another model's cached selection is essential after changing AUTO.
+  var modelInfo = findGeminiModelInList_(apiKey, REPORT_GEMINI_MODEL);
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL) return null;
+  cache.put('GEMINI_AVAILABLE_MODEL', REPORT_GEMINI_MODEL, 21600);
+  cache.put('GEMINI_AVAILABLE_ENDPOINT', modelInfo.apiVersion, 21600);
+  return modelInfo;
 }
 
 function resolveGeminiModel_(apiKey, settings) {
