@@ -3290,6 +3290,87 @@ function appendReportRegistry_(record) {
   return reportId;
 }
 
+
+/**
+ * G-27: Read-only ReportRegistry history for a non-void Event.
+ * The user's existing report permission is authoritative.
+ */
+function listReportsForEvent(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(main, eventId, false);
+  var revision = Number(main.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+  var recordStatus = String(main.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').trim().toLowerCase();
+  var stableEventId = String(eventId || '').trim();
+
+  // No implicit migration or sheet mutation on a read-only endpoint.
+  var registry = getDb_().getSheetByName(CONFIG.SHEETS.REPORTS);
+  if (!registry || registry.getLastRow() < 1 || registry.getLastColumn() < REPORT_REGISTRY_HEADERS.length) {
+    throw new Error('ยังไม่มีทะเบียน ReportRegistry ที่พร้อมใช้งาน กรุณาดำเนินการ migration G-17 ก่อน');
+  }
+  var actualHeaders = registry.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).getDisplayValues()[0];
+  for (var h = 0; h < REPORT_REGISTRY_HEADERS.length; h++) {
+    if (String(actualHeaders[h] || '').trim() !== REPORT_REGISTRY_HEADERS[h]) {
+      throw new Error('หัวข้อ ReportRegistry ไม่ตรงกับ schema v7 ที่คอลัมน์ ' + (h + 1));
+    }
+  }
+
+  var rows = registry.getLastRow() > 1
+    ? registry.getRange(2, 1, registry.getLastRow() - 1, REPORT_REGISTRY_HEADERS.length).getValues()
+    : [];
+  var seen = {};
+  var invalidCount = 0;
+  var matches = [];
+  rows.forEach(function(r, index) {
+    if (String(r[REPORT_REGISTRY_COL.EVENT_ID - 1] || '').trim() !== stableEventId) return;
+    var reportId = String(r[REPORT_REGISTRY_COL.REPORT_ID - 1] || '').trim();
+    var docId = String(r[REPORT_REGISTRY_COL.DOCUMENT_ID - 1] || '').trim();
+    if (!isUuid_(reportId) || !docId || Object.prototype.hasOwnProperty.call(seen, reportId)) {
+      invalidCount++;
+      return;
+    }
+    seen[reportId] = true;
+    var rawDate = r[REPORT_REGISTRY_COL.GENERATED_AT - 1];
+    var millis = rawDate instanceof Date && !isNaN(rawDate.getTime()) ? rawDate.getTime() : NaN;
+    var dateText = isFinite(millis) ? rawDate.toISOString() : String(rawDate || '');
+    var storedUrl = String(r[REPORT_REGISTRY_COL.DOCUMENT_URL - 1] || '').trim();
+    var urlMatch = /^https:\/\/docs\.google\.com\/document\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(storedUrl);
+    var safeUrl = urlMatch && urlMatch[1] === docId ? storedUrl : '';
+
+    matches.push({
+      order:index,
+      timestamp:millis,
+      report:{
+        reportId:reportId,
+        sourceRevision:Number(r[REPORT_REGISTRY_COL.SOURCE_REVISION - 1] || 0),
+        documentURL:safeUrl,
+        generatedAt:dateText,
+        generatedBy:String(r[REPORT_REGISTRY_COL.GENERATED_BY - 1] || ''),
+        geminiModels:String(r[REPORT_REGISTRY_COL.GEMINI_MODELS - 1] || ''),
+        geminiApiVersions:String(r[REPORT_REGISTRY_COL.GEMINI_API_VERSIONS - 1] || ''),
+        promptVersion:String(r[REPORT_REGISTRY_COL.PROMPT_VERSION - 1] || '')
+      }
+    });
+  });
+  // Timestamp is authoritative; the append order breaks ties deterministically.
+  matches.sort(function(a, b) {
+    var av = isFinite(a.timestamp), bv = isFinite(b.timestamp);
+    if (av && bv && a.timestamp !== b.timestamp) return b.timestamp - a.timestamp;
+    if (av !== bv) return av ? -1 : 1;
+    return b.order - a.order;
+  });
+  var reports = matches.map(function(item){ return item.report; });
+  return {
+    eventId:stableEventId,
+    currentRevision:revision,
+    recordStatus:recordStatus,
+    count:reports.length,
+    latest:reports.length ? reports[0] : null,
+    invalidCount:invalidCount,
+    reports:reports
+  };
+}
+
 function getAIReportReadiness(sessionToken, eventId) {
   requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
