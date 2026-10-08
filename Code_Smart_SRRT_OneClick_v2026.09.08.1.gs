@@ -3381,6 +3381,9 @@ function getAIReportReadiness(sessionToken, eventId) {
 
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
+  // Legacy two-argument RPC remains supported; G-32 passes an authenticated job ID.
+  var reportJobId = arguments.length > 2 ? arguments[2] : '';
+  reportJobCheckpoint_(reportJobId, 'preparing');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var settings = getSettingsMap_();
   var templateId = settings.TEMPLATE_DOC_ID;
@@ -3405,7 +3408,10 @@ function generateReportFromWeb(sessionToken, eventId) {
   ].filter(function(x){return x;}).join(' ');
   var title = 'รายงานการสอบสวนเบื้องต้น ผู้ป่วยสงสัยโรค' + disease + ' ' + locationInfo;
   var reportMeta = {models:[], apiVersions:[]};
-  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings, reportMeta);
+  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJobId);
+  // Atomic finalization boundary: a cancel request after this point is too late
+  // and must not be represented to the user as successfully cancelled.
+  reportJobCheckpoint_(reportJobId, 'finalizing');
 
   var reportId = Utilities.getUuid();
   var newDocFile = null;
@@ -3477,6 +3483,202 @@ function generateReportFromWeb(sessionToken, eventId) {
   }
 }
 
+// G-32: Cooperative cancellation and recoverable report-job metadata.
+// PropertiesService stores small status records, not prompts, patient narratives,
+// access tokens, API keys or other sensitive event content.
+var REPORT_JOB_PREFIX_ = 'SRRT_G32_JOB_';
+var REPORT_JOB_ACTIVE_KEY_ = 'SRRT_G32_ACTIVE';
+var REPORT_JOB_TTL_MS_ = 24 * 60 * 60 * 1000;
+var REPORT_JOB_STALE_MS_ = 8 * 60 * 1000;
+
+function withReportJobLock_(fn) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('ระบบรายงานกำลังจัดการคำขอ กรุณาลองใหม่');
+  try { return fn(PropertiesService.getScriptProperties()); }
+  finally { lock.releaseLock(); }
+}
+
+function readReportJob_(props, jobId) {
+  if (!isUuid_(String(jobId || ''))) throw new Error('Report Job ID ไม่ถูกต้อง');
+  var raw = props.getProperty(REPORT_JOB_PREFIX_ + jobId);
+  if (!raw) throw new Error('ไม่พบคำขอสร้างรายงาน หรือข้อมูลหมดอายุแล้ว');
+  return JSON.parse(raw);
+}
+function saveReportJob_(props, job) {
+  job.updatedAt = Date.now();
+  props.setProperty(REPORT_JOB_PREFIX_ + job.id, JSON.stringify(job));
+}
+function reportJobTerminal_(status) {
+  return ['cancelled','completed','failed','unknown'].indexOf(status) !== -1;
+}
+function releaseReportJobSlot_(props, jobId) {
+  if (props.getProperty(REPORT_JOB_ACTIVE_KEY_) === jobId) props.deleteProperty(REPORT_JOB_ACTIVE_KEY_);
+}
+function expireStaleReportJob_(props, job) {
+  if (!reportJobTerminal_(job.status) &&
+      Date.now() - Number(job.createdAt || 0) > REPORT_JOB_STALE_MS_) {
+    job.status = 'unknown';
+    job.stage = 'unknown';
+    job.message = 'ไม่สามารถยืนยันสถานะการทำงานหลังหมดเวลารอ กรุณาตรวจประวัติรายงานก่อนเริ่มใหม่';
+    saveReportJob_(props, job);
+    releaseReportJobSlot_(props, job.id);
+  }
+  return job;
+}
+function reportJobOwned_(props, jobId, user) {
+  var job = expireStaleReportJob_(props, readReportJob_(props, jobId));
+  if (String(job.ownerId) !== String(user.userId) ||
+      String(job.ownerEmail).toLowerCase() !== String(user.email).toLowerCase()) {
+    throw new Error('ไม่มีสิทธิ์ดูหรือจัดการคำขอรายงานนี้');
+  }
+  return job;
+}
+function publicReportJob_(job) {
+  return {
+    id:job.id,eventId:job.eventId,status:job.status,stage:job.stage,
+    createdAt:job.createdAt,updatedAt:job.updatedAt,
+    message:job.message || '', documentUrl:job.status === 'completed' ? (job.documentUrl || '') : ''
+  };
+}
+function cleanupOldReportJobs_(props) {
+  var all = props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(REPORT_JOB_PREFIX_) !== 0) return;
+    try {
+      var job = JSON.parse(all[key]);
+      if (Date.now() - Number(job.createdAt || 0) > REPORT_JOB_TTL_MS_) props.deleteProperty(key);
+    } catch(ignore) { props.deleteProperty(key); }
+  });
+}
+function createReportJob(sessionToken, eventId) {
+  var user = requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(sheet, eventId, false);
+  var stableEventId = String(eventId || '').trim();
+  if (!isUuid_(stableEventId)) throw new Error('EventID ไม่ถูกต้อง');
+  return withReportJobLock_(function(props) {
+    cleanupOldReportJobs_(props);
+    var existingId = props.getProperty(REPORT_JOB_ACTIVE_KEY_);
+    if (existingId) {
+      var existing;
+      try { existing = expireStaleReportJob_(props, readReportJob_(props, existingId)); }
+      catch(ignore) { releaseReportJobSlot_(props, existingId); }
+      if (existing && !reportJobTerminal_(existing.status)) {
+        if (existing.ownerId === String(user.userId)) {
+          return publicReportJob_(existing); // Idempotent same-owner retry; never start another.
+        }
+        throw new Error('มีการสร้างรายงานอื่นกำลังทำงานอยู่ กรุณารอจนเสร็จ');
+      }
+      releaseReportJobSlot_(props, existingId);
+    }
+    var job = {
+      id:Utilities.getUuid(),eventId:stableEventId,
+      ownerId:String(user.userId),ownerEmail:String(user.email).toLowerCase(),
+      status:'queued',stage:'queued',createdAt:Date.now(),updatedAt:Date.now(),
+      message:'รอเริ่มสร้างรายงาน',documentUrl:''
+    };
+    saveReportJob_(props, job);
+    props.setProperty(REPORT_JOB_ACTIVE_KEY_, job.id);
+    props.setProperty('SRRT_G32_USER_' + job.ownerId, job.id);
+    return publicReportJob_(job);
+  });
+}
+function getReportJobStatus(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    return publicReportJob_(reportJobOwned_(props, jobId, user));
+  });
+}
+function getCurrentReportJob(sessionToken) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var id = props.getProperty('SRRT_G32_USER_' + user.userId);
+    if (!id) return null;
+    try { return publicReportJob_(reportJobOwned_(props, id, user)); }
+    catch(ignore) { return null; }
+  });
+}
+function cancelReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var job = reportJobOwned_(props, jobId, user);
+    if (job.status === 'queued') {
+      job.status = 'cancelled';job.stage = 'cancelled';
+      job.message = 'ยกเลิกก่อนเริ่มสร้างรายงานแล้ว';
+      releaseReportJobSlot_(props,job.id);
+      saveReportJob_(props,job);
+    } else if (job.status === 'running') {
+      job.status = 'cancel_requested';
+      job.message = 'รับคำขอยกเลิกแล้ว จะหยุดเมื่อ Gemini ส่งคำตอบกลับและถึงจุดตรวจสอบ';
+      saveReportJob_(props,job);
+    } else if (job.status === 'finalizing') {
+      job.message = 'กำลังบันทึกเอกสารและทะเบียนรายงาน ไม่สามารถยกเลิกได้แล้ว';
+      saveReportJob_(props,job);
+    }
+    // cancel_requested/terminal states are idempotent and never revert.
+    return publicReportJob_(job);
+  });
+}
+function dismissReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var job = reportJobOwned_(props, jobId, user);
+    if (!reportJobTerminal_(job.status)) throw new Error('งานยังไม่สิ้นสุด ไม่สามารถล้างการแจ้งเตือนได้');
+    var pointer = 'SRRT_G32_USER_' + user.userId;
+    if (props.getProperty(pointer) === jobId) props.deleteProperty(pointer);
+    return publicReportJob_(job);
+  });
+}
+function reportJobCheckpoint_(jobId, stage) {
+  if (!jobId) return;
+  return withReportJobLock_(function(props) {
+    var job = expireStaleReportJob_(props,readReportJob_(props,jobId));
+    if (job.status === 'cancel_requested' || job.status === 'cancelled') {
+      throw new Error('REPORT_JOB_CANCELLED');
+    }
+    if (job.status !== 'running') throw new Error('คำขอรายงานไม่อยู่ในสถานะที่ทำงานได้');
+    job.stage = stage;
+    if (stage === 'finalizing') job.status = 'finalizing';
+    saveReportJob_(props,job);
+  });
+}
+function finalizeReportJob_(jobId, status, url, message) {
+  return withReportJobLock_(function(props) {
+    var job = readReportJob_(props,jobId);
+    if (reportJobTerminal_(job.status)) return publicReportJob_(job);
+    if (status === 'failed' && job.status === 'cancel_requested') status = 'cancelled';
+    job.status = status;job.stage = status;
+    job.documentUrl = status === 'completed' ? String(url || '') : '';
+    job.message = String(message || '').slice(0,220);
+    saveReportJob_(props,job);
+    releaseReportJobSlot_(props,jobId);
+    return publicReportJob_(job);
+  });
+}
+function runReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  var job = withReportJobLock_(function(props) {
+    var current = reportJobOwned_(props,jobId,user);
+    if (current.status === 'cancelled') return current;
+    if (current.status !== 'queued') throw new Error('คำขอรายงานนี้เริ่มแล้วหรือเสร็จสิ้นแล้ว โปรดตรวจสถานะเดิม');
+    if (props.getProperty(REPORT_JOB_ACTIVE_KEY_) !== current.id) {
+      throw new Error('คำขอรายงานไม่ใช่งานที่กำลังรออยู่');
+    }
+    current.status = 'running';current.stage = 'preparing';current.message = '';
+    saveReportJob_(props,current);
+    return current;
+  });
+  if (job.status === 'cancelled') return publicReportJob_(job);
+  try {
+    var url = generateReportFromWeb(sessionToken,job.eventId,job.id);
+    return finalizeReportJob_(job.id,'completed',url,'สร้างรายงานเรียบร้อยแล้ว');
+  } catch(error) {
+    var final = finalizeReportJob_(job.id,'failed','',String(error.message || error));
+    // Return a typed terminal state; the UI need not expose script errors.
+    return final;
+  }
+}
+
 function recordSuccessfulGeminiModel_(reportMeta, modelInfo) {
   if (!reportMeta || !modelInfo) return;
   if (!reportMeta.models) reportMeta.models = [];
@@ -3488,7 +3690,7 @@ function recordSuccessfulGeminiModel_(reportMeta, modelInfo) {
   if (apiVersion && reportMeta.apiVersions.indexOf(apiVersion) < 0) reportMeta.apiVersions.push(apiVersion);
 }
 
-function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
+function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJobId) {
   settings = settings || getSettingsMap_();
   var apiKey = String(settings.GEMINI_API_KEY || '').trim();
 
@@ -3510,7 +3712,9 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
   var startedAt = Date.now();
+  reportJobCheckpoint_(reportJobId,'gemini_1');
   var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
+  reportJobCheckpoint_(reportJobId,'gemini_2');
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
@@ -3522,6 +3726,7 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   }
 
   var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
+  reportJobCheckpoint_(reportJobId,'post_gemini');
   if (String(part2 || '').indexOf('🚨') === 0) {
     throw new Error(String(part2).replace(/^🚨\s*/, ''));
   }
@@ -3791,7 +3996,7 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) 
   var response;
   try {
     response = UrlFetchApp.fetch(apiUrl, {
-      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true
+      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true, timeoutSeconds:110
     });
   } catch (error) {
     Logger.log('AI Reporter ' + label + ' transport failure, ms=' + (Date.now() - startedAt));
