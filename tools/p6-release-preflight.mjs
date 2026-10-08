@@ -78,14 +78,32 @@ export function runOfflinePreflight(root = DEFAULT_ROOT) {
 
   const publicDashboard = codeBlock(server, 'getPublicDashboardData');
   const history = codeBlock(server, 'listReportsForEvent');
+  const readiness = codeBlock(server, 'getAIReportReadiness');
+  const generation = codeBlock(server, 'generateReportFromWeb');
   guard(checks, 'privacy-boundary', /buildDashboardAggregate_\(getFilteredEventRows_/.test(publicDashboard),
     'Public Dashboard must continue through aggregate contract');
   guard(checks, 'report-history-auth', /requireAuth_\(sessionToken, 'report'\)/.test(history),
     'Event report history requires report permission');
   guard(checks, 'report-history-void', /findEventRowById_\(main, eventId, false\)/.test(history),
     'Event history must reject void Event identity');
-  guard(checks, 'g26-warning', /function getAIReportReadiness\(sessionToken, eventId\)/.test(server),
+  guard(checks, 'g26-warning', Boolean(readiness),
     'G-26 latest-state advisory RPC remains present');
+  guard(checks, 'readiness-report-auth',
+    /requireAuth_\(sessionToken, 'report'\)/.test(readiness),
+    'G-26 pre-generation readiness RPC must require report permission');
+  guard(checks, 'readiness-void-boundary',
+    /findEventRowById_\(sheet, eventId, false\)/.test(readiness),
+    'G-26 readiness RPC must reject void Event identity');
+  guard(checks, 'generation-report-auth',
+    /requireAuth_\(sessionToken, 'report'\)/.test(generation),
+    'AI report generation must require report permission');
+  guard(checks, 'generation-void-boundary',
+    /findEventRowById_\(sheet, eventId, false\)/.test(generation),
+    'AI report generation must reject void Event identity');
+  guard(checks, 'generation-registry-commit',
+    /document\.saveAndClose\(\);[\s\S]*appendReportRegistry_\(\{/.test(generation)
+      && /newDocFile\.setTrashed\(true\)/.test(generation),
+    'Generated Doc must be saved then registered, with orphan compensation on failure');
   guard(checks, 'report-registry', /var REPORT_REGISTRY_HEADERS\s*=\s*\[[\s\S]*?'TemplateDocID'/.test(server),
     'ReportRegistry original 11-header declaration remains present');
 
