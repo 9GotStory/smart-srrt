@@ -27,5 +27,7 @@ jobs:
         run: npm run build:check
       - name: Verify syntax, RPC and duplicate declarations
         run: npm run check:contracts
+      - name: Verify offline P6 release readiness without deployment
+        run: npm run release:preflight
       - name: Run complete regression tests
         run: npm test
