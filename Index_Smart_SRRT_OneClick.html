@@ -253,6 +253,15 @@
   <div class="actions"><button class="btn light" onclick="closeModal('attachmentModal')">ปิด</button></div>
 </div></div>
 
+
+<div class="modal" id="reportHistoryModal"><div class="modal-box">
+  <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงานของเหตุการณ์</div>
+  <div id="reportHistorySummary" class="help" style="margin-bottom:10px" aria-live="polite">กำลังโหลดประวัติรายงาน...</div>
+  <div id="reportHistoryList" class="content-list"></div>
+  <div class="help" style="margin-top:12px">แสดงเฉพาะรายงานที่ลงทะเบียนใน ReportRegistry ตั้งแต่ G-17 เป็นต้นไป เอกสารเก่าที่ไม่มีทะเบียนจะไม่ถูกคาดเดาความเชื่อมโยง รายการนี้ไม่ใช่ระบบอนุมัติหรือระบบเวอร์ชันเอกสาร</div>
+  <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
+</div></div>
+
 <div class="modal" id="reportReadinessModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ความพร้อมก่อนสร้างรายงาน AI</div>
   <input type="hidden" id="pendingReportEventId">
@@ -390,7 +399,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -622,6 +631,51 @@
     }catch(e){toast(e.message||e)}
   }
 
+
+  // G-27: Report history is fetched on demand, never from public aggregates.
+  let reportHistoryRequest = 0;
+  async function openEventReportHistoryByIndex(index){
+    const event=allData[index];
+    if(!currentUser||!roleCanRecord()||!event||!event.eventId){
+      toast('ไม่มีสิทธิ์ดูประวัติรายงาน หรือไม่พบ EventID');
+      return;
+    }
+    const eventId=event.eventId, request=++reportHistoryRequest, authToken=token;
+    el('reportHistorySummary').textContent='กำลังโหลดประวัติรายงาน...';
+    el('reportHistoryList').innerHTML='';
+    openModal('reportHistoryModal');
+    try {
+      const result=await gs('listReportsForEvent',authToken,eventId);
+      if(request!==reportHistoryRequest||token!==authToken||!currentUser)return;
+      const entries=Array.isArray(result&&result.reports)?result.reports:[];
+      const latest=result&&result.latest?result.latest:null;
+      const when=value=>{
+        if(!value)return'-';
+        const d=new Date(value);
+        return isNaN(d.getTime())?String(value):d.toLocaleString('th-TH');
+      };
+      el('reportHistorySummary').textContent='จำนวนรายงาน '+Number(result.count||0)+' รายการ · Revision ปัจจุบัน '+Number(result.currentRevision||1)+
+        (latest?' · รายงานล่าสุด '+when(latest.generatedAt):' · ยังไม่มีรายงานในทะเบียน')+
+        (Number(result.invalidCount||0)?' · พบแถวทะเบียนที่ไม่สมบูรณ์ '+Number(result.invalidCount)+' รายการ':'');
+      el('reportHistoryList').innerHTML=entries.length?entries.map((r,i)=>{
+        const url=String(r.documentURL||'');
+        const link=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url)
+          ?'<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>'
+          :'<span class="help">ลิงก์เอกสารไม่พร้อมใช้งาน</span>';
+        return '<div class="content-item"><b><i class="fa-solid fa-file-medical"></i> รายงาน '+(i+1)+'</b>'+
+          '<p>สร้างเมื่อ: '+escapeHtml(when(r.generatedAt))+' · ผู้สร้าง: '+escapeHtml(r.generatedBy||'-')+
+          ' · SourceRevision: '+Number(r.sourceRevision||0)+'</p>'+
+          '<p>ReportID: '+escapeHtml(r.reportId||'-')+'</p>'+
+          '<p>Gemini: '+escapeHtml(r.geminiModels||'-')+' · API: '+escapeHtml(r.geminiApiVersions||'-')+
+          ' · Prompt: '+escapeHtml(r.promptVersion||'-')+'</p>'+link+'</div>';
+      }).join(''):'<div class="help">ยังไม่มีรายงานที่ลงทะเบียนสำหรับเหตุการณ์นี้</div>';
+    }catch(e){
+      if(request!==reportHistoryRequest||token!==authToken)return;
+      el('reportHistorySummary').textContent='ไม่สามารถโหลดประวัติรายงานได้';
+      el('reportHistoryList').textContent=String(e.message||e);
+    }
+  }
+
   function reportReadinessBadge(r){
     const rd=r&&r.aiReportReadiness?r.aiReportReadiness:null;
     if(!rd)return'';
@@ -665,14 +719,14 @@
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
-      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button> <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
     }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
     el('recordBody').innerHTML=allData.map((r,i)=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
-    el('reportBody').innerHTML=allData.map(r=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
