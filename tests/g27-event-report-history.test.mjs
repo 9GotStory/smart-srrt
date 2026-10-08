@@ -184,3 +184,11 @@ test('public dashboard response stays unrelated to private report registry',()=>
   const p=block('getPublicDashboardData');
   assert.doesNotMatch(p,/ReportRegistry|listReportsForEvent|reportHistory/);
 });
+
+test('inline browser JavaScript parses without executing the UI',()=>{
+  const scripts=Array.from(html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g),m=>m[1]).filter(s=>s.trim());
+  assert.ok(scripts.length>0);
+  for(const script of scripts){
+    assert.doesNotThrow(()=>new vm.Script(script,{filename:'Index_Smart_SRRT_OneClick.html'}));
+  }
+});
