@@ -528,7 +528,11 @@
   }
   function paintReportTask(job){
     if(!job)return;
-    if(activeReportJob&&activeReportJob.id!==job.id)return;
+    if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob))return;
+    if(activeReportJob&&activeReportJob.id===job.id){
+      if(reportJobTerminal(activeReportJob)&&!reportJobTerminal(job))return;
+      if(activeReportJob.status==='cancel_requested'&&job.status==='running')return;
+    }
     activeReportJob=job;
     localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
     const label=reportStageLabel(job);
@@ -565,8 +569,11 @@
   function dismissReportTask(){
     if(!reportJobTerminal(activeReportJob))return;
     stopReportPolling();
+    const dismissId=activeReportJob.id;
+    const session=token;
     activeReportJob=null;
     localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    void gs('dismissReportJob',session,dismissId).catch(()=>{});
     el('reportTaskIndicator').style.display='none';
     closeModal('reportResultModal');
   }
