@@ -2,6 +2,27 @@
 
 **Status: Checklist only, not release approval.** No Google Apps Script staging or production runtime smoke has been executed as part of G-30.
 
+## 0. Offline preflight (safe to run on development checkout)
+
+Run `npm run release:preflight` on an up-to-date local checkout. The command **only reads local source, generated artifacts, and migration function declarations** and prints a structured JSON result to standard output. It verifies byte parity, schema version 7, migration floor/lock contracts, selected permission boundaries, RPC resolution and known installer side effects.
+
+**Interpretation:** `codeGate=PASS` means the static source contract passed; `releaseDecision=HOLD` is intentional **even when every check passes**. It does not prove the current deployed Apps Script version, any Google API permission, file backup, migration behavior, staging UAT, or recovery exercise. The command never calls Google APIs, updates files or executes migration/installer functions. Exit 1 indicates a static check failure.
+
+**Important:** Do **not** run `installSmartSRRT()`, `installSmartSRRTCore_()`, `setupDatabase()` or any `migrate...()` as a "dry-run" on a real district installation. These functions are mutating. The installer can create/modify MainData and other sheets, settings, folders, reports/template assets, and an audit archive spreadsheet. Some migrations create Drive folders or additional spreadsheets; the Event identity migration may backfill IDs and revisions. A retained backup and access-controlled staging copy are mandatory before any authorized invocation.
+
+### Recorded migration sequence (not executed by this command)
+
+| Order | Function | Version floor | Side effects |
+|---|---|---|---|
+| 1 | `migrateP1EventIdentity()` | 2 | MainData IDs, Revision and status backfill |
+| 2 | `migrateG05EventOwner()` | 3 | Owner column |
+| 3 | `migrateG11EventAttachments()` | 4 | Attachment registry and Drive assets |
+| 4 | `migrateG21AuditRetention()` | 5 | Audit schema and archive spreadsheet |
+| 5 | `migrateG29VisitLogs()` | 6 | VisitLogs header semantics |
+| 6 | `migrateG17ReportRegistry()` | 7 | ReportRegistry sheet and settings |
+
+This table is an **operator review sequence**, not an automated migration pipeline. A fresh installation follows `installSmartSRRT()` and must be tested separately against new/legacy fixtures. Never run migrations against production solely because the source static checks pass.
+
 ## 1. Source/CI preflight
 
 - [ ] Confirm stacked ancestry and accepted commits through G-17 PR #44, G-26 PR #50, G-27 PR #52 and current G-30 PR, including P1–P4 ancestors.
