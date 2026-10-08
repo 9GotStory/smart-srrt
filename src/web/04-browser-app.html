@@ -543,6 +543,7 @@
     indicator.style.display='inline-flex';
     el('reportTaskStatus').textContent=label;
     const terminal=reportJobTerminal(job);
+    el('closeReportJobBtn').innerHTML=terminal?'<i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง':'<i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ';
     const cancel=el('cancelReportJobBtn');
     cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
     cancel.disabled=job.status==='cancel_requested';
@@ -606,7 +607,7 @@
       const state=await gs('cancelReportJob',session,id);
       if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
     }catch(e){toast('ไม่สามารถส่งคำขอยกเลิก: '+String(e.message||e))}
-    finally{btn.disabled=false}
+    finally{btn.disabled=!!(activeReportJob&&activeReportJob.status==='cancel_requested')}
   }
   async function recoverReportJob(){
     if(!currentUser||!token)return;
