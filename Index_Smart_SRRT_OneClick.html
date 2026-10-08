@@ -271,7 +271,7 @@
   <div id="reportResultStatus" class="help" role="status" aria-live="polite">กำลังเตรียมสร้างรายงาน...</div>
   <div class="mini" style="margin-top:12px">รายงาน AI เป็นฉบับร่าง ต้องตรวจทานก่อนใช้จริง หากคำขอหมดเวลาหรือไม่แน่ใจว่าสำเร็จหรือไม่ ให้ตรวจประวัติรายงานก่อนสั่งสร้างใหม่</div>
   <div class="actions">
-    <button class="btn light" onclick="closeReportTaskModal()"><i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ</button>
+    <button class="btn light" id="closeReportJobBtn" onclick="closeReportTaskModal()"><i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ</button>
     <button class="btn red" id="cancelReportJobBtn" onclick="cancelCurrentReportTask()" style="display:none"><i class="fa-solid fa-ban"></i> ยกเลิกการสร้าง</button>
     <button class="btn light" id="dismissReportJobBtn" onclick="dismissReportTask()" style="display:none">รับทราบ</button>
     <a id="reportResultLink" class="btn green" href="#" target="_blank" rel="noopener noreferrer" style="display:none"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>
@@ -883,6 +883,7 @@
     indicator.style.display='inline-flex';
     el('reportTaskStatus').textContent=label;
     const terminal=reportJobTerminal(job);
+    el('closeReportJobBtn').innerHTML=terminal?'<i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง':'<i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ';
     const cancel=el('cancelReportJobBtn');
     cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
     cancel.disabled=job.status==='cancel_requested';
@@ -946,7 +947,7 @@
       const state=await gs('cancelReportJob',session,id);
       if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
     }catch(e){toast('ไม่สามารถส่งคำขอยกเลิก: '+String(e.message||e))}
-    finally{btn.disabled=false}
+    finally{btn.disabled=!!(activeReportJob&&activeReportJob.status==='cancel_requested')}
   }
   async function recoverReportJob(){
     if(!currentUser||!token)return;
