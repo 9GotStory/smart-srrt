@@ -3496,10 +3496,10 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
     throw new Error('ยังไม่ได้ตั้งค่า Gemini API Key กรุณาใส่ในหน้า Admin ก่อนสร้างรายงาน AI');
   }
 
-  var modelInfo = resolveGeminiModelInfo_(apiKey, settings, false);
+  var modelInfo = resolveReportGeminiModelInfo_(apiKey);
 
   if (!modelInfo || !modelInfo.modelName) {
-    throw new Error('ไม่พบโมเดล Gemini ที่รองรับ generateContent สำหรับ API Key นี้ กรุณาตรวจสอบ API Key, Gemini API และ Quota/Billing แล้ว Run testGeminiConnection() อีกครั้ง');
+    throw new Error('ไม่พบ Gemini 3.8 Flash ที่รองรับ generateContent สำหรับ API Key นี้ ระบบจะไม่สลับไปโมเดลอื่น กรุณาตรวจสอบสิทธิ์หรือสถานะ API แล้วลองใหม่ภายหลัง');
   }
 
   Logger.log('AI Reporter split mode: start');
@@ -3509,12 +3509,17 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   var promptPart1 = buildReportPromptPart_(rowData, locationInfo, '1-3');
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
+  var startedAt = Date.now();
   var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
-  Utilities.sleep(500);
+  // Synchronous UrlFetchApp.fetch cannot be interrupted; avoid STARTING part 2
+  // if the first call has already consumed the safe request budget.
+  if (Date.now() - startedAt > 120000) {
+    throw new Error('Gemini 3.8 Flash ตอบช้าเกินไป ระบบยุติก่อนเริ่มส่วนที่สองเพื่อเลี่ยง Apps Script Timeout กรุณาลองใหม่ภายหลัง');
+  }
 
   var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
   if (String(part2 || '').indexOf('🚨') === 0) {
@@ -3528,6 +3533,25 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta) {
   Logger.log('AI Reporter final length: ' + finalText.length);
 
   return finalText.replace(/\*/g, '').replace(/```/g, '').trim();
+}
+
+var REPORT_GEMINI_MODEL = 'models/gemini-3.8-flash';
+
+// AI reports are pinned, regardless of AUTO settings or a stale cache entry.
+// Do not silently substitute another model when Gemini 3.8 is unavailable.
+function resolveReportGeminiModelInfo_(apiKey) {
+  var cache = CacheService.getScriptCache();
+  var cachedName = cache.get('GEMINI_AVAILABLE_MODEL');
+  var cachedVersion = cache.get('GEMINI_AVAILABLE_ENDPOINT');
+  if (cachedName === REPORT_GEMINI_MODEL && (cachedVersion === 'v1' || cachedVersion === 'v1beta')) {
+    return {modelName:REPORT_GEMINI_MODEL, apiVersion:cachedVersion};
+  }
+  // Ignoring another model's cached selection is essential after changing AUTO.
+  var modelInfo = findGeminiModelInList_(apiKey, REPORT_GEMINI_MODEL);
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL) return null;
+  cache.put('GEMINI_AVAILABLE_MODEL', REPORT_GEMINI_MODEL, 21600);
+  cache.put('GEMINI_AVAILABLE_ENDPOINT', modelInfo.apiVersion, 21600);
+  return modelInfo;
 }
 
 function resolveGeminiModel_(apiKey, settings) {
@@ -3751,174 +3775,55 @@ function testGeminiConnection() {
   Logger.log(response.getContentText());
   return 'API Version: ' + modelInfo.apiVersion + '\nModel: ' + modelInfo.modelName + '\nStatus: ' + response.getResponseCode() + '\n' + response.getContentText();
 }
-function getGeminiRetryModelQueue_(apiKey, primaryModelInfo) {
-  var queue = [];
-  var seen = {};
-
-  function add(info) {
-    if (!info || !info.modelName || !info.apiVersion) return;
-    if (String(info.modelName).indexOf('gemini-1.5') !== -1) return;
-
-    var key = info.apiVersion + '|' + info.modelName;
-    if (seen[key]) return;
-
-    seen[key] = true;
-    queue.push({
-      modelName: info.modelName,
-      apiVersion: info.apiVersion
-    });
-  }
-
-  add(primaryModelInfo);
-
-  var preferred = [
-    'models/gemini-3.8-flash',
-    'models/gemini-3.7-flash',
-    'models/gemini-3.6-flash',
-    'models/gemini-3.5-flash',
-    'models/gemini-3.5-flash-lite',
-    'models/gemini-3.1-flash-lite',
-    'models/gemini-pro'
-  ];
-
-  for (var i = 0; i < preferred.length; i++) {
-    var info = findGeminiModelInList_(apiKey, preferred[i]);
-    if (info) add(info);
-  }
-
-  if (queue.length === 0 && primaryModelInfo) {
-    add(primaryModelInfo);
-  }
-
-  Logger.log('Gemini retry queue: ' + queue.map(function(x) {
-    return x.apiVersion + '/' + x.modelName;
-  }).join(' -> '));
-
-  return queue;
-}
-
+// Only Gemini 3.8 Flash is authorized for Smart SRRT report generation.
+// One synchronous request per section; HTTP 503/429 fails immediately without retry.
 function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) {
-  var attempts = getGeminiRetryModelQueue_(apiKey, modelInfo);
-  var lastErrorText = '';
-
-  for (var attempt = 0; attempt < attempts.length; attempt++) {
-    var currentModelInfo = attempts[attempt];
-
-    var apiUrl = 'https://generativelanguage.googleapis.com/' +
-      currentModelInfo.apiVersion + '/' +
-      currentModelInfo.modelName +
-      ':generateContent?key=' + encodeURIComponent(apiKey);
-
-    var payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: promptText
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.15,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 12000
-      }
-    };
-
-    try {
-      var response = UrlFetchApp.fetch(apiUrl, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      });
-
-      var statusCode = response.getResponseCode();
-      var responseText = response.getContentText();
-      var json = JSON.parse(responseText);
-
-      Logger.log('AI Reporter ' + label + ' attempt: ' + (attempt + 1));
-      Logger.log('AI Reporter ' + label + ' API Version: ' + currentModelInfo.apiVersion);
-      Logger.log('AI Reporter ' + label + ' Model: ' + currentModelInfo.modelName);
-      Logger.log('AI Reporter ' + label + ' status: ' + statusCode);
-
-      if (statusCode >= 200 && statusCode < 300) {
-        if (
-          json.candidates &&
-          json.candidates.length > 0 &&
-          json.candidates[0].content &&
-          json.candidates[0].content.parts &&
-          json.candidates[0].content.parts.length > 0
-        ) {
-          var finishReason = json.candidates[0].finishReason || '';
-
-          var text = json.candidates[0].content.parts.map(function(p) {
-            return p.text || '';
-          }).join('\n');
-
-          text = String(text || '')
-            .replace(/\*/g, '')
-            .replace(/```/g, '')
-            .trim();
-
-          Logger.log('AI Reporter ' + label + ' finishReason: ' + finishReason);
-          Logger.log('AI Reporter ' + label + ' output length: ' + text.length);
-
-          CacheService.getScriptCache().put('GEMINI_AVAILABLE_MODEL', currentModelInfo.modelName, 21600);
-          CacheService.getScriptCache().put('GEMINI_AVAILABLE_ENDPOINT', currentModelInfo.apiVersion, 21600);
-          recordSuccessfulGeminiModel_(reportMeta, currentModelInfo);
-
-          if (finishReason === 'MAX_TOKENS') {
-            text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
-          }
-
-          return text;
-        }
-
-        return '🚨 Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + '): ' + responseText;
-      }
-
-      var errorMessage = json && json.error && json.error.message
-        ? json.error.message
-        : responseText;
-
-      lastErrorText =
-        'Google AI (' + statusCode + ') ขณะสร้าง' + label + ': ' + errorMessage +
-        '\nAPI Version: ' + currentModelInfo.apiVersion +
-        '\nModel: ' + currentModelInfo.modelName;
-
-      if (
-        statusCode === 404 ||
-        statusCode === 410 ||
-        statusCode === 429 ||
-        statusCode === 500 ||
-        statusCode === 502 ||
-        statusCode === 503 ||
-        statusCode === 504
-      ) {
-        Logger.log('Gemini model/API error, fallback to next model: ' + lastErrorText);
-        clearGeminiModelCache_();
-        Utilities.sleep(800 * (attempt + 1));
-        continue;
-      }
-
-      clearGeminiModelCache_();
-
-      return '🚨 พบปัญหาจาก ' + lastErrorText +
-        '\nข้อแนะนำ: ตรวจว่า หน้า Admin > Gemini Model เป็น AUTO แล้ว Run testGeminiConnection() ใหม่';
-
-    } catch (error) {
-      lastErrorText = 'Apps Script error ขณะเรียก Gemini API (' + label + '): ' + error.toString();
-      Logger.log(lastErrorText);
-      clearGeminiModelCache_();
-      Utilities.sleep(800 * (attempt + 1));
-    }
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL || !['v1','v1beta'].includes(modelInfo.apiVersion)) {
+    throw new Error('ไม่อนุญาตให้สร้างรายงานด้วยโมเดลอื่นนอกจาก Gemini 3.8 Flash');
   }
-
-  return '🚨 พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText +
-    '\n\nข้อแนะนำ: อาจเป็นช่วงที่ Gemini มีการใช้งานสูง ให้ลอง Run clearGeminiModelCache() แล้วสร้างรายงานใหม่อีกครั้ง หรือกำหนด Gemini Model ในหน้า Admin';
+  var apiUrl = 'https://generativelanguage.googleapis.com/' + modelInfo.apiVersion + '/' +
+    REPORT_GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(apiKey);
+  var payload = {
+    contents:[{parts:[{text:promptText}]}],
+    generationConfig:{temperature:0.15, topP:0.8, topK:40, maxOutputTokens:12000}
+  };
+  var startedAt = Date.now();
+  var response;
+  try {
+    response = UrlFetchApp.fetch(apiUrl, {
+      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true
+    });
+  } catch (error) {
+    Logger.log('AI Reporter ' + label + ' transport failure, ms=' + (Date.now() - startedAt));
+    throw new Error('เชื่อมต่อ Gemini 3.8 Flash ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ภายหลัง');
+  }
+  var statusCode = response.getResponseCode();
+  Logger.log('AI Reporter ' + label + ' model=' + REPORT_GEMINI_MODEL +
+    ' API=' + modelInfo.apiVersion + ' status=' + statusCode + ' durationMs=' + (Date.now() - startedAt));
+  if (statusCode === 503) {
+    throw new Error('Gemini 3.8 Flash กำลังมีการใช้งานสูง (HTTP 503) กรุณาลองใหม่ภายหลัง ระบบไม่ได้สลับโมเดลอื่น');
+  }
+  if (statusCode === 429) {
+    throw new Error('Gemini 3.8 Flash เกินขีดจำกัดการใช้งาน (HTTP 429) กรุณารอให้โควตาพร้อมแล้วลองใหม่');
+  }
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new Error('Gemini 3.8 Flash ตอบกลับ HTTP ' + statusCode + ' กรุณาลองใหม่ภายหลัง');
+  }
+  var json;
+  try { json = JSON.parse(response.getContentText()); }
+  catch (error) { throw new Error('Gemini 3.8 Flash ส่งข้อมูลตอบกลับที่อ่านไม่ได้'); }
+  var candidate = json.candidates && json.candidates[0];
+  if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) {
+    throw new Error('Gemini 3.8 Flash ไม่ส่งเนื้อหารายงานในส่วน ' + label);
+  }
+  var text = candidate.content.parts.map(function(p){return p.text || '';}).join('\n')
+    .replace(/\*/g,'').replace(/```/g,'').trim();
+  if (!text) throw new Error('Gemini 3.8 Flash ส่งรายงานว่างเปล่าในส่วน ' + label);
+  recordSuccessfulGeminiModel_(reportMeta, modelInfo);
+  if (candidate.finishReason === 'MAX_TOKENS') {
+    text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
+  }
+  return text;
 }
 
 function buildReportPromptPart_(rowData, locationInfo, sectionRange) {
