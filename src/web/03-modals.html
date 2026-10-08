@@ -54,6 +54,16 @@
   <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
 </div></div>
 
+<div class="modal" id="reportResultModal"><div class="modal-box modal-sm">
+  <div class="modal-title"><i class="fa-solid fa-file-medical"></i> ผลการสร้างรายงาน AI</div>
+  <div id="reportResultStatus" class="help" role="status" aria-live="polite">กำลังเตรียมสร้างรายงาน...</div>
+  <div class="mini" style="margin-top:12px">รายงาน AI เป็นฉบับร่าง ต้องตรวจทานก่อนใช้จริง หากคำขอหมดเวลาหรือไม่แน่ใจว่าสำเร็จหรือไม่ ให้ตรวจประวัติรายงานก่อนสั่งสร้างใหม่</div>
+  <div class="actions">
+    <button class="btn light" onclick="closeModal('reportResultModal')">ปิด</button>
+    <a id="reportResultLink" class="btn green" href="#" target="_blank" rel="noopener noreferrer" style="display:none"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>
+  </div>
+</div></div>
+
 <div class="modal" id="reportReadinessModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ความพร้อมก่อนสร้างรายงาน AI</div>
   <input type="hidden" id="pendingReportEventId">
