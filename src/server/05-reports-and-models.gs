@@ -356,6 +356,16 @@ function cancelReportJob(sessionToken, jobId) {
     return publicReportJob_(job);
   });
 }
+function dismissReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var job = reportJobOwned_(props, jobId, user);
+    if (!reportJobTerminal_(job.status)) throw new Error('งานยังไม่สิ้นสุด ไม่สามารถล้างการแจ้งเตือนได้');
+    var pointer = 'SRRT_G32_USER_' + user.userId;
+    if (props.getProperty(pointer) === jobId) props.deleteProperty(pointer);
+    return publicReportJob_(job);
+  });
+}
 function reportJobCheckpoint_(jobId, stage) {
   if (!jobId) return;
   return withReportJobLock_(function(props) {
