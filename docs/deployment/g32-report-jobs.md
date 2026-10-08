@@ -35,3 +35,15 @@ This adds owner-only task tracking and cancellation to the existing **G-31 Gemin
 - Client polling provides approximate stage statuses and does not imply percent completion.
 - G-32 **rejects** legacy direct `generateReportFromWeb` calls without a server-only execution nonce. A previously opened V4 browser tab must be refreshed after the approved V5 deployment; stale legacy calls fail explicitly rather than creating uncancellable reports. The private nonce is never returned to the browser and cannot be reused after a job leaves `running`.
 - Script instance termination may leave a stale `unknown` job until next status read. Do not infer absence of a registered document from an unknown client state; always use G-27 history.
+
+## G-32 follow-up code review — 2026-10-08
+
+This follow-up reviewed the stacked Draft PR with the original G-31 and P6 invariants. Code review findings and corrective tests:
+
+1. **Authorization before mutation:** `reportJobOwned_` now validates the authenticated user ID before invoking stale-job expiry. Regression simulates a different user knowing an expired job UUID; the foreign user cannot release the active slot or alter status.
+2. **Minimal ownership metadata:** the script-level ledger stores internal owner ID and EventID, but no account email, session token, prompt, API key or raw health narrative. These identifiers still require restricted Apps Script project access and retention discipline.
+3. **Post-commit truthfulness:** once the new Google Doc and append-only ReportRegistry have committed, failure to write the success Audit row is logged as an explicit operational warning (with ReportID) without returning false report failure and inviting an accidental duplicate. **Operations must investigate and repair any missing Audit entry through a separately reviewed recovery process**; success of the Doc does not prove Audit completeness.
+4. **Auth-safe client recovery:** a refreshed or relogged-in browser queries the authenticated server-owned `getCurrentReportJob` pointer rather than trusting a last-used localStorage ID from another user. It validates that the login session did not change while waiting for RPC.
+5. **Job retention:** expired user pointers are cleaned after their backing job expires. Terminal job history in ReportRegistry remains independent of the temporary ScriptProperties tracking ledger.
+
+The expanded offline test suite includes each above boundary. This is code inspection and mocked regression evidence, **not** a live cancellation test or a review by a separate human reviewer. Independent security review and owner-authorized V5 test deployment remain outstanding.
