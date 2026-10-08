@@ -3673,8 +3673,14 @@ function runReportJob(sessionToken, jobId) {
     var url = generateReportFromWeb(sessionToken,job.eventId,job.id);
     return finalizeReportJob_(job.id,'completed',url,'สร้างรายงานเรียบร้อยแล้ว');
   } catch(error) {
-    var final = finalizeReportJob_(job.id,'failed','',String(error.message || error));
-    // Return a typed terminal state; the UI need not expose script errors.
+    var internalError = String(error.message || error);
+    var safeMessage = internalError === 'REPORT_JOB_CANCELLED'
+      ? 'ยกเลิกการสร้างรายงานแล้ว'
+      : (/^Gemini 3\.8 Flash/.test(internalError)
+        ? internalError
+        : 'สร้างรายงานไม่สำเร็จ กรุณาตรวจ Execution Logs และประวัติรายงาน');
+    var final = finalizeReportJob_(job.id,'failed','',safeMessage);
+    // Return only a scrubbed terminal status, never raw patient content.
     return final;
   }
 }
