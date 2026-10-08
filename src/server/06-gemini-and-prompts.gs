@@ -14,7 +14,7 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) 
   var response;
   try {
     response = UrlFetchApp.fetch(apiUrl, {
-      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true
+      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true, timeoutSeconds:110
     });
   } catch (error) {
     Logger.log('AI Reporter ' + label + ' transport failure, ms=' + (Date.now() - startedAt));
