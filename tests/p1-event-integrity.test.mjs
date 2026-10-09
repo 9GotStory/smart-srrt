@@ -195,6 +195,12 @@ test('updateRecord resolves by EventID and increments Revision', () => {
   const audits=[];
   ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
   ctx.getSheetByIdOrName_=()=>sheet;
+  // V8 introduces an active-MasterData validation. Supply a genuine empty
+  // MasterData fixture rather than bypassing validateEventMasterData_.
+  ctx.getSheet_=name=>{
+    assert.equal(name,ctx.CONFIG.SHEETS.MASTER);
+    return {getDataRange:()=>({getValues:()=>[['Type','Value','Label','SortOrder','Active']]})};
+  };
   ctx.writeAudit_=(...args)=>audits.push(args);
   ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
 
