@@ -325,3 +325,13 @@ The prototype's exact P4 header checks, 44-to-39 MainData proposal, 11-to-13 act
 **CI evidence:** [GitHub Actions run 37887370869](https://github.com/9GotStory/smart-srrt/actions/runs/37887370869) on `ec6f78386e3ed3565d094a330dec344dc60735e9` — **261 tests / 246 PASS / 15 FAIL**; One-Click parity, syntax/RPC and offline release preflight PASS. The remaining **15 = P3 8 + P4 7**, not ignored. Overall Integration CI FAIL; P3/P4 semantics and migration are unapproved. Documentation-only follow-up commits need their own CI run.
 
 **Review/merge boundary:** all fixes in Draft PR #64 only; accepted G-32 V8 UAT and main untouched; no Google Workspace interaction, migration, deployment, or Gemini calls. Independent reviewer has not given PASS. Preserve HOLD; no readiness transition or merge.
+
+## Rehearsal 5: P3 Workflow/Owner preservation — 2026-10-09
+
+**Detailed P3 evidence:** [Schema v7 P3 Workflow Reconciliation](p3-v7-workflow-reconciliation-2026-10-09.md).
+
+A real compatibility gap in V8 consistency notices was corrected **only on Integration**: preserved P3 warnings for "ลงสอบสวน" with non-`เข้าเกณฑ์` and for measures-date `col22` with no measures details `col21`. They remain *advisory*, with no workflow writes or new production schema columns. `RecordStatus` is v7 authoritative; historical P3 `WorkflowStatus`, owner timestamp, closure reason/actor/time need separate restricted evidence migration approval, not implicit header renaming.
+
+`tests/p3-workflow.test.mjs`: retained all eight named old P3 tests with substantive V8 behavior verification for exact 39-column schema, lifecycle and warnings, owner directory, strict owner offset/collision guard, close/reopen EventID and Revision/Audit, void/closed separation and authenticated browser controls. Added three further positive/negative tests for owner assignment, owner status/role, permission `assign`, stale Revision, closing/reopening permission `close_event`, and no mutation under denial. No tests were deleted or skipped; no weak runtime aliases were added.
+
+**CI evidence:** [run 37887921987](https://github.com/9GotStory/smart-srrt/actions/runs/37887921987), SHA `e1d9f1edc3707f307202351395faf158e96b8f92`: **264 tests / 257 PASS / 7 FAIL**, all P1/P2/P3 assertions PASS. One-Click byte parity, syntax/RPC and offline P6 preflight PASS. Exactly **seven original P4 Governance tests** still FAIL. Integration remains **HOLD**. No live staging or Workbook data were accessed/altered, no merge/deploy/migration, no Gemini calls. Independent Review has not supplied PASS.
