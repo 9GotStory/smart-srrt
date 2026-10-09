@@ -104,7 +104,9 @@ export function assessP4ToV7Headers({main=[],attachments=[],visits=[],auditArchi
   return result('p4-to-v7-offline-preflight',{
     targetSchema:7,
     layouts:{main:mainLayout,attachments:attachmentLayout,visits:visitLayout,auditArchive:auditLayout},
-    canAutoMigrate:!findings.some(f=>f.severity==='block'),
+    hasBlockingLayouts:findings.some(f=>f.severity==='block'),
+    requiresReview:findings.length>0,
+    automatedMigrationAuthorized:false, // The scanner NEVER authorizes data mutation.
     findings
   });
 }
