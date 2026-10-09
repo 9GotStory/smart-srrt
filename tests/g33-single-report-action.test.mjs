@@ -232,3 +232,52 @@ test('G33 failed later summary batch never publishes incomplete counts',async()=
     'first successful batch cannot masquerade as complete verified history');
   assert.equal(h.calls.some(c=>c[0]==='createReportJob'),false);
 });
+
+test('G33 report action never interpolates EventID into executable onclick JavaScript',()=>{
+  const h=clientHarness();
+  const dangerous=EVENT+"' onmouseover='alert(123)";
+  const markup=h.ctx.reportActionButton(dangerous,false);
+  assert.match(markup,/onclick="handleReportAction\(this\.dataset\.reportEventId,this\)"/);
+  assert.doesNotMatch(markup,/handleReportAction\(["']/);
+  assert.match(html,/data-report-event-id="\$\{escapeHtml\(eventId\|\|''\)\}"/);
+  assert.doesNotMatch(html,/onclick=\\'handleReportAction\('\+JSON\.stringify/);
+});
+
+test('G33 rejects obsolete dashboard loads across filters and sessions',async()=>{
+  const sourceStart=html.indexOf('  let dashboardLoadRequest=0;');
+  const sourceEnd=html.indexOf('  function resetFilter(){',sourceStart);
+  assert.ok(sourceStart>0&&sourceEnd>sourceStart);
+  const requests=[],visible=[];
+  const ctx={
+    token:'session-a',currentUser:{role:'Admin'},reportSummaryRequest:0,
+    reportSummaryState:{status:'idle',summaries:{}},
+    dashboardSummary:null,allData:[],areas:[{province:'demo'}],
+    el:()=>({value:''}),
+    gs:(name,session)=>new Promise(resolve=>requests.push({name,session,resolve})),
+    updateDashboard:()=>visible.push('updated'),
+    renderTables:()=>visible.push('rendered'),
+    setupDashboardFilters:()=>visible.push('filters'),
+    refreshReportSummaries:()=>{visible.push('summary')},
+    roleCanRecord:()=>true,
+    toast:msg=>visible.push('error:'+msg)
+  };
+  vm.createContext(ctx);
+  vm.runInContext(html.slice(sourceStart,sourceEnd),ctx,{filename:'dashboard-request-guard.js'});
+  const first=ctx.loadDashboard();
+  const second=ctx.loadDashboard();
+  assert.equal(requests.length,2);
+  requests[1].resolve([{eventId:'new'}]);
+  await second;
+  requests[0].resolve([{eventId:'old'}]);
+  await first;
+  assert.equal(ctx.allData[0].eventId,'new','older filter result cannot replace a newer one');
+  assert.equal(visible.filter(x=>x==='rendered').length,1);
+
+  const before=visible.length;
+  const third=ctx.loadDashboard();
+  ctx.token='session-b';ctx.currentUser=null;
+  requests[2].resolve([{eventId:'old-user-private'}]);
+  await third;
+  assert.equal(ctx.allData.some(r=>r.eventId==='old-user-private'),false);
+  assert.equal(visible.length,before,'stale response never renders under a different user');
+});
