@@ -300,3 +300,14 @@ does not implicitly validate this later integration-only KPI correction.
 The design covers MainData 39-44 owner/lifecycle collision, P4 11-field versus V8 13-field attachments, separate P4 AuditArchive versus G-21 external archive/AuditID, and P4 VisitLogs RequestParams versus G-29 privacy-clean headers. It includes typed field mapping, synthetic fixture cases, idempotent identity ledger requirements, archival provenance, rollback/stop gates and unresolved policy decisions.
 
 **Gate status: DESIGN CANDIDATE — INDEPENDENT REVIEW REQUIRED.** This is not an implementation, a completed migration rehearsal, permission to alter real workbooks, or an Integration CI PASS. Existing 22 P1-P4 compatibility test failures remain open. The accepted V8 staging UAT, G-32 PR #60 and main remain untouched; Draft PR #64 remains HOLD. Application source, build artifacts and regression tests are unchanged by this Gate 1 documentation work.
+
+## Rehearsal 3: synthetic P4-to-v7 transformation proposal — 2026-10-09
+
+**Prototype scope:** `tools/p4-v7-offline-transform.mjs` and `tests/integration-p4-v7-offline-transform.test.mjs` added solely to this isolated integration branch, based on [Gate 1.1 design](p4-to-v7-migration-design-2026-10-09.md). This is a pure, synthetic-only planning function that always returns `status=HOLD` and `migrationAuthorized=false`. It does not invoke Google Workspace, modify the accepted staging application, or perform any migration.
+
+The prototype's exact P4 header checks, 44-to-39 MainData proposal, 11-to-13 active Attachment mapping, Archive evidence preservation, UUIDv5 mock-only Audit identity allocations, VisitLogs privacy HOLD and deterministic snapshot fingerprint are subject to an **independent security and data-preservation review**. Synthetic marking is **not** a way to sanitize real patient data; do not pass real data to this library or log its candidate/evidence output. There is no approved historical-data storage, partial-copy replay, or operator migration implementation.
+
+**CI evidence on candidate commit** `e4922a4a78300fa390d7fca1dfdf9d328b3dc242`:
+[GitHub Actions run 37886446376](https://github.com/9GotStory/smart-srrt/actions/runs/37886446376) — **250 tests: 228 PASS / 22 FAIL**. All **16 new synthetic offline tests PASS**; G-30 deterministic One-Click byte parity, syntax/RPC contracts and offline P6 preflight PASS. The **same 22 pre-existing P1-P4 regressions** remain unresolved. The run is overall FAIL. Doc-only commits after this SHA require their own workflow verification.
+
+**Decision: INTEGRATION HOLD.** Draft PR #64 remains Draft; no merge into main, no deploy, no migration or change to v7 staging, no Gemini calls, and no PR #60 modification. Next gate is independent review and behavioral P1-P4 reconciliation, not applying this proposal to a workbook.
