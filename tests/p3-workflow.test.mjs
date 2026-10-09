@@ -23,7 +23,7 @@ class FakeRange {
   clearContent(){this._ensure();for(let r=0;r<this.numRows;r++)for(let c=0;c<this.numCols;c++)this.sheet.rows[this.row-1+r][this.col-1+c]='';return this;}
 }
 class FakeSheet {
-  constructor(rows,maxCols=44){
+  constructor(rows,maxCols=39){
     this.maxCols=maxCols;
     this.rows=rows.map(r=>{const x=[...r];while(x.length<maxCols)x.push('');return x});
   }
@@ -40,121 +40,158 @@ function makeContext(){
   vm.createContext(context);vm.runInContext(source,context);return context;
 }
 function row(){
-  const r=Array(44).fill('');
+  const r=Array(39).fill('');
   r[1]='2569-10-06';
   r[30]='11111111-1111-4111-8111-111111111111';
   r[31]=1;r[32]='active';
   return r;
 }
 
+
 test('P3 schema appends workflow metadata after the P1 prefix',()=>{
   const ctx=makeContext();
   assert.equal(ctx.MAIN_HEADERS.length,30);
-  assert.equal(ctx.MAIN_SCHEMA_HEADERS.length,44);
-  assert.deepEqual(Array.from(ctx.EVENT_META_HEADERS).slice(8),[
-    'WorkflowStatus','OwnerUserID','OwnerAssignedAt','ClosedAt','ClosedBy','CloseReason'
+  assert.equal(ctx.MAIN_SCHEMA_HEADERS.length,38);
+  assert.deepEqual(Array.from(ctx.EVENT_META_HEADERS),[
+    'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason'
   ]);
-  assert.equal(ctx.EVENT_META_COL.WORKFLOW_STATUS,39);
-  assert.equal(ctx.EVENT_META_COL.CLOSE_REASON,44);
-  assert.ok(Number(ctx.CONFIG.SCHEMA_VERSION) >= 3);
+  assert.equal(ctx.EVENT_OWNER_HEADER,'OwnerUserID');
+  assert.equal(ctx.EVENT_OWNER_COL,39);
+  assert.equal(ctx.EVENT_META_COL.RECORD_STATUS,33);
+  assert.equal(ctx.EVENT_META_COL.VOID_REASON,38);
+  assert.equal(ctx.CONFIG.SCHEMA_VERSION,'7');
+  assert.equal(ctx.MAIN_SCHEMA_HEADERS.includes('WorkflowStatus'),false);
 });
 
 test('workflow derivation stays lightweight and distinguishes void/closed/progress/open',()=>{
   const ctx=makeContext();
-  assert.equal(ctx.deriveWorkflowStatus_({recordStatus:'void'}),'VOID');
-  assert.equal(ctx.deriveWorkflowStatus_({recordStatus:'active',closedAt:'2026-10-06'}),'CLOSED');
-  assert.equal(ctx.deriveWorkflowStatus_({recordStatus:'active',col17:'เข้าเกณฑ์'}),'IN_PROGRESS');
-  assert.equal(ctx.deriveWorkflowStatus_({recordStatus:'active'}),'OPEN');
+  const code=o=>ctx.deriveEventLifecycle_(o).code;
+  assert.equal(code({recordStatus:'void',col26:'2026-10-06'}),'voided');
+  assert.equal(code({recordStatus:'closed',col17:'เข้าเกณฑ์'}),'closed');
+  assert.equal(code({recordStatus:'active',col17:'เข้าเกณฑ์',col26:'2026-10-06'}),'investigated');
+  assert.equal(code({recordStatus:'active',col17:'เข้าเกณฑ์'}),'investigation_required');
+  assert.equal(code({recordStatus:'active',col17:'ไม่เข้าเกณฑ์'}),'criteria_not_met');
+  assert.equal(code({recordStatus:'active',col17:'รอดำเนินการ'}),'criteria_pending');
+  assert.equal(code({recordStatus:'active',col15:'รอตรวจสอบ'}),'verification_pending');
+  assert.equal(code({recordStatus:'active'}),'received');
+  assert.equal(code({recordStatus:'active',closedAt:'2026-10-06'}),'received');
 });
 
 test('consistency rules warn rather than hard-fail normal SRRT field combinations',()=>{
   const ctx=makeContext();
-  const warnings=ctx.getEventConsistencyWarnings_({
-    col17:'ไม่เข้าเกณฑ์',
-    col24:'ลงสอบสวน',
-    col26:'2569-10-06',
-    col21:'',
-    col22:'2569-10-06',
-    workflowStatus:'IN_PROGRESS'
-  });
-  assert.equal(warnings.length,3);
-  assert.ok(warnings.some(x=>x.includes('วันที่ลงสอบสวน')));
-  assert.ok(warnings.some(x=>x.includes('ระบุว่าลงสอบสวน')));
-  assert.ok(warnings.some(x=>x.includes('วันที่ดำเนินมาตรการ')));
+  const evidence={col17:'ไม่เข้าเกณฑ์',col24:'ลงสอบสวน',col26:'2569-10-06',col21:'',col22:'2569-10-06'};
+  const result=ctx.deriveEventConsistencyWarnings_(evidence);
+  assert.equal(result.length,3);
+  assert.deepEqual(Array.from(result,x=>x.code).sort(),[
+    'CRITERIA_NOT_MET_BUT_INVESTIGATED','INVESTIGATION_FLAG_WITHOUT_CRITERIA','MEASURES_DATE_WITHOUT_DETAILS'
+  ].sort());
+  assert.ok(result.every(x=>typeof x.message==='string'&&x.message.trim()));
+  assert.deepEqual(Array.from(ctx.deriveEventConsistencyWarnings_({recordStatus:'void',...evidence})),[]);
+  assert.deepEqual(Array.from(ctx.deriveEventConsistencyWarnings_({col17:'เข้าเกณฑ์',col24:'ลงสอบสวน',col26:'2569-10-06'})),[]);
 });
 
 test('workflow migration initializes blank status idempotently',()=>{
   const ctx=makeContext();
-  const header=Array(44).fill('');
-  const r=row();
-  r[16]='เข้าเกณฑ์';
-  const sheet=new FakeSheet([header,r]);
-  const first=ctx.ensureWorkflowData_(sheet);
-  assert.equal(first.initializedWorkflow,1);
-  assert.equal(sheet.rows[1][38],'IN_PROGRESS');
-  const second=ctx.ensureWorkflowData_(sheet);
-  assert.equal(second.initializedWorkflow,0);
-  assert.equal(sheet.rows[1][38],'IN_PROGRESS');
+  const validHeaders=[...Array.from(ctx.MAIN_SCHEMA_HEADERS),ctx.EVENT_OWNER_HEADER];
+  const ss={getSheetByName:()=>sheet};
+  const sheet=new FakeSheet([validHeaders,row()],39);
+  const before=JSON.stringify(sheet.rows);
+  assert.equal(ctx.ensureEventOwnerSchema_(ss),sheet);
+  assert.equal(ctx.ensureEventOwnerSchema_(ss),sheet);
+  assert.equal(JSON.stringify(sheet.rows),before);
+  assert.equal(sheet.rows[0][38],'OwnerUserID');
+  // Schema v4 WorkflowStatus must never be reinterpreted as a v7 OwnerUserID.
+  sheet.rows[0][38]='WorkflowStatus';
+  assert.throws(()=>ctx.ensureEventOwnerSchema_(ss),/คอลัมน์ 39/);
+  sheet.rows[0][38]='';
+  sheet.rows[1][38]='IN_PROGRESS';
+  assert.throws(()=>ctx.ensureEventOwnerSchema_(ss),/มีข้อมูลเดิม/);
 });
 
 test('active owner lookup accepts active users and rejects inactive users',()=>{
   const ctx=makeContext();
   const users=new FakeSheet([
-    ['UserID','ชื่อ-สกุล','Email','PasswordHash','Role','Status'],
+    ['UserID','Name','Email','PasswordHash','Role','Status'],
     ['u-active','Active User','active@example.test','','Admin','active'],
-    ['u-blocked','Blocked User','blocked@example.test','','Staff','blocked']
+    ['u-blocked','Blocked User','blocked@example.test','','Admin','blocked'],
+    ['u-staff','Staff User','staff@example.test','','Staff','active']
   ],14);
-  ctx.getSheet_=()=>users;
-  assert.equal(ctx.findActiveUserById_('u-active').name,'Active User');
-  assert.throws(()=>ctx.findActiveUserById_('u-blocked'),/ไม่ได้อยู่ในสถานะ active/);
-  assert.throws(()=>ctx.findActiveUserById_('missing'),/ไม่พบผู้รับผิดชอบ/);
+  ctx.getSheet_=name=>{assert.equal(name,ctx.CONFIG.SHEETS.USERS);return users;};
+  const checks=[];
+  ctx.requireAuth_=(_token,perm)=>{checks.push(perm);return {email:'manager@example.test',role:'Manager'};};
+  const result=ctx.listAssignableEventOwners('token');
+  assert.equal(result.length,1);
+  assert.equal(result[0].userId,'u-active');
+  assert.equal(result[0].status,'active');
+  assert.equal(ctx.findUserById_('u-blocked').status,'blocked');
+  assert.equal(ctx.findUserById_('missing'),null);
+  assert.deepEqual(checks,['assign']);
+  ctx.requireAuth_=()=>{throw Error('permission denied');};
+  assert.throws(()=>ctx.listAssignableEventOwners('token'),/permission denied/);
 });
 
 test('close and reopen preserve the row, increment revision and audit lifecycle actions',()=>{
   const ctx=makeContext();
-  const r=row();
-  r[16]='เข้าเกณฑ์';
-  r[38]='IN_PROGRESS';
-  const sheet=new FakeSheet([Array(44).fill(''),r]);
-  const audits=[];
-  ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
+  const r=row();r[16]='เข้าเกณฑ์';
+  const sheet=new FakeSheet([Array(39).fill(''),r],39);
+  const audits=[],perm=[];
+  ctx.requireAuth_=(_token,p)=>{perm.push(p);return {email:'manager@example.test',role:'Manager'};};
   ctx.getSheetByIdOrName_=()=>sheet;
   ctx.writeAudit_=(...a)=>audits.push(a);
   ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
-
-  const id=r[30];
-  const rowsBefore=sheet.getLastRow();
+  const id=r[30],rowsBefore=sheet.getLastRow();
   assert.match(ctx.closeEvent('token',id,'ดำเนินการครบแล้ว',1),/ปิดเหตุการณ์/);
   assert.equal(sheet.getLastRow(),rowsBefore);
+  assert.equal(sheet.rows[1][30],id);
   assert.equal(sheet.rows[1][31],2);
-  assert.equal(sheet.rows[1][38],'CLOSED');
-  assert.ok(sheet.rows[1][41] instanceof Date);
-  assert.equal(sheet.rows[1][42],'admin@example.test');
-  assert.equal(sheet.rows[1][43],'ดำเนินการครบแล้ว');
+  assert.equal(sheet.rows[1][32],'closed');
+  assert.equal(sheet.rows[1][38],'');
   assert.equal(audits[0][1],'CLOSE_EVENT');
-
-  assert.match(ctx.reopenEvent('token',id,2),/เปิดเหตุการณ์อีกครั้ง/);
+  assert.equal(audits[0][3],id);
+  assert.equal(JSON.parse(audits[0][5]).reason,'ดำเนินการครบแล้ว');
+  assert.match(ctx.reopenEvent('token',id,'พบข้อมูลต้องแก้ไข',2),/เปิดเหตุการณ์อีกครั้ง/);
   assert.equal(sheet.getLastRow(),rowsBefore);
+  assert.equal(sheet.rows[1][30],id);
   assert.equal(sheet.rows[1][31],3);
-  assert.equal(sheet.rows[1][38],'IN_PROGRESS');
-  assert.equal(sheet.rows[1][41],'');
-  assert.equal(sheet.rows[1][42],'');
-  assert.equal(sheet.rows[1][43],'');
+  assert.equal(sheet.rows[1][32],'active');
   assert.equal(audits[1][1],'REOPEN_EVENT');
+  assert.equal(JSON.parse(audits[1][5]).reason,'พบข้อมูลต้องแก้ไข');
+  assert.deepEqual(perm,['close_event','close_event']);
+  assert.equal(audits.length,2);
 });
 
 test('closed Event blocks normal update while void remains a separate disposition',()=>{
-  assert.match(source,/currentWorkflow === 'CLOSED'/);
-  assert.match(source,/setValue\('VOID'\)/);
-  assert.match(source,/function closeEvent\(/);
-  assert.match(source,/function reopenEvent\(/);
+  const ctx=makeContext(),r=row(),sheet=new FakeSheet([Array(39).fill(''),r],39),audit=[];
+  ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.requireAuth_=(_token,permission)=>({email:'manager@example.test',role:'Manager'});
+  ctx.writeAudit_=(...a)=>audit.push(a);
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  const id=r[30];
+  assert.throws(()=>ctx.reopenEvent('token',id,'',1),/กรุณาระบุเหตุผล/);
+  assert.throws(()=>ctx.closeEvent('token',id,'',1),/กรุณาระบุเหตุผล/);
+  assert.throws(()=>ctx.closeEvent('token',id,'reason',2),/ถูกแก้ไขจากผู้ใช้อื่น/);
+  assert.equal(sheet.rows[1][31],1);
+  assert.match(ctx.closeEvent('token',id,'close reason',1),/ปิดเหตุการณ์/);
+  assert.throws(()=>ctx.updateRecord('token',id,{col6:'should not change'},2),/เหตุการณ์นี้ถูกปิดแล้ว/);
+  assert.equal(sheet.rows[1][5],'');
+  assert.match(ctx.deleteRecord('token',id,'void reason',2),/ยกเลิก/);
+  assert.equal(sheet.rows[1][32],'void');
+  assert.equal(sheet.rows[1][31],3);
+  assert.equal(sheet.rows[1][37],'void reason');
+  assert.throws(()=>ctx.reopenEvent('token',id,'try to reopen void',3),/ถูกยกเลิกแล้ว/);
+  assert.equal(audit.length,2);
+  assert.deepEqual(Array.from(audit,a=>a[1]),['CLOSE_EVENT','VOID_RECORD']);
 });
 
 test('browser exposes owner and lifecycle controls without adding a task subsystem',()=>{
   assert.match(html,/ผู้รับผิดชอบหลัก/);
-  assert.match(html,/closeEventUi/);
-  assert.match(html,/reopenEventUi/);
-  assert.match(html,/consistencyWarnings/);
+  assert.match(html,/openOwnerModal/);
+  assert.match(html,/assignEventOwner/);
+  assert.match(html,/closeEventFlow/);
+  assert.match(html,/reopenEventFlow/);
+  assert.match(html,/consistencyWarningBadge/);
+  assert.match(html,/roleCanManage\(\)/);
+  assert.match(html,/if\(status==='closed'\)/);
   assert.doesNotMatch(source,/function\s+(?:create|save|update|delete)Task\s*\(/i);
   assert.doesNotMatch(source,/['"]TaskID['"]|['"]SLA['"]|['"]Escalation['"]/);
 });
