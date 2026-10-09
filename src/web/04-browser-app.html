@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){stopReportPolling();activeReportJob=null;localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){hideReportCancelConfirm();stopReportPolling();activeReportJob=null;localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -497,6 +497,7 @@
   const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
   let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
+  let reportCancelPendingJobId=null, reportCancelSubmitting=false;
 
   function reportJobTerminal(job){return !!job&&REPORT_TERMINAL_STATES.has(job.status)}
   function reportStageLabel(job){
@@ -543,6 +544,11 @@
     indicator.style.display='inline-flex';
     el('reportTaskStatus').textContent=label;
     const terminal=reportJobTerminal(job);
+    // The confirmation must never outlive the job's cancellable state.
+    if(reportCancelPendingJobId===job.id &&
+       (terminal||job.status==='cancel_requested'||job.status==='finalizing')){
+      hideReportCancelConfirm();
+    }
     el('closeReportJobBtn').innerHTML=terminal?'<i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง':'<i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ';
     const cancel=el('cancelReportJobBtn');
     cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
@@ -597,18 +603,80 @@
       }
     }finally{reportPollBusy=false}
   }
-  async function cancelCurrentReportTask(){
-    if(!activeReportJob||reportJobTerminal(activeReportJob)||activeReportJob.status==='finalizing')return;
-    if(!confirm('ต้องการขอยกเลิกการสร้างรายงานนี้หรือไม่? หาก Gemini กำลังตอบ ระบบจะรอจนถึงจุดที่หยุดได้ก่อน'))return;
-    const id=activeReportJob.id,session=token;
-    const btn=el('cancelReportJobBtn');
-    btn.disabled=true;
+  function hideReportCancelConfirm(){
+    reportCancelPendingJobId=null;
+    closeModal('reportCancelConfirmModal');
+    const returnFocus=el('cancelReportJobBtn');
+    if(returnFocus && returnFocus.style.display!=='none' && !returnFocus.disabled)returnFocus.focus();
+    else el('closeReportJobBtn').focus();
+  }
+  function closeReportCancelConfirm(){
+    if(reportCancelSubmitting)return;
+    hideReportCancelConfirm();
+  }
+  function cancelCurrentReportTask(){
+    if(reportCancelSubmitting||!currentUser||!activeReportJob||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status))return;
+    reportCancelPendingJobId=activeReportJob.id;
+    const warning=el('reportCancelConfirmError');
+    warning.textContent='';
+    warning.style.display='none';
+    openModal('reportCancelConfirmModal');
+    el('reportCancelKeepBtn').focus();
+  }
+  async function confirmReportCancelRequest(){
+    if(reportCancelSubmitting||!currentUser||!activeReportJob||
+       activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status)){
+      hideReportCancelConfirm();
+      return;
+    }
+    const id=reportCancelPendingJobId,session=token;
+    reportCancelSubmitting=true;
+    const submit=el('reportCancelConfirmBtn'),keep=el('reportCancelKeepBtn');
+    const previous=submit.innerHTML;
+    const warning=el('reportCancelConfirmError');
+    submit.disabled=true;keep.disabled=true;
+    submit.textContent='กำลังส่งคำขอยกเลิก...';
+    warning.textContent='';warning.style.display='none';
     try{
       const state=await gs('cancelReportJob',session,id);
-      if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
-    }catch(e){toast('ไม่สามารถส่งคำขอยกเลิก: '+String(e.message||e))}
-    finally{btn.disabled=!!(activeReportJob&&activeReportJob.status==='cancel_requested')}
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        paintReportTask(state);
+        hideReportCancelConfirm();
+      }else{
+        // Do not apply a stale result to a later login or another job.
+        hideReportCancelConfirm();
+      }
+    }catch(error){
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        warning.textContent='ยังยืนยันการรับคำขอยกเลิกไม่ได้ กรุณาตรวจสถานะงานก่อนส่งคำขอใหม่';
+        warning.style.display='block';
+      }else{
+        hideReportCancelConfirm();
+      }
+    }finally{
+      reportCancelSubmitting=false;
+      submit.disabled=false;keep.disabled=false;submit.innerHTML=previous;
+    }
   }
+  document.addEventListener('keydown',event=>{
+    if(!el('reportCancelConfirmModal').classList.contains('open'))return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!reportCancelSubmitting)closeReportCancelConfirm();
+    }else if(event.key==='Tab'){
+      // Keep keyboard navigation in the two-action confirmation dialog.
+      const focusables=[el('reportCancelKeepBtn'),el('reportCancelConfirmBtn')].filter(b=>!b.disabled);
+      if(!focusables.length){event.preventDefault();return}
+      const first=focusables[0],last=focusables[focusables.length-1];
+      if(event.shiftKey && (document.activeElement===first||!focusables.includes(document.activeElement))){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey && (document.activeElement===last||!focusables.includes(document.activeElement))){
+        event.preventDefault();first.focus();
+      }
+    }
+  });
   async function recoverReportJob(){
     if(!currentUser||!token)return;
     const session=token;
@@ -680,7 +748,11 @@
     }catch(e){toast(e.message||e)}
     finally{
       reportReadinessInFlight.delete(eventId);
-      if(btn.disabled){btn.disabled=false;btn.innerHTML=old}
+      // executeReport may have restored the temporary "กำลังตรวจข้อมูล" label.
+      // The outer readiness action owns the original label and must always
+      // restore it, whether queued, cancelled, failed or terminal.
+      btn.disabled=false;
+      btn.innerHTML=old;
     }
   }
   async function continueReportFromWarning(){
