@@ -396,3 +396,57 @@ test('G33 warning continuation prevents duplicate submits and ignores a stale se
   await one;
   assert.equal(created,0);
 });
+
+test('G33 only one createReportJob RPC can be in flight before the G32 pointer is returned',async()=>{
+  const h=clientHarness();
+  let rejectRequest;
+  h.setStub(fn=>{
+    if(fn==='createReportJob')return new Promise((resolve,reject)=>{rejectRequest=reject});
+    throw Error('unexpected RPC '+fn);
+  });
+  const firstButton={innerHTML:'สร้างรายงาน AI',disabled:false};
+  const secondButton={innerHTML:'สร้างรายงาน AI',disabled:false};
+  const first=h.ctx.executeReport(EVENT,firstButton);
+  assert.match(h.ctx.reportActionButton(EVENT,false),/กำลังส่งคำขอรายงาน/);
+  await h.ctx.executeReport(EVENT,secondButton);
+  assert.equal(h.calls.filter(c=>c[0]==='createReportJob').length,1,
+    'simultaneous clicks may only call the G32 backend once');
+  rejectRequest(Error('RPC timed out after write'));
+  await first;
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/);
+  assert.doesNotMatch(h.ctx.reportActionButton(EVENT,false),/สร้างรายงาน AI/);
+  assert.ok(h.toasts.some(x=>String(x).includes('ยังยืนยันผลคำขอ')));
+});
+
+test('G33 a verified G32 no-job response is necessary to recover from uncertain create RPC',async()=>{
+  const h=clientHarness();
+  h.setStub(fn=>{
+    if(fn==='createReportJob')throw Error('connection reset');
+    if(fn==='getCurrentReportJob')return null;
+    throw Error('unexpected RPC '+fn);
+  });
+  vm.runInContext('reportSummaryState={status:"ready",summaries:{"'+EVENT+'":{count:0,invalidCount:0,latestSourceRevision:0}}}',h.ctx);
+  await h.ctx.executeReport(EVENT,{innerHTML:'สร้างรายงาน AI',disabled:false});
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/);
+  await h.ctx.recoverReportJob();
+  assert.match(h.ctx.reportActionButton(EVENT,false),/สร้างรายงาน AI/);
+  assert.equal(h.calls.filter(x=>x[0]==='getCurrentReportJob').length,1);
+});
+
+test('G33 stale createReportJob callback from previous user cannot mutate the next session',async()=>{
+  const h=clientHarness();
+  let resolveRequest;
+  h.setStub(fn=>{
+    if(fn==='createReportJob')return new Promise(resolve=>{resolveRequest=resolve});
+    throw Error('unexpected RPC '+fn);
+  });
+  const first=h.ctx.executeReport(EVENT,{innerHTML:'สร้างรายงาน AI',disabled:false});
+  h.ctx.token='session-b';
+  h.ctx.currentUser={role:'Admin',email:'another@example.test'};
+  vm.runInContext('++reportJobCreateRequest;reportJobCreateInFlight=false',h.ctx);
+  resolveRequest({id:'old-job',eventId:EVENT,status:'queued'});
+  await first;
+  assert.equal(h.calls.filter(x=>x[0]==='runReportJob').length,0);
+  assert.equal(h.calls.some(x=>x[0]==='getCurrentReportJob'),false);
+  assert.equal(h.el('reportTaskIndicator').style.display,'none');
+});
