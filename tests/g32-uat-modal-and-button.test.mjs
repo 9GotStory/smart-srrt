@@ -40,6 +40,8 @@ function browserHarness(overrides={}){
   let nextTimer=0;
   const ctx={
     token:'test-session',currentUser:{userId:'actor'},
+    allData:[{eventId:'mock-event'},{eventId:'different-event'},{eventId:'another-event'}],
+    roleCanRecord:()=>true,
     document:doc,
     localStorage:{
       setItem(k,v){storage.set(k,String(v))},
@@ -57,6 +59,7 @@ function browserHarness(overrides={}){
       calls.push([fn,...args]);
       if(overrides[fn])return overrides[fn](...args);
       if(fn==='getAIReportReadiness')return {level:'ready'};
+      if(fn==='getReportSummariesForEvents')return {summaries:Object.fromEntries(args[1].map(id=>[id,{count:0,latestSourceRevision:0,invalidCount:0}]))};
       if(fn==='createReportJob')return {id:'job-1',eventId:args[1],status:'queued',stage:'queued',message:''};
       if(fn==='runReportJob')return new Promise(()=>{});
       if(fn==='cancelReportJob')return {id:'job-1',eventId:'mock-event',status:'cancel_requested',stage:'gemini_1'};
@@ -67,6 +70,7 @@ function browserHarness(overrides={}){
   el('reportCancelConfirmBtn').innerHTML='ยืนยันยกเลิก';
   vm.createContext(ctx);
   vm.runInContext(reportSource,ctx,{filename:'report-task-script',timeout:1500});
+  vm.runInContext("reportSummaryState={status:'ready',summaries:{'mock-event':{count:0,invalidCount:0},'different-event':{count:0,invalidCount:0},'another-event':{count:0,invalidCount:0}}}",ctx);
   return {ctx,el,calls,toasts,events,registerReportButton};
 }
 
@@ -146,7 +150,7 @@ test('G-32 event/report tables rebuild buttons with the current job status',()=>
   assert.match(h.ctx.reportActionButton('mock-event',false),/>สร้างรายงาน AI<\/button>/);
 });
 
-test('G-32 status update restores both duplicate event actions when job ends',()=>{
+test('G-32 status update restores consolidated report actions when job ends',async()=>{
   const h=browserHarness();
   const main=h.registerReportButton('mock-event',false,'report-page-action');
   const mini=h.registerReportButton('mock-event',true,'event-page-action');
@@ -156,6 +160,10 @@ test('G-32 status update restores both duplicate event actions when job ends',()
   assert.match(mini.innerHTML,/ดูสถานะ/);
   assert.equal(other.disabled,true);
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'completed',stage:'completed',documentUrl:'https://docs.google.com/document/d/example/edit'});
+  // A newly completed job must re-check the durable registry before offering another generation.
+  assert.match(main.innerHTML,/ตรวจสอบสถานะรายงาน/);
+  await Promise.resolve();
+  await Promise.resolve();
   assert.equal(main.innerHTML,'สร้างรายงาน AI');
   assert.equal(mini.innerHTML,'AI');
   assert.equal(other.disabled,false);
