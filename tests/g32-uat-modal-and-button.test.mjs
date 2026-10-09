@@ -118,15 +118,16 @@ test('G-32 reporter button remains restored after backend cancellation reaches t
   assert.match(h.el('reportResultStatus').textContent,/ยกเลิกการสร้างรายงานแล้ว/);
 });
 
-test('G-32 reporter button restores when createReportJob fails after readiness passed',async()=>{
+test('G-32 createReportJob network failure restores controls but blocks unverified re-generation',async()=>{
   const h=browserHarness({createReportJob:()=>Promise.reject(Error('job creation failed'))});
   const btn=h.el('create-ai-report');
   const old='<i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงาน AI';
   btn.innerHTML=old;
   await h.ctx.makeReport('mock-event',btn);
-  assert.equal(btn.innerHTML,old);
   assert.equal(btn.disabled,false);
-  assert.ok(h.toasts.some(s=>s.includes('เริ่มสร้างรายงานไม่สำเร็จ')));
+  assert.match(btn.innerHTML,/ตรวจสอบสถานะรายงาน/);
+  assert.doesNotMatch(btn.innerHTML,/สร้างรายงาน AI/);
+  assert.ok(h.toasts.some(s=>s.includes('ยังยืนยันผลคำขอสร้างรายงานไม่ได้')));
 });
 
 test('G-32 event/report tables rebuild buttons with the current job status',()=>{
