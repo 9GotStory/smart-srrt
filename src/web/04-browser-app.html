@@ -389,50 +389,6 @@
     try{toast(await gs('reopenEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
 
-  function reportActionState(eventId,compact){
-    const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
-    const busy=!!job||reportReadinessInFlight.size>0;
-    const matching=!!job&&String(job.eventId)===String(eventId);
-    if(matching){
-      let label='กำลังสร้างรายงาน · ดูสถานะ';
-      let icon='fa-spinner fa-spin';
-      if(job.status==='cancel_requested'){label='กำลังขอยกเลิก · ดูสถานะ';icon='fa-hourglass-half'}
-      else if(job.status==='finalizing'){label='กำลังบันทึก · ดูสถานะ';icon='fa-floppy-disk'}
-      else if(job.status==='queued'){label='รอเริ่มรายงาน · ดูสถานะ';icon='fa-clock'}
-      return {disabled:false,busy:true,active:true,
-        html:'<i class="fa-solid '+icon+'" aria-hidden="true"></i> '+label};
-    }
-    if(job)return {disabled:true,busy:true,active:false,
-      html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
-    if(reportReadinessInFlight.size>0){
-      const checking=reportReadinessInFlight.has(eventId);
-      return {disabled:true,busy:true,active:checking,
-        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจข้อมูล':'กำลังตรวจรายงานอื่น')};
-    }
-    return {disabled:false,busy:false,active:false,html:compact?'AI':'สร้างรายงาน AI'};
-  }
-  function reportActionButton(eventId,compact){
-    const state=reportActionState(eventId,compact);
-    return '<button class="btn green report-action-btn'+(state.active?' report-action-active':'')+'"'+
-      ' data-report-event-id="'+escapeHtml(eventId||'')+'"'+
-      ' data-report-compact="'+(compact?'1':'0')+'"'+
-      ' aria-busy="'+String(state.busy)+'"'+
-      (state.disabled?' disabled':'')+
-      ' onclick=\'makeReport('+JSON.stringify(eventId||'')+',this)\'>'+
-      state.html+'</button>';
-  }
-  function refreshReportActionButtons(){
-    if(typeof document.querySelectorAll!=='function')return;
-    document.querySelectorAll('button[data-report-event-id]').forEach(btn=>{
-      const id=btn.getAttribute('data-report-event-id')||'';
-      const compact=btn.getAttribute('data-report-compact')==='1';
-      const state=reportActionState(id,compact);
-      btn.disabled=state.disabled;
-      btn.innerHTML=state.html;
-      btn.setAttribute('aria-busy',String(state.busy));
-      btn.classList.toggle('report-action-active',state.active);
-    });
-  }
   function renderTables(){
     if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
     const manage=roleCanRecord();
@@ -542,6 +498,50 @@
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
   let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
   let reportCancelPendingJobId=null, reportCancelSubmitting=false;
+  function reportActionState(eventId,compact){
+    const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
+    const busy=!!job||reportReadinessInFlight.size>0;
+    const matching=!!job&&String(job.eventId)===String(eventId);
+    if(matching){
+      let label='กำลังสร้างรายงาน · ดูสถานะ';
+      let icon='fa-spinner fa-spin';
+      if(job.status==='cancel_requested'){label='กำลังขอยกเลิก · ดูสถานะ';icon='fa-hourglass-half'}
+      else if(job.status==='finalizing'){label='กำลังบันทึก · ดูสถานะ';icon='fa-floppy-disk'}
+      else if(job.status==='queued'){label='รอเริ่มรายงาน · ดูสถานะ';icon='fa-clock'}
+      return {disabled:false,busy:true,active:true,
+        html:'<i class="fa-solid '+icon+'" aria-hidden="true"></i> '+label};
+    }
+    if(job)return {disabled:true,busy:true,active:false,
+      html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
+    if(reportReadinessInFlight.size>0){
+      const checking=reportReadinessInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจข้อมูล':'กำลังตรวจรายงานอื่น')};
+    }
+    return {disabled:false,busy:false,active:false,html:compact?'AI':'สร้างรายงาน AI'};
+  }
+  function reportActionButton(eventId,compact){
+    const state=reportActionState(eventId,compact);
+    return '<button class="btn green report-action-btn'+(state.active?' report-action-active':'')+'"'+
+      ' data-report-event-id="'+escapeHtml(eventId||'')+'"'+
+      ' data-report-compact="'+(compact?'1':'0')+'"'+
+      ' aria-busy="'+String(state.busy)+'"'+
+      (state.disabled?' disabled':'')+
+      ' onclick=\'makeReport('+JSON.stringify(eventId||'')+',this)\'>'+
+      state.html+'</button>';
+  }
+  function refreshReportActionButtons(){
+    if(typeof document.querySelectorAll!=='function')return;
+    document.querySelectorAll('button[data-report-event-id]').forEach(btn=>{
+      const id=btn.getAttribute('data-report-event-id')||'';
+      const compact=btn.getAttribute('data-report-compact')==='1';
+      const state=reportActionState(id,compact);
+      btn.disabled=state.disabled;
+      btn.innerHTML=state.html;
+      btn.setAttribute('aria-busy',String(state.busy));
+      btn.classList.toggle('report-action-active',state.active);
+    });
+  }
 
   function reportJobTerminal(job){return !!job&&REPORT_TERMINAL_STATES.has(job.status)}
   function reportStageLabel(job){
