@@ -34,6 +34,14 @@
     .report-cancel-confirm-modal .actions{margin-top:16px}
     .report-cancel-confirm-modal button:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
     .report-cancel-error{padding:10px 12px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px}
+    .report-action-btn{transition:background-color .15s,box-shadow .15s,transform .12s;white-space:normal;text-align:center;min-width:64px}
+    .report-action-btn.report-action-active{background:#0f766e;box-shadow:0 0 0 2px #99f6e4 inset,0 3px 12px rgba(15,118,110,.2);color:white}
+    .report-action-btn.report-action-active:hover{background:#115e59}
+    .report-action-btn:focus-visible,.report-cancel-confirm-modal .btn:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
+    .report-action-btn:active:not(:disabled),.report-cancel-confirm-modal .btn:active:not(:disabled){transform:translateY(1px);filter:brightness(.87)}
+    .report-cancel-confirm-modal .btn:hover:not(:disabled){filter:brightness(.94)}
+    .report-action-btn:disabled{opacity:.7}
+    @media(prefers-reduced-motion:reduce){.report-action-btn{transition:none}}
     .mobile-overlay{display:none}
     @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.settings-grid{grid-template-columns:1fr}}
     @media(max-width:980px){.sidebar{transform:translateX(-105%);transition:.25s}.sidebar.open{transform:none}.mobile-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}.main{margin-left:0;width:100%;padding:16px}.hamb{display:block}.topbar{align-items:stretch}.banner{flex-direction:column;align-items:flex-start}.charts{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span-3{grid-column:span 1}.chart{height:285px}}
