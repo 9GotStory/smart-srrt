@@ -281,3 +281,60 @@ test('G33 rejects obsolete dashboard loads across filters and sessions',async()=
   assert.equal(ctx.allData.some(r=>r.eventId==='old-user-private'),false);
   assert.equal(visible.length,before,'stale response never renders under a different user');
 });
+
+test('G33 first-create action rechecks registry and redirects to history when another user already reported',async()=>{
+  const h=clientHarness();
+  vm.runInContext('reportSummaryState={status:"ready",summaries:{"'+EVENT+'":{count:0,invalidCount:0,latestSourceRevision:0}}}',h.ctx);
+  let created=0;
+  h.ctx.makeReport=async()=>{created++};
+  h.setStub((name,token,eventIds)=>{
+    assert.equal(name,'getReportSummariesForEvents');
+    assert.equal(token,'authorized');
+    assert.deepEqual(Array.from(eventIds),[EVENT]);
+    return {summaries:{[EVENT]:{count:1,invalidCount:0,latestSourceRevision:4}}};
+  });
+  await h.ctx.preflightFirstReportGeneration(EVENT,{innerHTML:'สร้างรายงาน AI'});
+  assert.equal(created,0,'stale zero cannot implicitly generate the second report');
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ดูรายงาน/);
+  assert.ok(h.toasts.some(s=>String(s).includes('มีรายงานที่ลงทะเบียนแล้ว')));
+  assert.equal(h.calls.filter(c=>c[0]==='getReportSummariesForEvents').length,1);
+});
+
+test('G33 preflight allows exactly one verified zero-report create after preventing double click',async()=>{
+  const h=clientHarness();
+  vm.runInContext('reportSummaryState={status:"ready",summaries:{"'+EVENT+'":{count:0,invalidCount:0,latestSourceRevision:0}}}',h.ctx);
+  let release;
+  let generated=0;
+  h.ctx.makeReport=async()=>{generated++};
+  h.setStub(()=>new Promise(resolve=>{release=resolve}));
+  const one=h.ctx.preflightFirstReportGeneration(EVENT,{innerHTML:'สร้างรายงาน AI'});
+  const two=h.ctx.preflightFirstReportGeneration(EVENT,{innerHTML:'สร้างรายงาน AI'});
+  await two;
+  assert.match(h.ctx.reportActionButton(EVENT,false),/กำลังตรวจทะเบียนรายงาน/);
+  assert.equal(h.calls.filter(c=>c[0]==='getReportSummariesForEvents').length,1);
+  release({summaries:{[EVENT]:{count:0,invalidCount:0,latestSourceRevision:0}}});
+  await one;
+  assert.equal(generated,1);
+});
+
+test('G33 first-generation fail closed on registry error or stale refresh callback',async()=>{
+  const h=clientHarness();
+  const seed='reportSummaryState={status:"ready",summaries:{"'+EVENT+'":{count:0,invalidCount:0,latestSourceRevision:0}}}';
+  vm.runInContext(seed,h.ctx);
+  let generated=0;
+  h.ctx.makeReport=async()=>{generated++};
+  h.setStub(()=>{throw Error('temporary registry outage')});
+  await h.ctx.preflightFirstReportGeneration(EVENT,{innerHTML:'สร้างรายงาน AI'});
+  assert.equal(generated,0);
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/);
+  assert.ok(h.toasts.some(s=>String(s).includes('ยังยืนยันทะเบียนรายงานไม่ได้')));
+
+  vm.runInContext(seed,h.ctx);
+  let release;
+  h.setStub(()=>new Promise(resolve=>{release=resolve}));
+  const inFlight=h.ctx.preflightFirstReportGeneration(EVENT,{innerHTML:'สร้างรายงาน AI'});
+  vm.runInContext('++reportSummaryRequest',h.ctx);
+  release({summaries:{[EVENT]:{count:0,invalidCount:0,latestSourceRevision:0}}});
+  await inFlight;
+  assert.equal(generated,0,'old request cannot trigger generation under refreshed dashboard');
+});
