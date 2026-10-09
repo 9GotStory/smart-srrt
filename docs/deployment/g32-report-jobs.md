@@ -47,3 +47,15 @@ This follow-up reviewed the stacked Draft PR with the original G-31 and P6 invar
 5. **Job retention:** expired user pointers are cleaned after their backing job expires. Terminal job history in ReportRegistry remains independent of the temporary ScriptProperties tracking ledger.
 
 The expanded offline test suite includes each above boundary. This is code inspection and mocked regression evidence, **not** a live cancellation test or a review by a separate human reviewer. Independent security review and owner-authorized V5 test deployment remain outstanding.
+
+## G-32 V5 UAT corrective UX follow-up — 2026-10-09
+
+The owner confirmed V5 minimize/reopen/cancel UAT **PASS** but identified two UX regressions:
+- Native browser `confirm()` appeared instead of a branded cancellation confirmation.
+- The Reporter page's AI report action stayed labelled `กำลังตรวจข้อมูล` after cancellation.
+
+The corrective candidate (on this **Draft PR #60**, not yet deployed) replaces only the report-cancellation confirmation with an accessible `role="alertdialog"` / `aria-modal="true"` themed modal, keyboard Escape/Tab handling, explicit back/confirm buttons, in-flight RPC double-submit protection, and appropriate failure feedback. It restores the original Reporter button markup and enabled state unconditionally in `makeReport()`'s `finally` block, while long-running server state continues through the existing task chip. Other unrelated browser confirm dialogs remain out of scope.
+
+Regression tests drive the actual extracted One-Click report browser code under a mocked DOM and simulate ready, warnings, failure to create job, terminal cancellation, confirmation back/escape, duplicate confirmation while pending, completed/late-terminal state and cancellation transport error.
+
+**Existing V5 remains unchanged** until the Product Owner separately approves an updated test-only deployment (next version, expected V6). No spreadsheet migration, installer, manual Gemini retry or PR merge is authorized by these source fixes.
