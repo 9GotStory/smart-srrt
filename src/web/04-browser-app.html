@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -318,6 +318,7 @@
   // G-27: Report history is fetched on demand, never from public aggregates.
   let reportHistoryRequest = 0;
   let reportHistoryEventId = '';
+  let reportNewConfirmSubmitting=false;
   async function openEventReportHistoryByIndex(index){
     const event=allData[index];
     if(!currentUser||!roleCanRecord()||!event||!event.eventId){
@@ -369,7 +370,7 @@
   }
 
   function requestNewReportFromHistory(){
-    if(!currentUser||!roleCanRecord()||!reportHistoryEventId)return;
+    if(reportNewConfirmSubmitting||!currentUser||!roleCanRecord()||!reportHistoryEventId)return;
     if(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
       toast('กรุณาตรวจสอบสถานะงานรายงานเดิมก่อน');return;
     }
@@ -379,12 +380,17 @@
     }
     el('reportNewConfirmSummary').textContent='ระบบจะสร้าง Google Doc และ ReportID ใหม่สำหรับเหตุการณ์นี้ โดยคงเอกสารและประวัติรายงานเดิมทั้งหมดไว้';
     openModal('reportNewConfirmModal');
+    el('reportNewConfirmBackBtn').focus();
   }
-  function cancelNewReportFromHistory(){closeModal('reportNewConfirmModal')}
+  function cancelNewReportFromHistory(){
+    if(!reportNewConfirmSubmitting)closeModal('reportNewConfirmModal');
+  }
   async function confirmNewReportFromHistory(){
     const eventId=reportHistoryEventId,session=token,button=el('reportHistoryNewBtn');
-    if(!eventId||!roleCanRecord()||!currentUser)return;
-    el('reportNewConfirmBtn').disabled=true;
+    if(reportNewConfirmSubmitting||!eventId||!roleCanRecord()||!currentUser)return;
+    reportNewConfirmSubmitting=true;
+    const confirmButton=el('reportNewConfirmBtn'),backButton=el('reportNewConfirmBackBtn');
+    confirmButton.disabled=true;backButton.disabled=true;
     try {
       // Recheck the authoritative registry immediately before deliberate regeneration.
       const verified=await gs('listReportsForEvent',session,eventId);
@@ -397,8 +403,27 @@
       closeModal('reportHistoryModal');
       await makeReport(eventId,button);
     }catch(e){if(token===session&&currentUser)toast(String(e.message||e))}
-    finally{el('reportNewConfirmBtn').disabled=false}
+    finally{
+      reportNewConfirmSubmitting=false;
+      confirmButton.disabled=false;backButton.disabled=false;
+    }
   }
+
+  document.addEventListener('keydown',event=>{
+    if(!el('reportNewConfirmModal').classList.contains('open'))return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!reportNewConfirmSubmitting)cancelNewReportFromHistory();
+    }else if(event.key==='Tab'){
+      const first=el('reportNewConfirmBackBtn'),last=el('reportNewConfirmBtn');
+      if(reportNewConfirmSubmitting){event.preventDefault();return}
+      if(event.shiftKey&&(document.activeElement===first||![first,last].includes(document.activeElement))){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey&&(document.activeElement===last||![first,last].includes(document.activeElement))){
+        event.preventDefault();first.focus();
+      }
+    }
+  });
 
   function reportReadinessBadge(r){
     const rd=r&&r.aiReportReadiness?r.aiReportReadiness:null;
@@ -573,6 +598,13 @@
     const matching=!!job&&String(job.eventId)===String(eventId);
     // An unknown server execution cannot be treated as a cancelled or failed job.
     if(reportUnknownNeedsVerification || (activeReportJob&&activeReportJob.status==='unknown')){
+      // A historical registered document remains readable even when a later job is unknown.
+      // Never allow implicit regeneration in this state.
+      const old=reportSummaryState.summaries&&reportSummaryState.summaries[eventId];
+      if(reportSummaryState.status==='ready'&&old&&old.count>0&&!old.invalidCount){
+        return {disabled:false,busy:false,active:false,mode:'history',
+          html:'<i class="fa-solid fa-file-lines" aria-hidden="true"></i> ดูรายงาน ('+old.count+') · ตรวจสอบงานค้าง'};
+      }
       return {disabled:false,busy:false,active:false,mode:'verify',
         html:'<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ตรวจสอบสถานะรายงาน'};
     }
@@ -687,6 +719,7 @@
     const previousStatus=activeReportJob&&activeReportJob.id===job.id?activeReportJob.status:'';
     activeReportJob=job;
     if(job.status==='unknown')reportUnknownNeedsVerification=true;
+    if(job.status==='completed')reportUnknownNeedsVerification=false;
     localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
     if(job.status==='completed'&&previousStatus!=='completed'){
       // A completed G-32 job is not equivalent to an already-refreshed registry view.
