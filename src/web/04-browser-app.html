@@ -1,0 +1,996 @@
+<script>
+  google.charts.load('current', {'packages':['corechart']});
+  let token=localStorage.getItem('SRRT_TOKEN')||'';
+  let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[],masterAdminCache=[],masterTypePolicies=[];
+  const fields=[
+    [2,'วันรับแจ้ง','date'],[9,'วันที่เริ่มป่วย','date'],[3,'ผู้แจ้งข่าว/หน่วยงานที่แจ้ง','text'],
+    [4,'การเฝ้าระวัง','select:surveillance'],[5,'กลุ่มโรค','select:disease_group'],[6,'โรค/ภัย/เหตุการณ์','text'],
+    [7,'ประเภทเหตุการณ์','select:event_type'],[8,'สถานที่เกิดเหตุ','text'],
+    [13,'จังหวัด','area:province'],[12,'อำเภอ','area:amphoe'],[11,'ตำบล','area:tambon'],[10,'หมู่ที่','area:moo'],
+    [29,'ชื่อหมู่บ้าน','area:village'],[30,'รหัสหมู่บ้าน','text'],
+    [14,'รายละเอียดเหตุการณ์','textarea'],[15,'การตรวจสอบ','select:verify_status'],[16,'วิธีการตรวจสอบ','text'],
+    [17,'เข้าเกณฑ์สอบสวนโรค','select:criteria'],[18,'ประเภทการสอบสวนโรค','text'],
+    [24,'ลงสอบสวนโรค','select_custom:ลงสอบสวน|ไม่ลงสอบสวน'],[26,'วันที่ลงสอบสวนโรค','date'],
+    [19,'ประเมินความเสี่ยงแจ้งเตือน','select:risk'],[20,'หน่วยงานแจ้งเตือน','text'],[23,'หน่วยงานรับแจ้ง','text'],
+    [21,'การดำเนินการตามมาตรการ','textarea'],[22,'วันที่ดำเนินการตามมาตรการ','date']
+  ];
+  const settingFields=['APP_NAME','APP_SUBTITLE','ORG_NAME','CONTACT_INFO','BANNER_TEXT','PRIMARY_COLOR','SECONDARY_COLOR','SYSTEM_STATUS','ALLOW_SELF_REGISTER','GEMINI_API_KEY','GEMINI_MODEL','TEMPLATE_DOC_ID','REPORT_FOLDER_ID'];
+
+  function el(id){return document.getElementById(id)}
+  function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
+  function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
+  function openModal(id){el(id).classList.add('open')} function closeModal(id){el(id).classList.remove('open')}
+  function toggleSidebar(show){el('sidebar').classList.toggle('open',show);el('overlay').classList.toggle('show',show)}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function unique(arr){return [...new Set(arr.filter(v=>String(v||'').trim()!=='').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'th'))}
+  function isInvestigationCriteriaMet(value){return String(value||'').trim()==='เข้าเกณฑ์'}
+  function roleCanManage(){return currentUser&&['Super Admin','Manager'].includes(currentUser.role)}
+  function roleCanRecord(){return currentUser&&['Super Admin','Manager','Admin'].includes(currentUser.role)}
+
+  function showPage(page,btn){
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');toggleSidebar(false);
+    if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
+  }
+
+  function applyTheme(){
+    document.documentElement.style.setProperty('--primary',settings.PRIMARY_COLOR||'#0f766e');
+    document.documentElement.style.setProperty('--secondary',settings.SECONDARY_COLOR||'#2563eb');
+    const logo=settings.LOGO_URL||'https://lh3.googleusercontent.com/d/1ANG8ALHZASMzdI4MFLtZHwbWcwS0vMWQ';
+    el('logoImg').src=logo;el('adminLogoPreview').src=logo;
+    el('appName').textContent=settings.APP_NAME||'Smart SRRT Dashboard & AI Reporter';
+    el('appSubtitle').textContent=settings.APP_SUBTITLE||'ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่';
+    el('sideTitle').textContent=settings.APP_NAME||'Smart SRRT';
+    el('sideOrg').textContent=settings.ORG_NAME||'District Edition';
+    el('bannerText').innerHTML='<i class="fa-solid fa-bullhorn"></i> '+escapeHtml(settings.BANNER_TEXT||'ระบบพร้อมใช้งาน');
+    el('closedBox').style.display=String(settings.SYSTEM_STATUS||'open')==='closed'?'block':'none'
+  }
+
+  async function boot(){
+    try{
+      const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
+      applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      if(currentUser)void recoverReportJob();
+      google.charts.setOnLoadCallback(loadDashboard)
+    }catch(e){toast(e.message||e)}
+  }
+
+  function updateAuthBox(){
+    const box=el('authBox');
+    document.querySelectorAll('.auth-only').forEach(x=>x.style.display=roleCanRecord()?'flex':'none');
+    document.querySelectorAll('.manager-only').forEach(x=>x.style.display=roleCanManage()?'flex':'none');
+    if(currentUser){
+      box.innerHTML=`<b>${escapeHtml(currentUser.name)}</b><span>${escapeHtml(currentUser.role)} | ${escapeHtml(currentUser.email)}</span><button onclick="doLogout()">ออกจากระบบ</button>`
+    }else{
+      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard สรุปได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
+    }
+    if(el('eventDetailPanel'))el('eventDetailPanel').style.display=currentUser?'block':'none';
+    if(el('publicAggregateNotice'))el('publicAggregateNotice').style.display=currentUser?'none':'block';
+  }
+
+  function openLogin(){openModal('loginModal')}
+  async function doLogin(){
+    try{
+      const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
+      if(!r.ok){toast(r.message);return}
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
+    }catch(e){toast(e.message||e)}
+  }
+  async function doLogout(){hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
+
+  function setupDashboardFilters(){
+    const source=areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}));
+    fillSelect(el('filterProvince'),unique(source.map(x=>x.province)),'ทุกจังหวัด',el('filterProvince').value);
+    updateDashboardAreaFilters('province')
+  }
+  function fillSelect(select,values,placeholder,current){
+    select.innerHTML=`<option value="">${placeholder}</option>`+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(values.includes(current))select.value=current
+  }
+  function updateDashboardAreaFilters(level){
+    const p=el('filterProvince').value,a=level==='province'?'':el('filterAmphoe').value,t=level==='tambon'?el('filterTambon').value:'';
+    const source=(areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}))).filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    if(level==='province')fillSelect(el('filterAmphoe'),unique(source.map(x=>x.amphoe)),'ทุกอำเภอ','');
+    const amph=el('filterAmphoe').value;
+    const source2=source.filter(x=>!amph||x.amphoe===amph);
+    if(level==='province'||level==='amphoe')fillSelect(el('filterTambon'),unique(source2.map(x=>x.tambon)),'ทุกตำบล','');
+    const tamb=el('filterTambon').value;
+    const source3=source2.filter(x=>!tamb||x.tambon===tamb);
+    fillSelect(el('filterVillage'),unique(source3.map(x=>x.village||('หมู่ '+x.moo))),'ทุกหมู่บ้าน','')
+  }
+
+  async function loadDashboard(){
+    try{
+      const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
+      if(currentUser){
+        dashboardSummary=null;
+        allData=await gs('getDashboardData',token,filter);
+      }else{
+        allData=[];
+        dashboardSummary=await gs('getPublicDashboardData',filter);
+      }
+      updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters()
+    }catch(e){toast(e.message||e)}
+  }
+  function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
+  function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
+  function locationLabel(r){return `${villageLabel(r)} ต.${r.col11||'-'} อ.${r.col12||'-'} จ.${r.col13||'-'}`}
+  function updateDashboard(){
+    if(!currentUser){
+      const s=dashboardSummary||{kpi:{}},k=s.kpi||{};
+      el('kpiTotal').textContent=k.events||0;el('kpiCriteria').textContent=k.criteria||0;el('kpiInvestigated').textContent=k.investigated||0;el('kpiRate').textContent=(k.investigationRate||0)+'%';
+      el('smartInsight').innerHTML=makePublicInsight(s);drawCharts();return
+    }
+    const total=allData.length,criteria=allData.filter(r=>isInvestigationCriteriaMet(r.col17)).length,investigated=allData.filter(r=>r.col26).length;
+    const rate=criteria?Math.round(investigated/criteria*100):(total?Math.round(investigated/total*100):0);
+    el('kpiTotal').textContent=total;el('kpiCriteria').textContent=criteria;el('kpiInvestigated').textContent=investigated;el('kpiRate').textContent=rate+'%';
+    el('smartInsight').innerHTML=makeInsight(total);drawCharts()
+  }
+  function makePublicInsight(s){
+    const k=s&&s.kpi?s.kpi:{};
+    if(!k.events)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    const pending=Number(k.pendingCriteria||0);
+    return`พบเหตุการณ์ <b>${Number(k.events||0)}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(s.topDisease||'ไม่ระบุ')}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(s.topVillage||'ไม่ระบุ')}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function makeInsight(total){
+    if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>isInvestigationCriteriaMet(r.col17)&&!r.col26).length;
+    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(topDisease)}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(topVillage)}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
+  function countMap(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.entries(m)}
+  function drawCharts(){
+    if(!google.visualization)return;
+    if(!currentUser){
+      const s=dashboardSummary||{};
+      draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...(s.byVillage||[])],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+      draw('lineChart','LineChart',[['เดือน','จำนวน'],...(s.byMonth||[])],{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+      draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...(s.byDiseaseGroup||[])],{pieHole:.42});
+      draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...(s.byRisk||[])],{pieHole:.42});return
+    }
+    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+    draw('lineChart','LineChart',monthRows(),{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
+    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
+  }
+  function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
+  function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
+  function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
+  function lifecycleBadge(r){
+    const code=String(r&&r.eventLifecycle||''),label=r&&r.eventLifecycleLabel?r.eventLifecycleLabel:'-';
+    let c='status ';
+    if(code==='investigated'||code==='closed')c+='st-low';
+    else if(code==='investigation_required'||code==='criteria_pending'||code==='verification_pending')c+='st-mid';
+    else if(code==='voided'||code==='verification_rejected')c+='st-high';
+    else c+='';
+    return`<span class="${c}">${escapeHtml(label)}</span>`
+  }
+  function consistencyWarningBadge(r){
+    const warnings=Array.isArray(r&&r.eventConsistencyWarnings)?r.eventConsistencyWarnings:[];
+    if(!warnings.length)return'';
+    const title=warnings.map(w=>w&&w.message?w.message:String(w&&w.code||'ตรวจสอบความสอดคล้อง')).join('\n');
+    return` <span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> ${warnings.length}</span>`
+  }
+  function ownerLabel(r){
+    if(!r||!r.ownerUserId)return'<span class="mini">ยังไม่กำหนด</span>';
+    if(r.ownerMissing)return'<span class="status st-high">ไม่พบบัญชีผู้ใช้</span>';
+    const name=r.ownerName||r.ownerEmail||r.ownerUserId;
+    const detail=r.ownerOrg?`<div class="mini">${escapeHtml(r.ownerOrg)}</div>`:'';
+    return`<b>${escapeHtml(name)}</b>${detail}`
+  }
+  async function openOwnerModal(i){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับกำหนดผู้รับผิดชอบ');return}
+    const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
+    if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return}
+    try{
+      assignableOwnerCache=await gs('listAssignableEventOwners',token);
+      el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
+      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+assignableOwnerCache.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)}`:''}</option>`).join('');
+      el('ownerUserId').value=r.ownerUserId||'';
+      openModal('ownerModal')
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveEventOwner(){
+    const btn=el('saveOwnerBtn');
+    try{
+      btn.disabled=true;
+      const msg=await gs('assignEventOwner',token,el('ownerEventId').value,el('ownerUserId').value,Number(el('ownerRevision').value||0));
+      closeModal('ownerModal');toast(msg);await loadDashboard()
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false}
+  }
+
+  function formatFileSize(bytes){
+    const n=Number(bytes||0);
+    if(n<1024)return n+' B';
+    if(n<1024*1024)return (n/1024).toFixed(1)+' KB';
+    return (n/(1024*1024)).toFixed(1)+' MB'
+  }
+  function attachmentButton(r,i){
+    const count=Number(r&&r.attachmentCount||0);
+    return`<button class="btn light" onclick="openAttachmentModal(${i})"><i class="fa-solid fa-paperclip"></i> ${count}</button>`
+  }
+  async function openAttachmentModal(i){
+    if(!currentUser){openLogin();return}
+    const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
+    const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
+    el('attachmentEventId').value=r.eventId;
+    el('attachmentRevision').value=String(r.revision||1);
+    el('attachmentClosed').value=closed?'1':'0';
+    el('attachmentFile').value='';
+    el('attachmentDescription').value='';
+    el('attachmentUploadPanel').style.display=roleCanRecord()&&!closed?'block':'none';
+    el('attachmentReadOnlyNotice').style.display=closed?'block':'none';
+    openModal('attachmentModal');
+    await loadAttachmentList()
+  }
+  async function loadAttachmentList(){
+    const eventId=el('attachmentEventId').value;
+    if(!eventId)return;
+    try{
+      const items=await gs('listEventAttachments',token,eventId);
+      const closed=el('attachmentClosed').value==='1';
+      el('attachmentList').innerHTML=items.map(a=>{
+        const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark"></i> นำออก</button>`:'';
+        return`<div class="content-item"><h4><i class="fa-solid fa-file"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-download"></i> ดาวน์โหลด</button>${remove}</div></div>`
+      }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>'
+    }catch(e){el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>'}
+  }
+  function attachmentMimeForFile(file){
+    if(file&&file.type)return file.type;
+    const name=String(file&&file.name||'').toLowerCase();
+    if(name.endsWith('.pdf'))return'application/pdf';
+    if(name.endsWith('.jpg')||name.endsWith('.jpeg'))return'image/jpeg';
+    if(name.endsWith('.png'))return'image/png';
+    if(name.endsWith('.webp'))return'image/webp';
+    if(name.endsWith('.docx'))return'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if(name.endsWith('.xlsx'))return'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return''
+  }
+  function fileToBase64(file){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+      reader.onerror=()=>reject(new Error('ไม่สามารถอ่านไฟล์ได้'));
+      reader.readAsDataURL(file)
+    })
+  }
+  async function uploadAttachment(){
+    if(!roleCanRecord()){toast('สิทธิ์ไม่เพียงพอสำหรับแนบไฟล์');return}
+    if(el('attachmentClosed').value==='1'){toast('เหตุการณ์นี้ถูกปิดแล้ว');return}
+    const file=el('attachmentFile').files&&el('attachmentFile').files[0];
+    if(!file){toast('กรุณาเลือกไฟล์แนบ');return}
+    if(file.size>5*1024*1024){toast('ไฟล์แนบต้องมีขนาดไม่เกิน 5 MB');return}
+    const btn=el('uploadAttachmentBtn');
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังอัปโหลด';
+      const base64=await fileToBase64(file);
+      const result=await gs('uploadEventAttachment',token,el('attachmentEventId').value,{
+        name:file.name,mimeType:attachmentMimeForFile(file),base64:base64,description:el('attachmentDescription').value
+      },Number(el('attachmentRevision').value||0));
+      el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
+      toast(result.message||'แนบไฟล์เรียบร้อยแล้ว');
+      el('attachmentFile').value='';el('attachmentDescription').value='';
+      await loadDashboard();
+      const refreshed=allData.find(x=>x.eventId===el('attachmentEventId').value);
+      if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
+      await loadAttachmentList()
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-upload"></i> แนบไฟล์'}
+  }
+  async function downloadAttachment(attachmentId){
+    try{
+      const result=await gs('downloadEventAttachment',token,attachmentId);
+      const binary=atob(result.base64||'');
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+      const blob=new Blob([bytes],{type:result.mimeType||'application/octet-stream'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=result.fileName||'attachment';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000)
+    }catch(e){toast(e.message||e)}
+  }
+  async function removeAttachment(attachmentId){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับนำเอกสารแนบออก');return}
+    if(el('attachmentClosed').value==='1'){toast('เหตุการณ์นี้ถูกปิดแล้ว');return}
+    const reason=prompt('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');return}
+    try{
+      const result=await gs('removeEventAttachment',token,attachmentId,String(reason).trim(),Number(el('attachmentRevision').value||0));
+      el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
+      toast(result.message||'นำเอกสารแนบออกแล้ว');
+      await loadDashboard();
+      const refreshed=allData.find(x=>x.eventId===el('attachmentEventId').value);
+      if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
+      await loadAttachmentList()
+    }catch(e){toast(e.message||e)}
+  }
+
+
+  // G-27: Report history is fetched on demand, never from public aggregates.
+  let reportHistoryRequest = 0;
+  async function openEventReportHistoryByIndex(index){
+    const event=allData[index];
+    if(!currentUser||!roleCanRecord()||!event||!event.eventId){
+      toast('ไม่มีสิทธิ์ดูประวัติรายงาน หรือไม่พบ EventID');
+      return;
+    }
+    const eventId=event.eventId, request=++reportHistoryRequest, authToken=token;
+    el('reportHistorySummary').textContent='กำลังโหลดประวัติรายงาน...';
+    el('reportHistoryList').innerHTML='';
+    openModal('reportHistoryModal');
+    try {
+      const result=await gs('listReportsForEvent',authToken,eventId);
+      if(request!==reportHistoryRequest||token!==authToken||!currentUser)return;
+      const entries=Array.isArray(result&&result.reports)?result.reports:[];
+      const latest=result&&result.latest?result.latest:null;
+      const when=value=>{
+        if(!value)return'-';
+        const d=new Date(value);
+        return isNaN(d.getTime())?String(value):d.toLocaleString('th-TH');
+      };
+      el('reportHistorySummary').textContent='จำนวนรายงาน '+Number(result.count||0)+' รายการ · Revision ปัจจุบัน '+Number(result.currentRevision||1)+
+        (latest?' · รายงานล่าสุด '+when(latest.generatedAt):' · ยังไม่มีรายงานในทะเบียน')+
+        (Number(result.invalidCount||0)?' · พบแถวทะเบียนที่ไม่สมบูรณ์ '+Number(result.invalidCount)+' รายการ':'');
+      el('reportHistoryList').innerHTML=entries.length?entries.map((r,i)=>{
+        const url=String(r.documentURL||'');
+        const link=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url)
+          ?'<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>'
+          :'<span class="help">ลิงก์เอกสารไม่พร้อมใช้งาน</span>';
+        return '<div class="content-item"><b><i class="fa-solid fa-file-medical"></i> รายงาน '+(i+1)+'</b>'+
+          '<p>สร้างเมื่อ: '+escapeHtml(when(r.generatedAt))+' · ผู้สร้าง: '+escapeHtml(r.generatedBy||'-')+
+          ' · SourceRevision: '+Number(r.sourceRevision||0)+'</p>'+
+          '<p>ReportID: '+escapeHtml(r.reportId||'-')+'</p>'+
+          '<p>Gemini: '+escapeHtml(r.geminiModels||'-')+' · API: '+escapeHtml(r.geminiApiVersions||'-')+
+          ' · Prompt: '+escapeHtml(r.promptVersion||'-')+'</p>'+link+'</div>';
+      }).join(''):'<div class="help">ยังไม่มีรายงานที่ลงทะเบียนสำหรับเหตุการณ์นี้</div>';
+    }catch(e){
+      if(request!==reportHistoryRequest||token!==authToken)return;
+      el('reportHistorySummary').textContent='ไม่สามารถโหลดประวัติรายงานได้';
+      el('reportHistoryList').textContent=String(e.message||e);
+    }
+  }
+
+  function reportReadinessBadge(r){
+    const rd=r&&r.aiReportReadiness?r.aiReportReadiness:null;
+    if(!rd)return'';
+    if(rd.level==='ready')return'<span class="status st-low" title="ไม่พบคำเตือนจากการตรวจเบื้องต้น ไม่ใช่การรับรองความถูกต้องของข้อมูลหรือรายงาน AI"><i class="fa-solid fa-circle-check"></i> AI พร้อม</span>';
+    const title=(rd.warnings||[]).map(w=>w.message||w.code).join('\n');
+    if(rd.level==='limited')return`<span class="status st-high" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ข้อมูลจำกัด ${Number(rd.warningCount||0)}</span>`;
+    return`<span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> AI ตรวจสอบ ${Number(rd.warningCount||0)}</span>`
+  }
+
+  function eventLifecycleActions(r,i){
+    const status=String(r&&r.recordStatus||'active').toLowerCase();
+    const buttons=[];
+    if(status!=='closed'&&roleCanRecord())buttons.push(`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button>`);
+    if(roleCanManage()){
+      if(status==='closed')buttons.push(`<button class="btn green" onclick='reopenEventFlow(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>เปิดใหม่</button>`);
+      else buttons.push(`<button class="btn gray" onclick='closeEventFlow(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิดเหตุการณ์</button>`);
+      buttons.push(`<button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`);
+    }
+    return buttons.join(' ')||'-'
+  }
+  async function closeEventFlow(eventId,revision){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับปิดเหตุการณ์');return}
+    if(!confirm('ยืนยันปิดเหตุการณ์นี้? เหตุการณ์จะเป็นแบบอ่านอย่างเดียวจนกว่าจะเปิดอีกครั้ง'))return;
+    const reason=prompt('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการปิดเหตุการณ์');return}
+    try{toast(await gs('closeEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+  async function reopenEventFlow(eventId,revision){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับเปิดเหตุการณ์อีกครั้ง');return}
+    const reason=prompt('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');return}
+    try{toast(await gs('reopenEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+
+  function renderTables(){
+    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
+    const manage=roleCanRecord();
+    el('eventBody').innerHTML=allData.map((r,i)=>{
+      const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
+      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
+      const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}${reportActionButton(r.eventId||'',true)} <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
+    }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
+    el('recordBody').innerHTML=allData.map((r,i)=>{
+      const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
+      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
+      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
+    }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
+    el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`${reportActionButton(r.eventId||'',false)} <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+  }
+
+  function buildRecordForm(){
+    el('recordForm').innerHTML=fields.map(f=>{
+      const span=f[2]==='textarea'?' span-3':'',id='in'+f[0];let input='';
+      if(f[2]==='textarea')input=`<textarea id="${id}" rows="3"></textarea>`;
+      else if(f[2]==='date')input=`<input type="date" id="${id}">`;
+      else if(f[2].startsWith('select:')){const key=f[2].split(':')[1];input=`<select id="${id}"><option value="">-- เลือก --</option>${(master[key]||[]).map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('select_custom:')){const opts=f[2].split(':')[1].split('|');input=`<select id="${id}"><option value="">-- เลือก --</option>${opts.map(o=>`<option>${escapeHtml(o)}</option>`).join('')}</select>`}
+      else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
+      else input=`<input type="text" id="${id}">`;
+      return`<div class="fg${span}"><label>${escapeHtml(f[1])}</label>${input}</div>`
+    }).join('');
+    refreshRecordAreaOptions()
+  }
+  function refreshRecordAreaOptions(){
+    if(!el('in13'))return;
+    const p=el('in13').value,a=el('in12').value,t=el('in11').value;
+    const filtered=areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    setDatalist('in13List',unique(areas.map(x=>x.province)));setDatalist('in12List',unique(areas.filter(x=>!p||x.province===p).map(x=>x.amphoe)));
+    setDatalist('in11List',unique(areas.filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)).map(x=>x.tambon)));
+    setDatalist('in10List',unique(filtered.map(x=>x.moo)));setDatalist('in29List',unique(filtered.map(x=>x.village)))
+  }
+  function setDatalist(id,values){el(id).innerHTML=values.map(v=>`<option value="${escapeHtml(v)}"></option>`).join('')}
+  function onRecordAreaChange(col){
+    refreshRecordAreaOptions();
+    if(col===29){
+      const v=el('in29').value,p=el('in13').value,a=el('in12').value,t=el('in11').value;
+      const found=areas.find(x=>x.village===v&&(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+      if(found){el('in13').value=found.province;el('in12').value=found.amphoe;el('in11').value=found.tambon;el('in10').value=found.moo;el('in30').value=found.villageCode||''}
+    }
+  }
+  function toIso(thai){if(!thai)return'';const p=String(thai).split('-');if(p.length!==3)return thai;let y=+p[0];if(y>2400)y-=543;return`${y}-${p[1]}-${p[2]}`}
+  function toThai(iso){if(!iso)return'';const p=String(iso).split('-');if(p.length!==3)return iso;return`${+p[0]+543}-${p[1]}-${p[2]}`}
+  function openRecordForm(mode,i){
+    if(!roleCanRecord()){openLogin();return}
+    el('formMode').value=mode;el('recordTitle').textContent=mode==='add'?'เพิ่มข้อมูลเหตุการณ์ใหม่':'แก้ไขข้อมูลเหตุการณ์';
+    el('editEventId').value='';el('editRevision').value='';
+    fields.forEach(f=>{const x=el('in'+f[0]);if(x)x.value=''});
+    if(mode==='edit'){
+      const r=allData[i];
+      if(!r.eventId){toast('ข้อมูลเหตุการณ์ยังไม่มี EventID กรุณาให้ผู้ดูแลอัปเกรดโครงสร้างข้อมูลก่อน');return}
+      if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไขข้อมูล');return}
+      el('editEventId').value=r.eventId;el('editRevision').value=String(r.revision||1);
+      fields.forEach(f=>{
+        const x=el('in'+f[0]);if(!x)return;
+        const v=r['col'+f[0]]||'';
+        if(f[2].startsWith('select:')&&v&&!Array.from(x.options).some(o=>o.value===String(v))){
+          const legacy=document.createElement('option');legacy.value=String(v);legacy.textContent='[เลิกใช้งาน] '+String(v);legacy.dataset.legacy='true';x.appendChild(legacy)
+        }
+        x.value=f[2]==='date'?toIso(v):v
+      })
+    }
+    refreshRecordAreaOptions();openModal('recordModal')
+  }
+  async function saveRecord(){
+    const btn=el('saveRecordBtn');try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
+      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
+      const msg=el('formMode').value==='add'
+        ?await gs('addRecord',token,data)
+        :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
+      closeModal('recordModal');toast(msg);await loadDashboard()
+    }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
+  }
+  async function deleteEvent(eventId,revision){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
+    const reason=prompt('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
+    try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  }
+  function renderReportReadinessModal(readiness,eventId){
+    el('pendingReportEventId').value=eventId||'';
+    const level=String(readiness&&readiness.level||'review');
+    const count=Number(readiness&&readiness.warningCount||0);
+    const headline=level==='limited'
+      ?'ข้อมูลหลักยังไม่ครบ รายงานที่สร้างอาจมีจุดไข่ปลาหรือข้อจำกัดหลายส่วน'
+      :'พบข้อมูลที่ควรตรวจสอบก่อนสร้างรายงาน';
+    el('reportReadinessSummary').innerHTML=`<b>${escapeHtml(readiness&&readiness.label||headline)}</b><br>${escapeHtml(headline)} · คำเตือน ${count} รายการ`;
+    const warnings=Array.isArray(readiness&&readiness.warnings)?readiness.warnings:[];
+    el('reportReadinessWarnings').innerHTML=warnings.map(w=>{
+      const prefix=w.severity==='core'?'ข้อมูลหลัก':(w.severity==='consistency'?'ความสอดคล้อง':'ควรเพิ่มเติม');
+      return`<div class="content-item"><b>${escapeHtml(prefix)}</b><p>${escapeHtml(w.message||w.code||'ควรตรวจสอบข้อมูล')}</p></div>`
+    }).join('')||'<div class="help">ไม่พบคำเตือน</div>';
+    openModal('reportReadinessModal')
+  }
+  const reportReadinessInFlight = new Set();
+  const reportGenerationInFlight = new Set();
+  const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
+  const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
+  let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
+  let reportCancelPendingJobId=null, reportCancelSubmitting=false;
+  function reportActionState(eventId,compact){
+    const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
+    const busy=!!job||reportReadinessInFlight.size>0;
+    const matching=!!job&&String(job.eventId)===String(eventId);
+    if(matching){
+      let label='กำลังสร้างรายงาน · ดูสถานะ';
+      let icon='fa-spinner fa-spin';
+      if(job.status==='cancel_requested'){label='กำลังขอยกเลิก · ดูสถานะ';icon='fa-hourglass-half'}
+      else if(job.status==='finalizing'){label='กำลังบันทึก · ดูสถานะ';icon='fa-floppy-disk'}
+      else if(job.status==='queued'){label='รอเริ่มรายงาน · ดูสถานะ';icon='fa-clock'}
+      return {disabled:false,busy:true,active:true,
+        html:'<i class="fa-solid '+icon+'" aria-hidden="true"></i> '+label};
+    }
+    if(job)return {disabled:true,busy:true,active:false,
+      html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
+    if(reportReadinessInFlight.size>0){
+      const checking=reportReadinessInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจข้อมูล':'กำลังตรวจรายงานอื่น')};
+    }
+    return {disabled:false,busy:false,active:false,html:compact?'AI':'สร้างรายงาน AI'};
+  }
+  function reportActionButton(eventId,compact){
+    const state=reportActionState(eventId,compact);
+    return '<button class="btn green report-action-btn'+(state.active?' report-action-active':'')+'"'+
+      ' data-report-event-id="'+escapeHtml(eventId||'')+'"'+
+      ' data-report-compact="'+(compact?'1':'0')+'"'+
+      ' aria-busy="'+String(state.busy)+'"'+
+      (state.disabled?' disabled':'')+
+      ' onclick=\'makeReport('+JSON.stringify(eventId||'')+',this)\'>'+
+      state.html+'</button>';
+  }
+  function refreshReportActionButtons(){
+    if(typeof document.querySelectorAll!=='function')return;
+    document.querySelectorAll('button[data-report-event-id]').forEach(btn=>{
+      const id=btn.getAttribute('data-report-event-id')||'';
+      const compact=btn.getAttribute('data-report-compact')==='1';
+      const state=reportActionState(id,compact);
+      btn.disabled=state.disabled;
+      btn.innerHTML=state.html;
+      btn.setAttribute('aria-busy',String(state.busy));
+      btn.classList.toggle('report-action-active',state.active);
+    });
+  }
+
+  function reportJobTerminal(job){return !!job&&REPORT_TERMINAL_STATES.has(job.status)}
+  function reportStageLabel(job){
+    if(!job)return 'ไม่มีงานสร้างรายงาน';
+    if(job.status==='completed')return 'สร้างรายงานสำเร็จ';
+    if(job.status==='cancelled')return 'ยกเลิกการสร้างรายงานแล้ว';
+    if(job.status==='failed')return 'สร้างรายงานไม่สำเร็จ';
+    if(job.status==='unknown')return 'ไม่สามารถยืนยันผล กรุณาตรวจประวัติรายงาน';
+    if(job.status==='cancel_requested')return 'กำลังขอยกเลิก · รอให้ขั้นตอนปัจจุบันสิ้นสุด';
+    if(job.status==='finalizing')return 'กำลังบันทึก Google Docs และทะเบียนรายงาน';
+    const steps={
+      queued:'รอเริ่มสร้างรายงาน',
+      preparing:'กำลังเตรียมข้อมูลรายงาน',
+      gemini_1:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 1–3',
+      gemini_2:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 4–6',
+      post_gemini:'กำลังเตรียมบันทึกเอกสาร'
+    };
+    return steps[job.stage]||'กำลังสร้างรายงานด้วย Gemini 3.8 Flash';
+  }
+  function showReportGenerationStatus(message,url){
+    el('reportResultStatus').textContent=String(message||'');
+    const link=el('reportResultLink');
+    const target=String(url||'');
+    const valid=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(target);
+    if(valid)link.href=target;
+    else link.removeAttribute('href');
+    link.style.display=valid?'inline-flex':'none';
+    return valid;
+  }
+  function paintReportTask(job){
+    if(!job)return;
+    if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob))return;
+    if(activeReportJob&&activeReportJob.id===job.id){
+      if(reportJobTerminal(activeReportJob)&&!reportJobTerminal(job))return;
+      if(activeReportJob.status==='cancel_requested'&&job.status==='running')return;
+    }
+    activeReportJob=job;
+    localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
+    const label=reportStageLabel(job);
+    const detail=job.message ? ' · '+String(job.message) : '';
+    const possibleDoc=job.status==='completed'?job.documentUrl:null;
+    showReportGenerationStatus(label+detail,possibleDoc);
+    const indicator=el('reportTaskIndicator');
+    indicator.style.display='inline-flex';
+    el('reportTaskStatus').textContent=label;
+    const terminal=reportJobTerminal(job);
+    refreshReportActionButtons();
+    // The confirmation must never outlive the job's cancellable state.
+    if(reportCancelPendingJobId===job.id &&
+       (terminal||job.status==='cancel_requested'||job.status==='finalizing')){
+      hideReportCancelConfirm();
+    }
+    el('closeReportJobBtn').innerHTML=terminal?'<i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง':'<i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ';
+    const cancel=el('cancelReportJobBtn');
+    cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
+    cancel.disabled=job.status==='cancel_requested';
+    const close=el('dismissReportJobBtn');
+    close.style.display=terminal?'inline-flex':'none';
+    if(terminal){
+      reportGenerationInFlight.clear();
+      stopReportPolling();
+      if(!el('reportResultModal').classList.contains('open'))toast(label);
+    }else{
+      reportGenerationInFlight.add(job.eventId);
+      startReportPolling();
+    }
+  }
+  function reopenReportTask(){
+    if(!activeReportJob)return;
+    openModal('reportResultModal');
+    showReportGenerationStatus(reportStageLabel(activeReportJob)+(activeReportJob.message?' · '+activeReportJob.message:''),activeReportJob.status==='completed'?activeReportJob.documentUrl:null);
+  }
+  function closeReportTaskModal(){
+    closeModal('reportResultModal');
+    if(activeReportJob&&!reportJobTerminal(activeReportJob))toast('ปิดหน้าต่างแล้ว งานยังดำเนินต่อขณะที่หน้าเว็บนี้เปิดอยู่');
+  }
+  function dismissReportTask(){
+    if(!reportJobTerminal(activeReportJob))return;
+    stopReportPolling();
+    const dismissId=activeReportJob.id;
+    const session=token;
+    activeReportJob=null;
+    localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    refreshReportActionButtons();
+    void gs('dismissReportJob',session,dismissId).catch(()=>{});
+    el('reportTaskIndicator').style.display='none';
+    closeModal('reportResultModal');
+  }
+  function stopReportPolling(){if(reportPollTimer){clearInterval(reportPollTimer);reportPollTimer=null}}
+  function startReportPolling(){
+    if(reportPollTimer||!activeReportJob||reportJobTerminal(activeReportJob))return;
+    reportPollTimer=setInterval(()=>{void pollReportTask()},7000);
+  }
+  async function pollReportTask(){
+    if(reportPollBusy||!activeReportJob||reportJobTerminal(activeReportJob)||!currentUser)return;
+    reportPollBusy=true;
+    const id=activeReportJob.id,session=token;
+    try{
+      const state=await gs('getReportJobStatus',session,id);
+      if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
+    }catch(error){
+      // A transient status-lookup failure is not proof that generation stopped.
+      if(activeReportJob&&activeReportJob.id===id){
+        el('reportTaskStatus').textContent='ตรวจสอบสถานะไม่ได้ · งานอาจยังทำอยู่';
+      }
+    }finally{reportPollBusy=false}
+  }
+  function hideReportCancelConfirm(){
+    reportCancelPendingJobId=null;
+    closeModal('reportCancelConfirmModal');
+    const returnFocus=el('cancelReportJobBtn');
+    if(returnFocus && returnFocus.style.display!=='none' && !returnFocus.disabled)returnFocus.focus();
+    else el('closeReportJobBtn').focus();
+  }
+  function closeReportCancelConfirm(){
+    if(reportCancelSubmitting)return;
+    hideReportCancelConfirm();
+  }
+  function cancelCurrentReportTask(){
+    if(reportCancelSubmitting||!currentUser||!activeReportJob||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status))return;
+    reportCancelPendingJobId=activeReportJob.id;
+    const warning=el('reportCancelConfirmError');
+    warning.textContent='';
+    warning.style.display='none';
+    openModal('reportCancelConfirmModal');
+    el('reportCancelKeepBtn').focus();
+  }
+  async function confirmReportCancelRequest(){
+    // Ignore duplicate clicks during a pending RPC without dismissing the dialog.
+    if(reportCancelSubmitting)return;
+    if(!currentUser||!activeReportJob||
+       activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status)){
+      hideReportCancelConfirm();
+      return;
+    }
+    const id=reportCancelPendingJobId,session=token;
+    reportCancelSubmitting=true;
+    const submit=el('reportCancelConfirmBtn'),keep=el('reportCancelKeepBtn');
+    const previous=submit.innerHTML;
+    const warning=el('reportCancelConfirmError');
+    submit.disabled=true;keep.disabled=true;
+    submit.textContent='กำลังส่งคำขอยกเลิก...';
+    warning.textContent='';warning.style.display='none';
+    try{
+      const state=await gs('cancelReportJob',session,id);
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        paintReportTask(state);
+        hideReportCancelConfirm();
+      }else{
+        // Do not apply a stale result to a later login or another job.
+        hideReportCancelConfirm();
+      }
+    }catch(error){
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        warning.textContent='ยังยืนยันการรับคำขอยกเลิกไม่ได้ กรุณาตรวจสถานะงานก่อนส่งคำขอใหม่';
+        warning.style.display='block';
+      }else{
+        hideReportCancelConfirm();
+      }
+    }finally{
+      reportCancelSubmitting=false;
+      submit.disabled=false;keep.disabled=false;submit.innerHTML=previous;
+    }
+  }
+  document.addEventListener('keydown',event=>{
+    if(!el('reportCancelConfirmModal').classList.contains('open'))return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!reportCancelSubmitting)closeReportCancelConfirm();
+    }else if(event.key==='Tab'){
+      // Keep keyboard navigation in the two-action confirmation dialog.
+      const focusables=[el('reportCancelKeepBtn'),el('reportCancelConfirmBtn')].filter(b=>!b.disabled);
+      if(!focusables.length){event.preventDefault();return}
+      const first=focusables[0],last=focusables[focusables.length-1];
+      if(event.shiftKey && (document.activeElement===first||!focusables.includes(document.activeElement))){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey && (document.activeElement===last||!focusables.includes(document.activeElement))){
+        event.preventDefault();first.focus();
+      }
+    }
+  });
+  async function recoverReportJob(){
+    if(!currentUser||!token)return;
+    const session=token;
+    try{
+      // The authenticated server pointer, not a prior user's browser key,
+      // is authoritative after login or full page reload.
+      const state=await gs('getCurrentReportJob',session);
+      if(token!==session||!currentUser)return;
+      if(state){
+        paintReportTask(state);
+        if(state.status==='queued') void runReportJobClient(state.id,session);
+      }else{
+        localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+        refreshReportActionButtons();
+      }
+    }catch(error){
+      // A network failure is not proof the previous task has stopped.
+      if(token===session&&currentUser)toast('ยังตรวจสอบงานรายงานเดิมไม่ได้ โปรดตรวจประวัติก่อนสร้างซ้ำ');
+    }
+  }
+  async function runReportJobClient(jobId,session){
+    try{
+      const state=await gs('runReportJob',session,jobId);
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId)paintReportTask(state);
+    }catch(e){
+      // The server may still be executing despite a disconnected client callback.
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId){
+        await pollReportTask();
+        toast('ตรวจสอบคำขอไม่สำเร็จ กรุณาเปิดสถานะรายงาน ห้ามสั่งสร้างซ้ำ');
+      }
+    }
+  }
+  async function executeReport(eventId,btn){
+    if(reportGenerationInFlight.size > 0 || reportReadinessInFlight.size > 1){
+      toast('มีงานสร้างรายงานอยู่แล้ว เปิดสถานะงานเดิมแทนการส่งซ้ำ');
+      if(activeReportJob)reopenReportTask();
+      return;
+    }
+    const old=btn?btn.innerHTML:'';
+    const session=token;
+    try{
+      if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังเริ่มงาน'}
+      const job=await gs('createReportJob',session,eventId);
+      if(session!==token||!currentUser)return;
+      if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob)){
+        toast('มีงานเดิมอยู่แล้ว กรุณารอตรวจสถานะก่อน');return;
+      }
+      paintReportTask(job);
+      openModal('reportResultModal');
+      if(job.status==='queued')void runReportJobClient(job.id,session);
+    }catch(e){toast('เริ่มสร้างรายงานไม่สำเร็จ: '+String(e.message||e))}
+    finally{
+      if(btn){btn.disabled=false;btn.innerHTML=old}
+      refreshReportActionButtons();
+    }
+  }
+  async function makeReport(eventId,btn){
+    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
+      toast('มีคำขอรายงานอยู่แล้ว กรุณาเปิดสถานะงานเดิม');
+      if(activeReportJob)reopenReportTask();
+      return;
+    }
+    reportReadinessInFlight.add(eventId);
+    const old=btn.innerHTML;
+    refreshReportActionButtons();
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
+      const readiness=await gs('getAIReportReadiness',token,eventId);
+      if(readiness&&readiness.level==='ready'){
+        return await executeReport(eventId,btn);
+      }
+      renderReportReadinessModal(readiness,eventId);
+    }catch(e){toast(e.message||e)}
+    finally{
+      reportReadinessInFlight.delete(eventId);
+      // executeReport may have restored the temporary "กำลังตรวจข้อมูล" label.
+      // The outer readiness action owns the original label and must always
+      // restore it, whether queued, cancelled, failed or terminal.
+      btn.disabled=false;
+      btn.innerHTML=old;
+      refreshReportActionButtons();
+    }
+  }
+  async function continueReportFromWarning(){
+    const eventId=el('pendingReportEventId').value;
+    if(!eventId){toast('ไม่พบ EventID');return}
+    if(reportGenerationInFlight.size > 0){
+      toast('มีคำขอรายงานอยู่แล้ว กรุณารอผลก่อน');return;
+    }
+    closeModal('reportReadinessModal');
+    await executeReport(eventId,el('continueReportBtn'));
+  }
+
+  function exportClientExcel(){
+    if(!currentUser){toast('กรุณาเข้าสู่ระบบเพื่อ Export ข้อมูล');return}
+    const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
+  }
+  async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
+  function captureDashboard(){html2canvas(el('captureArea'),{scale:2,backgroundColor:'#eef4f7',useCORS:true}).then(canvas=>{const a=document.createElement('a');a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';a.href=canvas.toDataURL('image/png');a.click()}).catch(e=>toast(e.message))}
+
+  async function loadAdmin(){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
+    try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
+    await Promise.allSettled([loadSettings(),loadInstallStatus(),loadMasterDataAdmin(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit(),loadAuditRetentionStatus()])
+  }
+  async function loadInstallStatus(){
+    try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
+  }
+  async function repairSystem(){if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;try{toast(await gs('repairInstallation',token));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||[];applyTheme();setupDashboardFilters();loadInstallStatus()}catch(e){toast(e.message||e)}}
+
+  async function loadSettings(){
+    try{
+      const rows=await gs('getSystemSettings',token);const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveSettings(){
+    try{
+      const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
+      toast(await gs('saveSystemSettings',token,arr));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||areas;applyTheme();loadInstallStatus()
+    }catch(e){toast(e.message||e)}
+  }
+  async function uploadLogoFile(){
+    const file=el('logoFile').files[0];if(!file){toast('กรุณาเลือกไฟล์โลโก้');return}if(file.size>3*1024*1024){toast('ไฟล์ต้องไม่เกิน 3 MB');return}
+    el('logoProgress').classList.add('show');
+    try{
+      const base64=await fileToBase64(file);const r=await gs('uploadLogo',token,{name:file.name,mimeType:file.type,base64});
+      settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
+    }catch(e){toast(e.message||e)}finally{el('logoProgress').classList.remove('show')}
+  }
+  function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file)})}
+
+  async function loadAreasAdmin(){
+    try{areaAdminCache=await gs('listAreas',token,el('areaSearch').value);el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openAreaForm(i){
+    const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
+  }
+  async function saveAreaItem(){
+    try{
+      const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
+      toast(await gs('saveArea',token,item));closeModal('areaModal');await refreshAreas()
+    }catch(e){toast(e.message||e)}
+  }
+  async function disableArea(id){if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;try{toast(await gs('deleteArea',token,id));await refreshAreas()}catch(e){toast(e.message||e)}}
+  async function refreshAreas(){const b=await gs('getAppBoot',token);areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();loadAreasAdmin()}
+  async function importAreaFile(input){
+    const file=input.files[0];if(!file)return;
+    try{
+      const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const mapped=rows.map(r=>({province:r['จังหวัด']||r['province']||r['Province'],amphoe:r['อำเภอ']||r['amphoe']||r['Amphoe'],tambon:r['ตำบล']||r['tambon']||r['Tambon'],moo:r['หมู่']||r['หมู่ที่']||r['moo']||r['Moo'],village:r['ชื่อหมู่บ้าน']||r['หมู่บ้าน']||r['village']||r['Village'],villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''})).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
+      if(!mapped.length)throw new Error('ไม่พบคอลัมน์ข้อมูลพื้นที่ที่รองรับ');
+      for(let i=0;i<mapped.length;i+=200)toast(await gs('importAreas',token,mapped.slice(i,i+200)));
+      await refreshAreas()
+    }catch(e){toast(e.message||e)}finally{input.value=''}
+  }
+
+  async function loadUsers(){
+    try{usersCache=await gs('listUsers',token,el('userSearch').value);el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}
+  }
+  function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
+  async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
+
+  function masterPolicyByType(type){return masterTypePolicies.find(p=>p.type===type)||null}
+  async function loadMasterDataAdmin(){
+    try{
+      const result=await gs('getMasterDataAdmin',token);
+      masterAdminCache=result.items||[];masterTypePolicies=result.types||[];
+      const filter=el('masterTypeFilter'),current=filter.value;
+      filter.innerHTML='<option value="">ทั้งหมด</option>'+masterTypePolicies.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
+      filter.value=current;
+      renderMasterDataAdmin()
+    }catch(e){toast(e.message||e)}
+  }
+  function renderMasterDataAdmin(){
+    const type=el('masterTypeFilter').value,q=String(el('masterSearch').value||'').trim().toLowerCase();
+    const rows=masterAdminCache.filter(r=>(!type||r.type===type)&&(!q||String(r.value||'').toLowerCase().includes(q)||String(r.label||'').toLowerCase().includes(q)));
+    el('masterDataBody').innerHTML=rows.map(r=>{
+      const index=masterAdminCache.indexOf(r);
+      const lock=r.semanticLocked?'<span class="status st-mid">System semantic</span>':'';
+      return`<tr><td>${escapeHtml(r.typeLabel)}<div class="mini">${escapeHtml(r.type)}</div></td><td>${escapeHtml(r.value)}</td><td>${escapeHtml(r.label)}</td><td>${Number(r.sortOrder||0)}</td><td>${Number(r.usageCount||0)}</td><td>${r.active?'<span class="status st-low">ใช้งาน</span>':'<span class="status st-high">ปิดใช้งาน</span>'} ${lock}</td><td><button class="btn light" onclick="openMasterDataForm(${index})">แก้ไข</button></td></tr>`
+    }).join('')||'<tr><td colspan="7">ไม่พบข้อมูลมาตรฐาน</td></tr>'
+  }
+  function openMasterDataForm(index){
+    const editing=index!==undefined&&index!==null;
+    const item=editing?masterAdminCache[index]:null;
+    const allowedTypes=editing?masterTypePolicies:masterTypePolicies.filter(p=>p.allowCreate);
+    el('mdType').innerHTML=allowedTypes.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
+    el('mdMode').value=editing?'update':'create';
+    el('mdOriginalType').value=editing?item.type:'';
+    el('mdOriginalValue').value=editing?item.value:'';
+    el('mdType').value=editing?item.type:(allowedTypes[0]?.type||'');
+    el('mdValue').value=editing?item.value:'';
+    el('mdLabel').value=editing?item.label:'';
+    el('mdSort').value=editing?String(item.sortOrder||1):'1';
+    el('mdActive').value=editing&&item.active===false?'false':'true';
+    el('mdType').disabled=editing;
+    el('mdValue').disabled=editing;
+    const policy=masterPolicyByType(el('mdType').value);
+    el('mdActive').disabled=!!(policy&&!policy.allowDeactivate);
+    el('mdPolicyNote').textContent=policy&&policy.semanticLocked
+      ?'Type นี้ผูกกับ business semantics ของระบบ: แก้ Label/ลำดับได้ แต่ห้ามเปลี่ยน Value, เพิ่มค่าใหม่ หรือปิดใช้งาน'
+      :'Value ของรายการเดิมเป็น identity และไม่สามารถ rename ได้; การปิดใช้งานมีผลเฉพาะรายการใหม่ ข้อมูลย้อนหลังยังคงเดิม';
+    openModal('masterDataModal')
+  }
+  async function saveMasterDataAdminItem(){
+    try{
+      const item={
+        mode:el('mdMode').value,
+        originalType:el('mdOriginalType').value,
+        originalValue:el('mdOriginalValue').value,
+        type:el('mdType').value,
+        value:el('mdValue').value,
+        label:el('mdLabel').value,
+        sortOrder:Number(el('mdSort').value||0),
+        active:el('mdActive').value==='true'
+      };
+      toast(await gs('saveMasterDataItem',token,item));
+      closeModal('masterDataModal');
+      const b=await gs('getAppBoot',token);
+      master=b.master||{};
+      currentContent=b.content||currentContent;
+      buildRecordForm();
+      populateContentCategoryOptions('');
+      await Promise.all([loadMasterDataAdmin(),loadContentAdmin()])
+    }catch(e){toast(e.message||e)}
+  }
+  function populateContentCategoryOptions(selected){
+    const select=el('cCategory');
+    const items=master.content_category||[];
+    select.innerHTML='<option value="">-- เลือก --</option>'+items.map(o=>`<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('');
+    if(selected&&!items.some(o=>String(o.value)===String(selected))){
+      const legacy=document.createElement('option');legacy.value=String(selected);legacy.textContent='[เลิกใช้งาน] '+String(selected);legacy.dataset.legacy='true';select.appendChild(legacy)
+    }
+    select.value=selected||''
+  }
+
+  async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
+  function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
+  function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
+  async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
+  async function loadAuditRetentionStatus(){
+    try{
+      const s=await gs('getAuditRetentionStatus',token);
+      el('auditRetentionStatus').innerHTML=`เก็บ Audit ในฐานข้อมูลหลัก <b>${Number(s.retentionDays||0)} วัน</b> · Active <b>${Number(s.activeRows||0)}</b> รายการ · เข้าเกณฑ์ Archive <b>${Number(s.eligibleRows||0)}</b> รายการ${Number(s.malformedTimestampRows||0)?` · <span style="color:#b45309">Timestamp ผิดรูปแบบ ${Number(s.malformedTimestampRows||0)} รายการ (ยังคงไว้)</span>`:''}${s.oldestTimestamp?`<br>รายการเก่าสุด: ${escapeHtml(s.oldestTimestamp)} · Cutoff: ${escapeHtml(s.cutoff||'')}`:''}`;
+      el('archiveAuditBtn').disabled=Number(s.eligibleRows||0)===0
+    }catch(e){el('auditRetentionStatus').textContent=e.message||e}
+  }
+  async function archiveAuditNow(){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับ Archive Audit');return}
+    if(!confirm('ยืนยัน Archive Audit ที่เก่ากว่า retention policy? ระบบจะคัดลอกไปไฟล์ Archive และตรวจสอบก่อนนำออกจาก AuditLogs'))return;
+    const btn=el('archiveAuditBtn');
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลัง Archive';
+      const r=await gs('archiveAuditLogs',token);
+      toast(`Archive สำเร็จ ${Number(r.removedFromActiveRows||0)} รายการ`);
+      await Promise.all([loadAudit(),loadAuditRetentionStatus()])
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-box-archive"></i> Archive รายการเก่า'}
+  }
+  async function loadAudit(){try{const rows=await gs('listAuditLogs',token,100);el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}}
+  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
+
+  boot();
+</script>
+</body>
+</html>

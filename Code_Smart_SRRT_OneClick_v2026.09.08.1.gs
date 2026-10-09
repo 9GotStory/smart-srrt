@@ -14,7 +14,7 @@
 var CONFIG = {
   APP_TITLE: 'Smart SRRT Dashboard & AI Reporter',
   VERSION: '2026.09.08.1',
-  SCHEMA_VERSION: '4',
+  SCHEMA_VERSION: '7',
   DEFAULT_DB_SHEET_NAME: 'MainData',
   SHEETS: {
     MAIN: 'MainData',
@@ -24,8 +24,8 @@ var CONFIG = {
     AREAS: 'AreaMaster',
     CONTENT: 'ContentLibrary',
     ATTACHMENTS: 'EventAttachments',
+    REPORTS: 'ReportRegistry',
     AUDIT: 'AuditLogs',
-    AUDIT_ARCHIVE: 'AuditArchive',
     VISITS: 'VisitLogs'
   },
   ROLES: {
@@ -35,7 +35,9 @@ var CONFIG = {
     STAFF: 'Staff'
   },
   MAX_LOGO_BYTES: 3 * 1024 * 1024,
-  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024
+  MAX_ATTACHMENT_BYTES: 5 * 1024 * 1024,
+  DEFAULT_AUDIT_RETENTION_DAYS: 365,
+  REPORT_PROMPT_VERSION: '2026.10.06.1'
 };
 
 var MAIN_HEADERS = [
@@ -43,8 +45,7 @@ var MAIN_HEADERS = [
 ];
 
 var EVENT_META_HEADERS = [
-  'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason',
-  'WorkflowStatus','OwnerUserID','OwnerAssignedAt','ClosedAt','ClosedBy','CloseReason'
+  'EventID','Revision','RecordStatus','CreatedAt','CreatedBy','VoidedAt','VoidedBy','VoidReason'
 ];
 
 var MAIN_SCHEMA_HEADERS = MAIN_HEADERS.concat(EVENT_META_HEADERS);
@@ -57,13 +58,129 @@ var EVENT_META_COL = {
   CREATED_BY: 35,
   VOIDED_AT: 36,
   VOIDED_BY: 37,
-  VOID_REASON: 38,
-  WORKFLOW_STATUS: 39,
-  OWNER_USER_ID: 40,
-  OWNER_ASSIGNED_AT: 41,
-  CLOSED_AT: 42,
-  CLOSED_BY: 43,
-  CLOSE_REASON: 44
+  VOID_REASON: 38
+};
+
+var EVENT_OWNER_HEADER = 'OwnerUserID';
+var EVENT_OWNER_COL = 39;
+
+var EVENT_ATTACHMENT_HEADERS = [
+  'AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','Description',
+  'Status','UploadedAt','UploadedBy','RemovedAt','RemovedBy','RemoveReason'
+];
+
+var EVENT_ATTACHMENT_COL = {
+  ATTACHMENT_ID: 1,
+  EVENT_ID: 2,
+  FILE_ID: 3,
+  FILE_NAME: 4,
+  MIME_TYPE: 5,
+  SIZE_BYTES: 6,
+  DESCRIPTION: 7,
+  STATUS: 8,
+  UPLOADED_AT: 9,
+  UPLOADED_BY: 10,
+  REMOVED_AT: 11,
+  REMOVED_BY: 12,
+  REMOVE_REASON: 13
+};
+
+var AUDIT_HEADERS = [
+  'Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','AuditID'
+];
+
+var AUDIT_COL = {
+  TIMESTAMP: 1,
+  USER_EMAIL: 2,
+  ROLE: 3,
+  ACTION: 4,
+  TARGET_SHEET: 5,
+  TARGET_ID: 6,
+  BEFORE: 7,
+  AFTER: 8,
+  IP_HINT: 9,
+  AUDIT_ID: 10
+};
+
+var REPORT_REGISTRY_HEADERS = [
+  'ReportID','EventID','SourceRevision','DocumentID','DocumentURL','GeneratedAt',
+  'GeneratedBy','GeminiModels','GeminiApiVersions','PromptVersion','TemplateDocID'
+];
+
+var REPORT_REGISTRY_COL = {
+  REPORT_ID: 1,
+  EVENT_ID: 2,
+  SOURCE_REVISION: 3,
+  DOCUMENT_ID: 4,
+  DOCUMENT_URL: 5,
+  GENERATED_AT: 6,
+  GENERATED_BY: 7,
+  GEMINI_MODELS: 8,
+  GEMINI_API_VERSIONS: 9,
+  PROMPT_VERSION: 10,
+  TEMPLATE_DOC_ID: 11
+};
+
+var VISIT_HEADERS = ['Timestamp','EntryPoint','LegacyRequestParams'];
+var VISIT_LEGACY_HEADERS = ['Timestamp','Page','UserAgent'];
+
+var MASTER_DATA_POLICIES = {
+  surveillance: {
+    label:'การเฝ้าระวัง',
+    sourceSheet:'main',
+    sourceColumn:4,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  disease_group: {
+    label:'กลุ่มโรค',
+    sourceSheet:'main',
+    sourceColumn:5,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  event_type: {
+    label:'ประเภทเหตุการณ์',
+    sourceSheet:'main',
+    sourceColumn:7,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  verify_status: {
+    label:'สถานะการตรวจสอบ',
+    sourceSheet:'main',
+    sourceColumn:15,
+    allowCreate:false,
+    allowDeactivate:false,
+    semanticLocked:true
+  },
+  criteria: {
+    label:'เกณฑ์สอบสวนโรค',
+    sourceSheet:'main',
+    sourceColumn:17,
+    allowCreate:false,
+    allowDeactivate:false,
+    semanticLocked:true
+  },
+  risk: {
+    label:'ระดับความเสี่ยง',
+    sourceSheet:'main',
+    sourceColumn:19,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  },
+  content_category: {
+    label:'หมวดหมู่ประกาศ/คู่มือ',
+    sourceSheet:'content',
+    sourceColumn:2,
+    allowCreate:true,
+    allowDeactivate:true,
+    semanticLocked:false
+  }
 };
 
 function doGet(e) {
@@ -76,7 +193,7 @@ function doGet(e) {
     .setTitle(title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  logVisit_(e);
+  logVisit_();
   return output;
 }
 
@@ -90,8 +207,12 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('Smart SRRT')
       .addItem('ติดตั้ง/ซ่อมระบบครั้งเดียว', 'installSmartSRRT')
       .addItem('อัปเกรด Event ID / Data Integrity', 'migrateP1EventIdentity')
-      .addItem('อัปเกรด Workflow / Owner', 'migrateP3Workflow')
-      .addItem('อัปเกรด Supporting Governance', 'migrateP4Governance')
+      .addItem('อัปเกรด Event Owner', 'migrateG05EventOwner')
+      .addItem('อัปเกรด Event Attachments', 'migrateG11EventAttachments')
+      .addItem('อัปเกรด Audit Retention', 'migrateG21AuditRetention')
+      .addItem('อัปเกรด VisitLogs', 'migrateG29VisitLogs')
+      .addItem('อัปเกรด Report Registry', 'migrateG17ReportRegistry')
+      .addItem('จัดเก็บ Audit เก่า', 'archiveAuditLogsFromSheetMenu')
       .addItem('เปิดหน้าฐานข้อมูล', 'showDatabaseInfo')
       .addItem('รีเซ็ตรหัส Super Admin', 'resetSuperAdminPassword')
       .addToUi();
@@ -129,20 +250,22 @@ function installSmartSRRTCore_() {
 
     var mainSheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var eventMigration = ensureEventIdentityData_(mainSheet);
-    var workflowMigration = ensureWorkflowData_(mainSheet);
+    ensureEventOwnerSchema_(ss);
     ensureSheet_(ss, CONFIG.SHEETS.USERS, ['UserID','ชื่อ-สกุล','Email','PasswordHash','Role','Status','หน่วยงาน','ตำบล','อำเภอ','จังหวัด','วันที่ลงทะเบียน','อนุมัติโดย','วันที่อนุมัติ','LastLogin']);
     ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.MASTER, ['Type','Value','Label','SortOrder','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.AREAS, ['AreaID','จังหวัด','อำเภอ','ตำบล','หมู่','ชื่อหมู่บ้าน','รหัสหมู่บ้าน','Active','UpdatedAt','UpdatedBy']);
     ensureSheet_(ss, CONFIG.SHEETS.CONTENT, ['ContentID','Category','Title','Description','URL','FileID','Status','SortOrder','CreatedAt','UpdatedAt','UpdatedBy']);
-    ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','FileSize','DriveUrl','Description','Status','CreatedAt','CreatedBy']);
-    ensureSheet_(ss, CONFIG.SHEETS.AUDIT, ['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint']);
-    ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt','ArchivedBy']);
-    var visitSheet = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','RequestParams']);
-    migrateVisitLogHeader_(visitSheet);
+    ensureEventAttachmentSheet_(ss);
+    var reportRegistry = ensureReportRegistrySheet_(ss);
+    var auditMigration = ensureAuditSchema_(ss);
+    var visitMigration = ensureVisitLogSchema_(ss);
 
     var assets = ensureSystemAssets_(ss);
     seedSettings_(ss, assets);
+    var auditArchive = ensureAuditArchiveSpreadsheet_(ss);
+    var settingsSheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
+    upsertSettingDirect_(settingsSheet, 'AUDIT_ARCHIVE_SPREADSHEET_ID', auditArchive.getId(), 'Spreadsheet ID สำหรับเก็บ Audit archive', true);
     seedMasterData_(ss);
     var adminInfo = seedSuperAdmin_(ss);
     formatSheets_(ss);
@@ -152,6 +275,7 @@ function installSmartSRRTCore_() {
     props.setProperty('REPORT_FOLDER_ID', assets.reportFolderId);
     props.setProperty('LOGO_FOLDER_ID', assets.logoFolderId);
     props.setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+    props.setProperty('AUDIT_ARCHIVE_SPREADSHEET_ID', auditArchive.getId());
     props.setProperty('TEMPLATE_DOC_ID', assets.templateDocId);
 
     var message = [
@@ -159,7 +283,9 @@ function installSmartSRRTCore_() {
       'ฐานข้อมูล: ' + ss.getName(),
       'โฟลเดอร์ระบบและ Template รายงานถูกสร้างให้อัตโนมัติ',
       'Event identity: backfilled ' + eventMigration.backfilledIds + ', initialized revision ' + eventMigration.initializedRevision + ', initialized status ' + eventMigration.initializedStatus,
-      'Workflow: initialized ' + workflowMigration.initializedWorkflow,
+      'Audit identity: backfilled ' + auditMigration.backfilledIds + ', retention ' + getAuditRetentionDays_() + ' วัน',
+      'VisitLogs: rows ' + visitMigration.rows + ', legacy headers ' + (visitMigration.migratedLegacyHeaders ? 'migrated' : 'ok'),
+      'Report Registry: rows ' + reportRegistry.rows + ', prompt version ' + CONFIG.REPORT_PROMPT_VERSION,
       'เข้าสู่ระบบครั้งแรกด้วย Email: ' + adminInfo.email,
       'รหัสผ่านเริ่มต้น: ' + adminInfo.password,
       'กรุณาเปลี่ยนรหัสผ่านและตั้งค่าชื่อระบบ/โลโก้/Gemini API Key ในหน้า Admin'
@@ -171,10 +297,11 @@ function installSmartSRRTCore_() {
       spreadsheetId: ss.getId(),
       systemFolderId: assets.systemFolderId,
       reportFolderId: assets.reportFolderId,
+      attachmentFolderId: assets.attachmentFolderId,
+      auditArchiveSpreadsheetId: auditArchive.getId(),
       templateDocId: assets.templateDocId,
       adminEmail: adminInfo.email,
-      eventMigration: eventMigration,
-      workflowMigration: workflowMigration
+      eventMigration: eventMigration
     };
   } finally {
     lock.releaseLock();
@@ -236,7 +363,7 @@ function ensureSystemAssets_(ss) {
     'โลโก้ระบบ',
     systemFolder
   );
-  var attachmentFolder = getOrCreateFolder_(
+  var attachmentFolder = getOrCreateNamedChildFolder_(
     directSettings.ATTACHMENT_FOLDER_ID || props.getProperty('ATTACHMENT_FOLDER_ID'),
     'เอกสารแนบเหตุการณ์',
     systemFolder
@@ -254,6 +381,22 @@ function ensureSystemAssets_(ss) {
     attachmentFolderId: attachmentFolder.getId(),
     templateDocId: templateId
   };
+}
+
+function getOrCreateNamedChildFolder_(folderId, name, parentFolder) {
+  if (folderId) {
+    try {
+      var existing = DriveApp.getFolderById(String(folderId));
+      existing.getName();
+      return existing;
+    } catch (ignore) {}
+  }
+  if (parentFolder) {
+    var matches = parentFolder.getFoldersByName(name);
+    if (matches.hasNext()) return matches.next();
+    return parentFolder.createFolder(name);
+  }
+  return DriveApp.createFolder(name);
 }
 
 function getOrCreateFolder_(folderId, name, parentFolder) {
@@ -338,6 +481,438 @@ function ensureSheet_(ss, name, headers) {
   return sheet;
 }
 
+function ensureReportRegistrySheet_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.REPORTS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.REPORTS);
+    sheet.appendRow(REPORT_REGISTRY_HEADERS);
+    return {sheet:sheet, rows:0};
+  }
+
+  if (sheet.getMaxColumns() < REPORT_REGISTRY_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), REPORT_REGISTRY_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(REPORT_REGISTRY_HEADERS);
+    return {sheet:sheet, rows:0};
+  }
+
+  var current = sheet.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).getValues()[0];
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  var patched = current.slice();
+
+  for (var i = 0; i < REPORT_REGISTRY_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = REPORT_REGISTRY_HEADERS[i];
+
+    if (actual === expected) continue;
+
+    if (!actual) {
+      if (rowCount > 0) {
+        var values = sheet.getRange(2, i + 1, rowCount, 1).getValues();
+        for (var r = 0; r < values.length; r++) {
+          if (String(values[r][0] || '').trim() !== '') {
+            throw new Error('ไม่สามารถเตรียม ReportRegistry ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แต่หัวข้อว่าง');
+          }
+        }
+      }
+      patched[i] = expected;
+      continue;
+    }
+
+    throw new Error('ไม่สามารถเตรียม ReportRegistry ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+  }
+
+  if (patched.join('\u0001') !== current.map(function(v){return String(v || '').trim();}).join('\u0001')) {
+    sheet.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).setValues([patched]);
+  }
+
+  return {sheet:sheet, rows:rowCount};
+}
+
+function ensureVisitLogSchema_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.VISITS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.VISITS);
+    sheet.appendRow(VISIT_HEADERS);
+    return {sheet:sheet, rows:0, migratedLegacyHeaders:false};
+  }
+
+  if (sheet.getMaxColumns() < VISIT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), VISIT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(VISIT_HEADERS);
+    return {sheet:sheet, rows:0, migratedLegacyHeaders:false};
+  }
+
+  var current = sheet.getRange(1, 1, 1, VISIT_HEADERS.length).getValues()[0];
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  var migratedLegacyHeaders = false;
+  var patched = current.slice();
+
+  for (var i = 0; i < VISIT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = VISIT_HEADERS[i];
+    var legacy = VISIT_LEGACY_HEADERS[i];
+
+    if (actual === expected) continue;
+    if (actual === legacy) {
+      patched[i] = expected;
+      migratedLegacyHeaders = true;
+      continue;
+    }
+
+    if (!actual) {
+      if (rowCount > 0) {
+        var values = sheet.getRange(2, i + 1, rowCount, 1).getValues();
+        for (var r = 0; r < values.length; r++) {
+          if (String(values[r][0] || '').trim() !== '') {
+            throw new Error('ไม่สามารถอัปเกรด VisitLogs ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แต่หัวข้อว่าง');
+          }
+        }
+      }
+      patched[i] = expected;
+      continue;
+    }
+
+    throw new Error('ไม่สามารถอัปเกรด VisitLogs ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" ซึ่งไม่ใช่ schema ที่รองรับ');
+  }
+
+  if (patched.join('\u0001') !== current.map(function(v){return String(v || '').trim();}).join('\u0001')) {
+    sheet.getRange(1, 1, 1, VISIT_HEADERS.length).setValues([patched]);
+  }
+
+  return {sheet:sheet, rows:rowCount, migratedLegacyHeaders:migratedLegacyHeaders};
+}
+
+function ensureAuditSchema_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.AUDIT);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.AUDIT);
+    sheet.appendRow(AUDIT_HEADERS);
+    return {sheet:sheet, rows:0, backfilledIds:0};
+  }
+
+  if (sheet.getMaxColumns() < AUDIT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), AUDIT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(AUDIT_HEADERS);
+    return {sheet:sheet, rows:0, backfilledIds:0};
+  }
+
+  var current = sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).getValues()[0];
+  for (var i = 0; i < AUDIT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = AUDIT_HEADERS[i];
+    if (actual && actual !== expected) {
+      throw new Error('ไม่สามารถอัปเกรด AuditLogs ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+    }
+    if (!actual && i < 9 && sheet.getLastRow() > 1) {
+      var legacyValues = sheet.getRange(2, i + 1, sheet.getLastRow() - 1, 1).getValues();
+      for (var lr = 0; lr < legacyValues.length; lr++) {
+        if (String(legacyValues[lr][0] || '').trim() !== '') {
+          throw new Error('ไม่สามารถอัปเกรด AuditLogs ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (lr + 2) + ' แม้หัวข้อจะว่าง');
+        }
+      }
+    }
+  }
+
+  var patched = current.slice();
+  var headerChanged = false;
+  for (var h = 0; h < AUDIT_HEADERS.length; h++) {
+    if (!String(patched[h] || '').trim()) {
+      patched[h] = AUDIT_HEADERS[h];
+      headerChanged = true;
+    }
+  }
+  if (headerChanged) sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).setValues([patched]);
+
+  var rowCount = Math.max(sheet.getLastRow() - 1, 0);
+  if (!rowCount) return {sheet:sheet, rows:0, backfilledIds:0};
+
+  var values = sheet.getRange(2, 1, rowCount, AUDIT_HEADERS.length).getValues();
+  var seen = {};
+  var backfilled = 0;
+  var changed = false;
+
+  for (var r = 0; r < values.length; r++) {
+    var hasAuditData = false;
+    for (var c = 0; c < 9; c++) {
+      if (String(values[r][c] || '').trim() !== '') {
+        hasAuditData = true;
+        break;
+      }
+    }
+    if (!hasAuditData) continue;
+
+    var auditId = String(values[r][AUDIT_COL.AUDIT_ID - 1] || '').trim();
+    if (auditId) {
+      if (!isUuid_(auditId)) throw new Error('AuditID ไม่ถูกต้องที่แถว ' + (r + 2));
+      if (seen[auditId]) throw new Error('พบ AuditID ซ้ำที่แถว ' + (r + 2));
+      seen[auditId] = true;
+    } else {
+      auditId = Utilities.getUuid();
+      while (seen[auditId]) auditId = Utilities.getUuid();
+      values[r][AUDIT_COL.AUDIT_ID - 1] = auditId;
+      seen[auditId] = true;
+      backfilled++;
+      changed = true;
+    }
+  }
+
+  if (changed) sheet.getRange(2, 1, rowCount, AUDIT_HEADERS.length).setValues(values);
+  return {sheet:sheet, rows:rowCount, backfilledIds:backfilled};
+}
+
+function ensureEventAttachmentSheet_(ss) {
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.SHEETS.ATTACHMENTS);
+    sheet.appendRow(EVENT_ATTACHMENT_HEADERS);
+    return sheet;
+  }
+
+  if (sheet.getMaxColumns() < EVENT_ATTACHMENT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), EVENT_ATTACHMENT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(EVENT_ATTACHMENT_HEADERS);
+    return sheet;
+  }
+
+  var current = sheet.getRange(1, 1, 1, EVENT_ATTACHMENT_HEADERS.length).getValues()[0];
+  for (var i = 0; i < EVENT_ATTACHMENT_HEADERS.length; i++) {
+    var actual = String(current[i] || '').trim();
+    var expected = EVENT_ATTACHMENT_HEADERS[i];
+    if (actual && actual !== expected) {
+      throw new Error('ไม่สามารถเตรียม EventAttachments ได้: คอลัมน์ ' + (i + 1) + ' ใช้หัวข้อ "' + actual + '" แทน "' + expected + '"');
+    }
+    if (!actual && sheet.getLastRow() > 1) {
+      var values = sheet.getRange(2, i + 1, sheet.getLastRow() - 1, 1).getValues();
+      for (var r = 0; r < values.length; r++) {
+        if (String(values[r][0] || '').trim() !== '') {
+          throw new Error('ไม่สามารถเตรียม EventAttachments ได้: คอลัมน์ ' + (i + 1) + ' มีข้อมูลเดิมที่แถว ' + (r + 2) + ' แม้หัวข้อจะว่าง');
+        }
+      }
+    }
+  }
+
+  var patched = current.slice();
+  var changed = false;
+  for (var j = 0; j < EVENT_ATTACHMENT_HEADERS.length; j++) {
+    if (!String(patched[j] || '').trim()) {
+      patched[j] = EVENT_ATTACHMENT_HEADERS[j];
+      changed = true;
+    }
+  }
+  if (changed) sheet.getRange(1, 1, 1, EVENT_ATTACHMENT_HEADERS.length).setValues([patched]);
+  return sheet;
+}
+
+function ensureEventOwnerSchema_(ss) {
+  var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
+  if (sheet.getMaxColumns() < EVENT_OWNER_COL) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), EVENT_OWNER_COL - sheet.getMaxColumns());
+  }
+
+  var header = String(sheet.getRange(1, EVENT_OWNER_COL).getValue() || '').trim();
+  if (header && header !== EVENT_OWNER_HEADER) {
+    throw new Error('ไม่สามารถเพิ่ม Event Owner ได้: คอลัมน์ ' + EVENT_OWNER_COL + ' ถูกใช้งานด้วยหัวข้อ "' + header + '"');
+  }
+
+  if (!header && sheet.getLastRow() > 1) {
+    var values = sheet.getRange(2, EVENT_OWNER_COL, sheet.getLastRow() - 1, 1).getValues();
+    var occupiedRow = 0;
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][0] || '').trim() !== '') {
+        occupiedRow = i + 2;
+        break;
+      }
+    }
+    if (occupiedRow) {
+      throw new Error('ไม่สามารถเพิ่ม Event Owner ได้: คอลัมน์ ' + EVENT_OWNER_COL + ' มีข้อมูลเดิมที่แถว ' + occupiedRow + ' แม้หัวข้อจะว่าง');
+    }
+  }
+
+  if (!header) sheet.getRange(1, EVENT_OWNER_COL).setValue(EVENT_OWNER_HEADER);
+  return sheet;
+}
+
+function migrateG05EventOwner() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    ensureEventOwnerSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 3);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    var message = [
+      'อัปเกรด Event Owner เรียบร้อยแล้ว',
+      'เพิ่มคอลัมน์: ' + EVENT_OWNER_HEADER,
+      'คอลัมน์: ' + EVENT_OWNER_COL,
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function migrateG11EventAttachments() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    ensureEventAttachmentSheet_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    var assets = ensureSystemAssets_(ss);
+    upsertSettingDirect_(settings, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'Google Drive Folder สำหรับเอกสารแนบเหตุการณ์', true);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 4);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    PropertiesService.getScriptProperties().setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+    var message = [
+      'อัปเกรด Event Attachments เรียบร้อยแล้ว',
+      'สร้าง/ตรวจสอบชีท: ' + CONFIG.SHEETS.ATTACHMENTS,
+      'โฟลเดอร์เอกสารแนบพร้อมใช้งาน',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG21AuditRetention() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var audit = ensureAuditSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+    upsertSettingDirect_(settings, 'AUDIT_RETENTION_DAYS', String(CONFIG.DEFAULT_AUDIT_RETENTION_DAYS), 'จำนวนวันที่เก็บ AuditLogs ในฐานข้อมูลหลักก่อน Archive', false);
+    var archive = ensureAuditArchiveSpreadsheet_(ss);
+    upsertSettingDirect_(settings, 'AUDIT_ARCHIVE_SPREADSHEET_ID', archive.getId(), 'Spreadsheet ID สำหรับเก็บ Audit archive', true);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 5);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+    PropertiesService.getScriptProperties().setProperty('AUDIT_ARCHIVE_SPREADSHEET_ID', archive.getId());
+
+    var message = [
+      'อัปเกรด Audit Retention เรียบร้อยแล้ว',
+      'Audit rows ที่ตรวจ: ' + audit.rows,
+      'สร้าง AuditID ใหม่: ' + audit.backfilledIds,
+      'Retention เริ่มต้น: ' + getAuditRetentionDays_() + ' วัน',
+      'Archive spreadsheet พร้อมใช้งาน',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG29VisitLogs() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var visit = ensureVisitLogSchema_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 6);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+
+    var message = [
+      'อัปเกรด VisitLogs เรียบร้อยแล้ว',
+      'จำนวน Visit rows เดิม: ' + visit.rows,
+      'ปรับชื่อหัวข้อ legacy: ' + (visit.migratedLegacyHeaders ? 'ใช่' : 'ไม่'),
+      'รายการใหม่จะไม่เก็บ request parameter values',
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function migrateG17ReportRegistry() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var registry = ensureReportRegistrySheet_(ss);
+    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 7);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
+
+    var message = [
+      'อัปเกรด Report Registry เรียบร้อยแล้ว',
+      'จำนวน Report records เดิม: ' + registry.rows,
+      'Prompt version: ' + CONFIG.REPORT_PROMPT_VERSION,
+      'Schema version: ' + resultingSchemaVersion
+    ].join('\n');
+    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
+    return message;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function isUuid_(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 }
@@ -372,7 +947,7 @@ function ensureEventIdentityData_(sheet) {
       }
     }
     var existingStatus = String(meta[i][2] || '').trim().toLowerCase();
-    if (existingStatus && ['active','void'].indexOf(existingStatus) < 0) {
+    if (existingStatus && ['active','closed','void'].indexOf(existingStatus) < 0) {
       throw new Error('พบ RecordStatus ไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + existingStatus);
     }
   }
@@ -416,145 +991,30 @@ function migrateP1EventIdentity() {
     var ss = getDb_();
     var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
     var summary = ensureEventIdentityData_(sheet);
-    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
-    setSchemaVersionAtLeast_(settings, 2);
+    var settings = getSheet_(CONFIG.SHEETS.SETTINGS);
+    var settingValues = settings.getDataRange().getValues();
+    var existingSchemaVersion = 0;
+    for (var i = 1; i < settingValues.length; i++) {
+      if (String(settingValues[i][0]) === 'SCHEMA_VERSION') {
+        existingSchemaVersion = Number(settingValues[i][1] || 0);
+        break;
+      }
+    }
+    var resultingSchemaVersion = Math.max(existingSchemaVersion, 2);
+    upsertSettingDirect_(settings, 'SCHEMA_VERSION', String(resultingSchemaVersion), 'รุ่นโครงสร้างข้อมูลถาวร', true);
     var message = [
       'อัปเกรด Event identity เรียบร้อยแล้ว',
       'จำนวน Event ที่ตรวจ: ' + summary.rows,
       'สร้าง EventID ใหม่: ' + summary.backfilledIds,
       'กำหนด Revision เริ่มต้น: ' + summary.initializedRevision,
       'กำหนด RecordStatus เริ่มต้น: ' + summary.initializedStatus,
-      'Schema version: 2'
+      'Schema version: ' + resultingSchemaVersion
     ].join('\n');
     try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
     return message;
   } finally {
     lock.releaseLock();
   }
-}
-
-function setSchemaVersionAtLeast_(settingsSheet, targetVersion) {
-  var values = settingsSheet.getDataRange().getValues();
-  var current = 0;
-  for (var i = 1; i < values.length; i++) {
-    if (String(values[i][0]) === 'SCHEMA_VERSION') {
-      current = Number(values[i][1] || 0);
-      break;
-    }
-  }
-  var next = Math.max(current || 0, Number(targetVersion || 0));
-  upsertSettingDirect_(settingsSheet, 'SCHEMA_VERSION', String(next), 'รุ่นโครงสร้างข้อมูลถาวร', true);
-  return next;
-}
-
-function hasWorkflowProgress_(rowObj) {
-  var fields = ['col15','col16','col17','col18','col19','col20','col21','col22','col23','col24','col26'];
-  return fields.some(function(key){ return String(rowObj && rowObj[key] || '').trim() !== ''; });
-}
-
-function deriveWorkflowStatus_(rowObj) {
-  if (String(rowObj && rowObj.recordStatus || 'active').toLowerCase() === 'void') return 'VOID';
-  if (String(rowObj && rowObj.closedAt || '').trim() !== '') return 'CLOSED';
-  return hasWorkflowProgress_(rowObj) ? 'IN_PROGRESS' : 'OPEN';
-}
-
-function getEventConsistencyWarnings_(rowObj) {
-  var warnings = [];
-  var criteriaMet = String(rowObj && rowObj.col17 || '').trim() === 'เข้าเกณฑ์';
-  var investigationFlag = String(rowObj && rowObj.col24 || '').trim();
-  var investigationDate = String(rowObj && rowObj.col26 || '').trim();
-  var measures = String(rowObj && rowObj.col21 || '').trim();
-  var measureDate = String(rowObj && rowObj.col22 || '').trim();
-
-  if (investigationDate && !criteriaMet) {
-    warnings.push('มีวันที่ลงสอบสวน แต่สถานะเข้าเกณฑ์สอบสวนโรคไม่ใช่ "เข้าเกณฑ์"');
-  }
-  if (investigationFlag === 'ลงสอบสวน' && !criteriaMet) {
-    warnings.push('ระบุว่าลงสอบสวน แต่สถานะเข้าเกณฑ์สอบสวนโรคไม่ใช่ "เข้าเกณฑ์"');
-  }
-  if (measureDate && !measures) {
-    warnings.push('มีวันที่ดำเนินมาตรการ แต่ยังไม่มีรายละเอียดการดำเนินการตามมาตรการ');
-  }
-  if (String(rowObj && rowObj.workflowStatus || '') === 'CLOSED') {
-    if (!String(rowObj && rowObj.closedAt || '').trim() || !String(rowObj && rowObj.closedBy || '').trim() || !String(rowObj && rowObj.closeReason || '').trim()) {
-      warnings.push('สถานะ CLOSED มีข้อมูลการปิดเหตุการณ์ไม่ครบถ้วน');
-    }
-  }
-  return warnings;
-}
-
-function ensureWorkflowData_(sheet) {
-  var count = Math.max(sheet.getLastRow() - 1, 0);
-  var summary = {rows:count, initializedWorkflow:0};
-  if (!count) return summary;
-
-  var rows = sheet.getRange(2, 1, count, MAIN_SCHEMA_HEADERS.length).getDisplayValues();
-  var values = sheet.getRange(2, EVENT_META_COL.WORKFLOW_STATUS, count, 1).getValues();
-  var changed = false;
-
-  for (var i = 0; i < count; i++) {
-    if (!String(rows[i][1] || '').trim()) continue;
-    var current = String(values[i][0] || '').trim().toUpperCase();
-    if (current && ['OPEN','IN_PROGRESS','CLOSED','VOID'].indexOf(current) < 0) {
-      throw new Error('พบ WorkflowStatus ไม่ถูกต้องที่แถว ' + (i + 2) + ': ' + current);
-    }
-    if (!current) {
-      var rowObj = rowToObject_(rows[i]);
-      rowObj.closedAt = rows[i][EVENT_META_COL.CLOSED_AT - 1] || '';
-      rowObj.closedBy = rows[i][EVENT_META_COL.CLOSED_BY - 1] || '';
-      rowObj.closeReason = rows[i][EVENT_META_COL.CLOSE_REASON - 1] || '';
-      values[i][0] = deriveWorkflowStatus_(rowObj);
-      summary.initializedWorkflow++;
-      changed = true;
-    }
-  }
-
-  if (changed) sheet.getRange(2, EVENT_META_COL.WORKFLOW_STATUS, count, 1).setValues(values);
-  return summary;
-}
-
-function migrateP3Workflow() {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var ss = getDb_();
-    var sheet = ensureSheet_(ss, CONFIG.SHEETS.MAIN, MAIN_SCHEMA_HEADERS);
-    ensureEventIdentityData_(sheet);
-    var summary = ensureWorkflowData_(sheet);
-    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
-    setSchemaVersionAtLeast_(settings, 3);
-    var message = [
-      'อัปเกรด Workflow / Owner เรียบร้อยแล้ว',
-      'จำนวน Event ที่ตรวจ: ' + summary.rows,
-      'กำหนด WorkflowStatus เริ่มต้น: ' + summary.initializedWorkflow,
-      'Schema version: 3'
-    ].join('\n');
-    try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
-    return message;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function findActiveUserById_(userId) {
-  userId = String(userId || '').trim();
-  if (!userId) return null;
-  var rows = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === userId) {
-      if (String(rows[i][5]).toLowerCase() !== 'active') throw new Error('ผู้รับผิดชอบไม่ได้อยู่ในสถานะ active');
-      return {userId:rows[i][0], name:rows[i][1], email:rows[i][2], role:rows[i][4], status:rows[i][5]};
-    }
-  }
-  throw new Error('ไม่พบผู้รับผิดชอบที่ระบุ');
-}
-
-function listAssignableUsers(sessionToken) {
-  requireAuth_(sessionToken, 'edit');
-  var rows = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
-  return rows.filter(function(r){ return String(r[5]).toLowerCase() === 'active'; }).map(function(r){
-    return {userId:r[0], name:r[1], role:r[4], org:r[6] || ''};
-  }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name), 'th'); });
 }
 
 function findEventRowById_(sheet, eventId, includeVoided) {
@@ -583,48 +1043,8 @@ function getEventMetaFromRow_(row) {
     createdBy: row[EVENT_META_COL.CREATED_BY - 1] || '',
     voidedAt: row[EVENT_META_COL.VOIDED_AT - 1] || '',
     voidedBy: row[EVENT_META_COL.VOIDED_BY - 1] || '',
-    voidReason: row[EVENT_META_COL.VOID_REASON - 1] || '',
-    workflowStatus: String(row[EVENT_META_COL.WORKFLOW_STATUS - 1] || '').toUpperCase(),
-    ownerUserId: String(row[EVENT_META_COL.OWNER_USER_ID - 1] || ''),
-    ownerAssignedAt: row[EVENT_META_COL.OWNER_ASSIGNED_AT - 1] || '',
-    closedAt: row[EVENT_META_COL.CLOSED_AT - 1] || '',
-    closedBy: row[EVENT_META_COL.CLOSED_BY - 1] || '',
-    closeReason: row[EVENT_META_COL.CLOSE_REASON - 1] || ''
+    voidReason: row[EVENT_META_COL.VOID_REASON - 1] || ''
   };
-}
-
-function migrateVisitLogHeader_(sheet) {
-  if (!sheet) return false;
-  var current = String(sheet.getRange(1, 3).getValue() || '').trim();
-  if (!current || current === 'UserAgent') {
-    sheet.getRange(1, 3).setValue('RequestParams');
-    return true;
-  }
-  return false;
-}
-
-function migrateP4Governance() {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var ss = getDb_();
-    var attachments = ensureSheet_(ss, CONFIG.SHEETS.ATTACHMENTS, ['AttachmentID','EventID','FileID','FileName','MimeType','FileSize','DriveUrl','Description','Status','CreatedAt','CreatedBy']);
-    ensureSheet_(ss, CONFIG.SHEETS.AUDIT_ARCHIVE, ['ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint','ArchivedAt','ArchivedBy']);
-    var visits = ensureSheet_(ss, CONFIG.SHEETS.VISITS, ['Timestamp','Page','RequestParams']);
-    var renamedVisitHeader = migrateVisitLogHeader_(visits);
-    var assets = ensureSystemAssets_(ss);
-    var settings = ensureSheet_(ss, CONFIG.SHEETS.SETTINGS, ['Key','Value','Description','UpdatedAt','UpdatedBy']);
-    upsertSettingDirect_(settings, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์', true);
-    setSchemaVersionAtLeast_(settings, 4);
-    return [
-      'อัปเกรด Supporting Governance เรียบร้อยแล้ว',
-      'EventAttachments: ' + attachments.getName(),
-      'VisitLogs header renamed: ' + (renamedVisitHeader ? 'YES' : 'NO'),
-      'Schema version: 4'
-    ].join('\n');
-  } finally {
-    lock.releaseLock();
-  }
 }
 
 function seedSettings_(ss, assets) {
@@ -645,6 +1065,8 @@ function seedSettings_(ss, assets) {
     ['SYSTEM_FOLDER_ID', assets.systemFolderId, 'โฟลเดอร์หลักของระบบ'],
     ['LOGO_FOLDER_ID', assets.logoFolderId, 'โฟลเดอร์เก็บโลโก้'],
     ['ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์'],
+    ['AUDIT_RETENTION_DAYS',String(CONFIG.DEFAULT_AUDIT_RETENTION_DAYS),'จำนวนวันที่เก็บ AuditLogs ในฐานข้อมูลหลักก่อน Archive'],
+    ['AUDIT_ARCHIVE_SPREADSHEET_ID','','Spreadsheet ID สำหรับเก็บ Audit archive'],
     ['GEMINI_API_KEY','','Gemini API Key ตั้งค่าผ่านหน้า Admin'],
     ['GEMINI_MODEL','AUTO','AUTO หรือชื่อโมเดล Gemini ที่รองรับ generateContent'],
     ['TEMPLATE_DOC_ID',assets.templateDocId,'Google Docs Template สำหรับรายงาน'],
@@ -811,8 +1233,8 @@ function getCurrentUserHint_() {
 
 function hasPermission_(role, action) {
   var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','users','settings','master','audit','export','approve'],
+    'Super Admin': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
+    'Manager': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
     'Admin': ['view','create','edit','report','export'],
     'Staff': ['view','export']
   };
@@ -823,7 +1245,7 @@ function requireAuth_(sessionToken, action) {
   var user = getUserByToken_(sessionToken);
   if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
   if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report'].indexOf(action) >= 0) {
+  if (['create','edit','delete','report','assign','close_event'].indexOf(action) >= 0) {
     var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
     if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
   }
@@ -866,6 +1288,460 @@ function findUserByEmail_(email) {
   return null;
 }
 
+function findUserById_(userId) {
+  userId = String(userId || '').trim();
+  if (!userId) return null;
+  var sheet = getSheet_(CONFIG.SHEETS.USERS);
+  var values = sheet.getDataRange().getValues();
+  for (var i=1; i<values.length; i++) {
+    if (String(values[i][0] || '').trim() === userId) {
+      return {
+        rowNumber: i + 1,
+        userId: values[i][0],
+        name: values[i][1],
+        email: values[i][2],
+        passwordHash: values[i][3],
+        role: values[i][4],
+        status: values[i][5],
+        org: values[i][6],
+        tambon: values[i][7],
+        amphoe: values[i][8],
+        province: values[i][9]
+      };
+    }
+  }
+  return null;
+}
+
+function getUserDirectoryById_() {
+  var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  var out = {};
+  values.forEach(function(r) {
+    var userId = String(r[0] || '').trim();
+    if (!userId) return;
+    out[userId] = {
+      userId:userId,
+      name:r[1] || '',
+      email:r[2] || '',
+      role:r[4] || '',
+      status:r[5] || '',
+      org:r[6] || ''
+    };
+  });
+  return out;
+}
+
+function enrichEventOwners_(rows) {
+  var users = getUserDirectoryById_();
+  return rows.map(function(r) {
+    var owner = r.ownerUserId ? users[r.ownerUserId] : null;
+    r.ownerName = owner ? owner.name : '';
+    r.ownerEmail = owner ? owner.email : '';
+    r.ownerRole = owner ? owner.role : '';
+    r.ownerStatus = owner ? owner.status : '';
+    r.ownerOrg = owner ? owner.org : '';
+    r.ownerMissing = !!(r.ownerUserId && !owner);
+    return r;
+  });
+}
+
+function listAssignableEventOwners(sessionToken) {
+  requireAuth_(sessionToken, 'assign');
+  var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
+  return values.map(function(r) {
+    return {
+      userId:String(r[0] || '').trim(),
+      name:r[1] || '',
+      email:r[2] || '',
+      role:r[4] || '',
+      status:r[5] || '',
+      org:r[6] || ''
+    };
+  }).filter(function(u) {
+    return u.userId && u.status === 'active' && hasPermission_(u.role, 'edit');
+  }).sort(function(a,b) {
+    return String(a.name || a.email).localeCompare(String(b.name || b.email), 'th');
+  });
+}
+
+function enrichEventAttachments_(rows) {
+  var ss = getDb_();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  var counts = {};
+  if (sheet && sheet.getLastRow() > 1) {
+    var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, EVENT_ATTACHMENT_HEADERS.length).getValues();
+    values.forEach(function(r) {
+      var eventId = String(r[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+      var status = String(r[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+      if (eventId && status === 'active') counts[eventId] = (counts[eventId] || 0) + 1;
+    });
+  }
+  return rows.map(function(r) {
+    r.attachmentCount = counts[r.eventId] || 0;
+    return r;
+  });
+}
+
+function attachmentMimeAllowed_(mimeType) {
+  return [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ].indexOf(String(mimeType || '').toLowerCase()) >= 0;
+}
+
+function validateAttachmentMagic_(bytes, mimeType) {
+  function b_(i) {
+    var v = Number(bytes[i] || 0);
+    return v < 0 ? v + 256 : v;
+  }
+  mimeType = String(mimeType || '').toLowerCase();
+  if (mimeType === 'application/pdf') {
+    return b_(0) === 0x25 && b_(1) === 0x50 && b_(2) === 0x44 && b_(3) === 0x46 && b_(4) === 0x2d;
+  }
+  if (mimeType === 'image/jpeg') {
+    return b_(0) === 0xff && b_(1) === 0xd8 && b_(2) === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return b_(0) === 0x89 && b_(1) === 0x50 && b_(2) === 0x4e && b_(3) === 0x47 &&
+      b_(4) === 0x0d && b_(5) === 0x0a && b_(6) === 0x1a && b_(7) === 0x0a;
+  }
+  if (mimeType === 'image/webp') {
+    return b_(0) === 0x52 && b_(1) === 0x49 && b_(2) === 0x46 && b_(3) === 0x46 &&
+      b_(8) === 0x57 && b_(9) === 0x45 && b_(10) === 0x42 && b_(11) === 0x50;
+  }
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+    return b_(0) === 0x50 && b_(1) === 0x4b && b_(2) === 0x03 && b_(3) === 0x04;
+  }
+  return false;
+}
+
+function sanitizeAttachmentFileName_(name) {
+  var clean = String(name || 'attachment')
+    .replace(/[\\\/:*?"<>|]+/g, '_')
+    .replace(/[\r\n\t]+/g, '_')
+    .trim();
+  if (!clean) clean = 'attachment';
+  if (clean.length > 120) clean = clean.substring(0, 120);
+  return clean;
+}
+
+function formatAttachmentDateTime_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(value);
+}
+
+function getEventAttachmentRoot_() {
+  var settings = getSettingsMap_();
+  var folderId = String(settings.ATTACHMENT_FOLDER_ID || '').trim();
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (ignore) {}
+  }
+  var assets = ensureSystemAssets_(getDb_());
+  var settingsSheet = getSheet_(CONFIG.SHEETS.SETTINGS);
+  upsertSettingDirect_(settingsSheet, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'Google Drive Folder สำหรับเอกสารแนบเหตุการณ์', true);
+  PropertiesService.getScriptProperties().setProperty('ATTACHMENT_FOLDER_ID', assets.attachmentFolderId);
+  return DriveApp.getFolderById(assets.attachmentFolderId);
+}
+
+function getEventAttachmentFolder_(eventId) {
+  var root = getEventAttachmentRoot_();
+  var matches = root.getFoldersByName(String(eventId));
+  if (matches.hasNext()) return matches.next();
+  return root.createFolder(String(eventId));
+}
+
+function findAttachmentRowById_(sheet, attachmentId, includeRemoved) {
+  attachmentId = String(attachmentId || '').trim();
+  if (!isUuid_(attachmentId)) throw new Error('AttachmentID ไม่ถูกต้อง');
+  var count = Math.max(sheet.getLastRow() - 1, 0);
+  if (!count) throw new Error('ไม่พบเอกสารแนบ');
+  var values = sheet.getRange(2, 1, count, EVENT_ATTACHMENT_HEADERS.length).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][EVENT_ATTACHMENT_COL.ATTACHMENT_ID - 1] || '').trim() === attachmentId) {
+      var status = String(values[i][EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+      if (!includeRemoved && status === 'removed') throw new Error('เอกสารแนบนี้ถูกนำออกแล้ว');
+      return {rowNumber:i + 2, values:values[i]};
+    }
+  }
+  throw new Error('ไม่พบ AttachmentID: ' + attachmentId);
+}
+
+function listEventAttachments(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'view');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, false);
+
+  var ss = getDb_();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS);
+  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, EVENT_ATTACHMENT_HEADERS.length).getValues();
+  return values.filter(function(r) {
+    return String(r[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim() === String(eventId) &&
+      String(r[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase() === 'active';
+  }).map(function(r) {
+    return {
+      attachmentId:String(r[EVENT_ATTACHMENT_COL.ATTACHMENT_ID - 1] || ''),
+      fileName:String(r[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || ''),
+      mimeType:String(r[EVENT_ATTACHMENT_COL.MIME_TYPE - 1] || ''),
+      sizeBytes:Number(r[EVENT_ATTACHMENT_COL.SIZE_BYTES - 1] || 0),
+      description:String(r[EVENT_ATTACHMENT_COL.DESCRIPTION - 1] || ''),
+      uploadedAt:formatAttachmentDateTime_(r[EVENT_ATTACHMENT_COL.UPLOADED_AT - 1]),
+      uploadedBy:String(r[EVENT_ATTACHMENT_COL.UPLOADED_BY - 1] || '')
+    };
+  }).sort(function(a,b) {
+    return String(b.uploadedAt).localeCompare(String(a.uploadedAt));
+  });
+}
+
+function uploadEventAttachment(sessionToken, eventId, payload, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'edit');
+  payload = payload || {};
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนแนบไฟล์');
+  }
+
+  var mimeType = String(payload.mimeType || '').toLowerCase();
+  if (!attachmentMimeAllowed_(mimeType)) {
+    throw new Error('รองรับเฉพาะ PDF, JPG/JPEG, PNG, WEBP, DOCX และ XLSX');
+  }
+
+  var base64 = String(payload.base64 || '');
+  if (!base64) throw new Error('ไม่พบข้อมูลไฟล์แนบ');
+  var bytes = Utilities.base64Decode(base64);
+  if (!bytes.length) throw new Error('ไฟล์แนบไม่มีข้อมูล');
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) throw new Error('ไฟล์แนบต้องมีขนาดไม่เกิน 5 MB');
+  if (!validateAttachmentMagic_(bytes, mimeType)) throw new Error('ชนิดไฟล์ไม่ตรงกับเนื้อหาไฟล์ หรือไฟล์ไม่รองรับ');
+
+  var fileName = sanitizeAttachmentFileName_(payload.name);
+  var description = String(payload.description || '').trim();
+  if (description.length > 500) throw new Error('รายละเอียดไฟล์แนบต้องไม่เกิน 500 ตัวอักษร');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(main, eventId, false);
+    var status = String(main.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแนบไฟล์');
+
+    var currentRevision = Number(main.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนแนบไฟล์');
+    }
+
+    var attachmentSheet = ensureEventAttachmentSheet_(ss);
+    var folder = getEventAttachmentFolder_(eventId);
+    var attachmentId = Utilities.getUuid();
+    var now = new Date();
+    var file = null;
+    try {
+      file = folder.createFile(Utilities.newBlob(bytes, mimeType, attachmentId + '_' + fileName));
+      attachmentSheet.appendRow([
+        attachmentId,
+        eventId,
+        file.getId(),
+        fileName,
+        mimeType,
+        bytes.length,
+        description,
+        'active',
+        now,
+        user.email || '',
+        '',
+        '',
+        ''
+      ]);
+
+      main.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+      main.getRange(rowNumber, 27).setValue(user.email || '');
+      main.getRange(rowNumber, 28).setValue(now);
+    } catch (e) {
+      if (file) {
+        try { file.setTrashed(true); } catch (ignore) {}
+      }
+      throw e;
+    }
+
+    writeAudit_(
+      user,
+      'UPLOAD_EVENT_ATTACHMENT',
+      CONFIG.SHEETS.ATTACHMENTS,
+      attachmentId,
+      '',
+      JSON.stringify({eventId:eventId, fileName:fileName, mimeType:mimeType, sizeBytes:bytes.length})
+    );
+
+    return {
+      ok:true,
+      message:'แนบไฟล์เรียบร้อยแล้ว',
+      attachmentId:attachmentId,
+      revision:currentRevision + 1
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function downloadEventAttachment(sessionToken, attachmentId) {
+  var user = requireAuth_(sessionToken, 'view');
+  var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
+  var found = findAttachmentRowById_(sheet, attachmentId, false);
+  var row = found.values;
+  var eventId = String(row[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(main, eventId, false);
+
+  var fileId = String(row[EVENT_ATTACHMENT_COL.FILE_ID - 1] || '').trim();
+  var file;
+  try { file = DriveApp.getFileById(fileId); }
+  catch (e) { throw new Error('ไม่พบไฟล์เอกสารแนบใน Google Drive'); }
+
+  var blob = file.getBlob();
+  var bytes = blob.getBytes();
+  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) {
+    throw new Error('ไฟล์เอกสารแนบมีขนาดเกินขีดจำกัดการดาวน์โหลดของระบบ');
+  }
+
+  writeAudit_(
+    user,
+    'DOWNLOAD_EVENT_ATTACHMENT',
+    CONFIG.SHEETS.ATTACHMENTS,
+    attachmentId,
+    '',
+    JSON.stringify({eventId:eventId, fileName:String(row[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || file.getName())})
+  );
+
+  return {
+    fileName:String(row[EVENT_ATTACHMENT_COL.FILE_NAME - 1] || file.getName()),
+    mimeType:String(row[EVENT_ATTACHMENT_COL.MIME_TYPE - 1] || blob.getContentType() || 'application/octet-stream'),
+    sizeBytes:bytes.length,
+    base64:Utilities.base64Encode(bytes)
+  };
+}
+
+function removeEventAttachment(sessionToken, attachmentId, removeReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'delete');
+  var reason = String(removeReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนนำเอกสารแนบออก');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureEventAttachmentSheet_(ss);
+    var found = findAttachmentRowById_(sheet, attachmentId, true);
+    var row = found.values;
+    var status = String(row[EVENT_ATTACHMENT_COL.STATUS - 1] || 'active').trim().toLowerCase();
+    var eventId = String(row[EVENT_ATTACHMENT_COL.EVENT_ID - 1] || '').trim();
+
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var eventRow = findEventRowById_(main, eventId, false);
+    var eventStatus = String(main.getRange(eventRow, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (eventStatus === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนนำเอกสารแนบออก');
+
+    var currentRevision = Number(main.getRange(eventRow, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนนำเอกสารแนบออก');
+    }
+    if (status === 'removed') return {ok:true, message:'เอกสารแนบนี้ถูกนำออกไว้แล้ว', revision:currentRevision};
+
+    var now = new Date();
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.STATUS).setValue('removed');
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVED_AT).setValue(now);
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVED_BY).setValue(user.email || '');
+    sheet.getRange(found.rowNumber, EVENT_ATTACHMENT_COL.REMOVE_REASON).setValue(reason);
+
+    main.getRange(eventRow, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    main.getRange(eventRow, 27).setValue(user.email || '');
+    main.getRange(eventRow, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'REMOVE_EVENT_ATTACHMENT',
+      CONFIG.SHEETS.ATTACHMENTS,
+      attachmentId,
+      JSON.stringify({eventId:eventId, status:status}),
+      JSON.stringify({eventId:eventId, status:'removed', reason:reason})
+    );
+
+    return {ok:true, message:'นำเอกสารแนบออกจากเหตุการณ์แล้ว', revision:currentRevision + 1};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) {
+  var actor = requireAuth_(sessionToken, 'assign');
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
+  }
+
+  ownerUserId = String(ownerUserId || '').trim();
+  var owner = null;
+  if (ownerUserId) {
+    owner = findUserById_(ownerUserId);
+    if (!owner) throw new Error('ไม่พบบัญชีผู้รับผิดชอบที่เลือก');
+    if (owner.status !== 'active') throw new Error('บัญชีผู้รับผิดชอบที่เลือกไม่ได้อยู่ในสถานะ active');
+    if (!hasPermission_(owner.role, 'edit')) throw new Error('บัญชีผู้รับผิดชอบที่เลือกไม่มีสิทธิ์แก้ไขเหตุการณ์');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var ss = getDb_();
+    var sheet = ensureEventOwnerSchema_(ss);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปลี่ยนผู้รับผิดชอบ');
+    }
+
+    var beforeOwnerUserId = String(sheet.getRange(rowNumber, EVENT_OWNER_COL).getValue() || '').trim();
+    if (beforeOwnerUserId === ownerUserId) {
+      return ownerUserId ? 'ผู้รับผิดชอบเหตุการณ์ไม่เปลี่ยนแปลง' : 'เหตุการณ์นี้ยังไม่ได้กำหนดผู้รับผิดชอบ';
+    }
+
+    sheet.getRange(rowNumber, EVENT_OWNER_COL).setValue(ownerUserId);
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(actor.email || '');
+    sheet.getRange(rowNumber, 28).setValue(new Date());
+
+    writeAudit_(
+      actor,
+      'ASSIGN_EVENT_OWNER',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({ownerUserId:beforeOwnerUserId}),
+      JSON.stringify({ownerUserId:ownerUserId, ownerName:owner ? owner.name : ''})
+    );
+
+    return ownerUserId
+      ? 'กำหนดผู้รับผิดชอบเหตุการณ์เรียบร้อยแล้ว'
+      : 'ยกเลิกการกำหนดผู้รับผิดชอบเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function login(payload) {
   var email = String(payload.email || '').trim().toLowerCase();
   var password = String(payload.password || '');
@@ -898,7 +1774,7 @@ function registerUser(payload) {
 }
 
 function publicUser_(u) {
-  return {userId:u.userId, name:u.name, email:u.email, role:u.role, status:u.status, org:u.org, tambon:u.tambon, amphoe:u.amphoe, province:u.province};
+  return {name:u.name, email:u.email, role:u.role, status:u.status, org:u.org, tambon:u.tambon, amphoe:u.amphoe, province:u.province};
 }
 
 function getAppBoot(sessionToken) {
@@ -916,89 +1792,6 @@ function getAppBoot(sessionToken) {
   };
 }
 
-var MASTER_TYPES = ['surveillance','disease_group','event_type','verify_status','criteria','risk','content_category'];
-
-function listMasterItems(sessionToken, type) {
-  requireAuth_(sessionToken, 'master');
-  type = String(type || '').trim();
-  if (type && MASTER_TYPES.indexOf(type) < 0) throw new Error('ประเภท MasterData ไม่ถูกต้อง');
-  return getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1).map(function(r){
-    return {
-      type:String(r[0] || ''),
-      value:String(r[1] || ''),
-      label:String(r[2] || r[1] || ''),
-      sort:Number(r[3] || 999),
-      active:String(r[4]).toLowerCase() !== 'false',
-      updatedAt:r[5] || '',
-      updatedBy:r[6] || ''
-    };
-  }).filter(function(item){ return !type || item.type === type; });
-}
-
-function saveMasterItem(sessionToken, item) {
-  var user = requireAuth_(sessionToken, 'master');
-  item = item || {};
-  var type = String(item.type || '').trim();
-  var value = String(item.value || '').trim();
-  var label = String(item.label || value).trim();
-  var sort = Number(item.sort || 999);
-  var active = item.active !== false;
-  var originalType = String(item.originalType || '').trim();
-  var originalValue = String(item.originalValue || '').trim();
-
-  if (MASTER_TYPES.indexOf(type) < 0) throw new Error('ประเภท MasterData ไม่ถูกต้อง');
-  if (!value) throw new Error('กรุณาระบุ Value');
-  if (!label) throw new Error('กรุณาระบุ Label');
-  if (!isFinite(sort) || sort < 0) throw new Error('SortOrder ไม่ถูกต้อง');
-  if (type === 'criteria' && value === 'เข้าเกณฑ์' && !active) {
-    throw new Error('ไม่สามารถปิดใช้ค่าเข้าเกณฑ์ ซึ่งเป็นค่ามาตรฐานสำหรับ KPI');
-  }
-
-  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
-  var rows = sheet.getDataRange().getValues();
-  var targetRow = 0;
-  var existingByNewKey = 0;
-
-  for (var i = 1; i < rows.length; i++) {
-    var rowType = String(rows[i][0] || '');
-    var rowValue = String(rows[i][1] || '');
-    if (rowType === type && rowValue === value) existingByNewKey = i + 1;
-    if (originalType && originalValue && rowType === originalType && rowValue === originalValue) targetRow = i + 1;
-  }
-
-  if (targetRow) {
-    if (type !== originalType || value !== originalValue) throw new Error('Type และ Value ของรายการเดิมเปลี่ยนไม่ได้ กรุณาสร้างรายการใหม่');
-  } else {
-    if (existingByNewKey) throw new Error('มี MasterData Type/Value นี้อยู่แล้ว');
-    targetRow = sheet.getLastRow() + 1;
-  }
-
-  var before = targetRow <= sheet.getLastRow() ? sheet.getRange(targetRow,1,1,7).getDisplayValues()[0] : [];
-  sheet.getRange(targetRow,1,1,7).setValues([[type,value,label,sort,active,new Date(),user.email]]);
-  writeAudit_(user, originalType ? 'UPDATE_MASTER_DATA' : 'CREATE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, JSON.stringify(before), JSON.stringify(item));
-  return 'บันทึก MasterData เรียบร้อยแล้ว';
-}
-
-function disableMasterItem(sessionToken, type, value) {
-  var user = requireAuth_(sessionToken, 'master');
-  type = String(type || '').trim();
-  value = String(value || '').trim();
-  if (type === 'criteria' && value === 'เข้าเกณฑ์') throw new Error('ไม่สามารถปิดใช้ค่าเข้าเกณฑ์ ซึ่งเป็นค่ามาตรฐานสำหรับ KPI');
-
-  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === type && String(rows[i][1]) === value) {
-      var before = sheet.getRange(i+1,1,1,7).getDisplayValues()[0];
-      sheet.getRange(i+1,5).setValue(false);
-      sheet.getRange(i+1,6,1,2).setValues([[new Date(),user.email]]);
-      writeAudit_(user, 'DISABLE_MASTER_DATA', CONFIG.SHEETS.MASTER, type + ':' + value, JSON.stringify(before), JSON.stringify({active:false}));
-      return 'ปิดใช้ MasterData เรียบร้อยแล้ว';
-    }
-  }
-  throw new Error('ไม่พบ MasterData ที่ระบุ');
-}
-
 function getMasterData() {
   var values = getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1);
   var out = {};
@@ -1012,6 +1805,250 @@ function getMasterData() {
   return out;
 }
 
+function normalizeMasterKey_(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getActiveMasterValueSets_() {
+  var sets = {};
+  Object.keys(MASTER_DATA_POLICIES).forEach(function(type){ sets[type] = {}; });
+  var rows = getSheet_(CONFIG.SHEETS.MASTER).getDataRange().getValues().slice(1);
+  rows.forEach(function(r) {
+    var type = String(r[0] || '').trim();
+    var value = String(r[1] || '').trim();
+    var active = String(r[4]).toLowerCase() !== 'false';
+    if (!type || !value || !active || !sets[type]) return;
+    sets[type][value] = true;
+  });
+  return sets;
+}
+
+function validateEventMasterData_(data, beforeRow) {
+  var mapping = {
+    4:'surveillance',
+    5:'disease_group',
+    7:'event_type',
+    15:'verify_status',
+    17:'criteria',
+    19:'risk'
+  };
+  var sets = getActiveMasterValueSets_();
+
+  Object.keys(mapping).forEach(function(colKey) {
+    var col = Number(colKey);
+    var type = mapping[col];
+    var value = String((data || {})['col' + col] || '').trim();
+    if (!value) return;
+    if (sets[type] && sets[type][value]) return;
+
+    var oldValue = beforeRow ? String(beforeRow[col - 1] || '').trim() : '';
+    if (beforeRow && oldValue === value) return;
+
+    throw new Error('ค่า "' + value + '" ของ ' + MASTER_DATA_POLICIES[type].label + ' ไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+  });
+}
+
+function isActiveMasterValue_(type, value) {
+  getMasterPolicy_(type);
+  value = String(value || '').trim();
+  if (!value) return false;
+  var sets = getActiveMasterValueSets_();
+  return !!(sets[type] && sets[type][value]);
+}
+
+function getMasterPolicy_(type) {
+  type = String(type || '').trim();
+  var policy = MASTER_DATA_POLICIES[type];
+  if (!policy) throw new Error('MasterData Type ไม่ได้รับอนุญาต: ' + type);
+  return policy;
+}
+
+function buildMasterDataUsageMap_() {
+  var usage = {};
+  Object.keys(MASTER_DATA_POLICIES).forEach(function(type){ usage[type] = {}; });
+
+  var mainPolicies = Object.keys(MASTER_DATA_POLICIES).filter(function(type){
+    return MASTER_DATA_POLICIES[type].sourceSheet === 'main';
+  });
+  if (mainPolicies.length) {
+    var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var mainRows = main.getDataRange().getValues().slice(1);
+    mainRows.forEach(function(row) {
+      mainPolicies.forEach(function(type) {
+        var policy = MASTER_DATA_POLICIES[type];
+        var value = String(row[policy.sourceColumn - 1] || '').trim();
+        if (value) usage[type][value] = (usage[type][value] || 0) + 1;
+      });
+    });
+  }
+
+  var contentPolicies = Object.keys(MASTER_DATA_POLICIES).filter(function(type){
+    return MASTER_DATA_POLICIES[type].sourceSheet === 'content';
+  });
+  if (contentPolicies.length) {
+    var content = getSheet_(CONFIG.SHEETS.CONTENT);
+    var contentRows = content.getDataRange().getValues().slice(1);
+    contentRows.forEach(function(row) {
+      contentPolicies.forEach(function(type) {
+        var policy = MASTER_DATA_POLICIES[type];
+        var value = String(row[policy.sourceColumn - 1] || '').trim();
+        if (value) usage[type][value] = (usage[type][value] || 0) + 1;
+      });
+    });
+  }
+
+  return usage;
+}
+
+function countMasterDataUsage_(type, value, usageMap) {
+  getMasterPolicy_(type);
+  var wanted = String(value || '').trim();
+  if (!wanted) return 0;
+  var map = usageMap || buildMasterDataUsageMap_();
+  return map[type] && map[type][wanted] ? map[type][wanted] : 0;
+}
+
+function getMasterDataAdmin(sessionToken) {
+  requireAuth_(sessionToken, 'master');
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues().slice(1);
+  var usageMap = buildMasterDataUsageMap_();
+  var items = [];
+
+  rows.forEach(function(r) {
+    var type = String(r[0] || '').trim();
+    var value = String(r[1] || '').trim();
+    if (!type || !value || !MASTER_DATA_POLICIES[type]) return;
+    var policy = MASTER_DATA_POLICIES[type];
+    items.push({
+      type:type,
+      typeLabel:policy.label,
+      value:value,
+      label:String(r[2] || value),
+      sortOrder:Number(r[3] || 999),
+      active:String(r[4]).toLowerCase() !== 'false',
+      usageCount:countMasterDataUsage_(type, value, usageMap),
+      allowCreate:policy.allowCreate,
+      allowDeactivate:policy.allowDeactivate,
+      semanticLocked:policy.semanticLocked
+    });
+  });
+
+  items.sort(function(a,b) {
+    return String(a.typeLabel).localeCompare(String(b.typeLabel), 'th') ||
+      a.sortOrder - b.sortOrder ||
+      String(a.label).localeCompare(String(b.label), 'th');
+  });
+
+  var types = Object.keys(MASTER_DATA_POLICIES).map(function(type) {
+    var p = MASTER_DATA_POLICIES[type];
+    return {
+      type:type,
+      label:p.label,
+      allowCreate:p.allowCreate,
+      allowDeactivate:p.allowDeactivate,
+      semanticLocked:p.semanticLocked
+    };
+  }).sort(function(a,b){ return String(a.label).localeCompare(String(b.label), 'th'); });
+
+  return {types:types, items:items};
+}
+
+function saveMasterDataItem(sessionToken, item) {
+  var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
+
+  var mode = String(item.mode || '').trim().toLowerCase();
+  if (['create','update'].indexOf(mode) < 0) throw new Error('โหมดการบันทึก MasterData ไม่ถูกต้อง');
+
+  var type = String(item.type || '').trim();
+  var value = String(item.value || '').trim();
+  var label = String(item.label || '').trim();
+  var sortOrder = Number(item.sortOrder);
+  var active = !(item.active === false || String(item.active).toLowerCase() === 'false');
+  var policy = getMasterPolicy_(type);
+
+  if (!value) throw new Error('กรุณาระบุ Value');
+  if (!label) throw new Error('กรุณาระบุ Label');
+  if (value.length > 120) throw new Error('Value ต้องไม่เกิน 120 ตัวอักษร');
+  if (label.length > 160) throw new Error('Label ต้องไม่เกิน 160 ตัวอักษร');
+  if (!isFinite(sortOrder) || Math.floor(sortOrder) !== sortOrder || sortOrder < 1 || sortOrder > 9999) {
+    throw new Error('SortOrder ต้องเป็นจำนวนเต็ม 1-9999');
+  }
+  if (!policy.allowDeactivate && !active) {
+    throw new Error('Type นี้เป็นค่าควบคุมของระบบและไม่อนุญาตให้ปิดใช้งาน');
+  }
+
+  var sheet = getSheet_(CONFIG.SHEETS.MASTER);
+  var rows = sheet.getDataRange().getValues();
+  var wantedKey = normalizeMasterKey_(value);
+  var matchRow = 0;
+  var duplicateRow = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var rowType = String(rows[i][0] || '').trim();
+    var rowValue = String(rows[i][1] || '').trim();
+    if (rowType !== type) continue;
+    if (normalizeMasterKey_(rowValue) === wantedKey) {
+      duplicateRow = i + 1;
+      if (rowValue === value) matchRow = i + 1;
+      break;
+    }
+  }
+
+  var now = new Date();
+  if (mode === 'create') {
+    if (!policy.allowCreate) {
+      throw new Error('Type นี้เป็นค่าควบคุมของระบบและไม่อนุญาตให้สร้าง Value ใหม่');
+    }
+    if (duplicateRow) throw new Error('มี MasterData Type/Value นี้อยู่แล้ว');
+    sheet.appendRow([type, value, label, sortOrder, active, now, user.email || '']);
+    writeAudit_(
+      user,
+      'CREATE_MASTER_DATA',
+      CONFIG.SHEETS.MASTER,
+      type + ':' + value,
+      '',
+      JSON.stringify({type:type,value:value,label:label,sortOrder:sortOrder,active:active})
+    );
+    return 'เพิ่ม MasterData เรียบร้อยแล้ว';
+  }
+
+  var originalType = String(item.originalType || '').trim();
+  var originalValue = String(item.originalValue || '').trim();
+  if (!originalType || !originalValue) throw new Error('ไม่พบ identity เดิมของ MasterData');
+  if (originalType !== type || originalValue !== value) {
+    throw new Error('ไม่อนุญาตให้เปลี่ยน Type หรือ Value ของ MasterData เดิม');
+  }
+  if (!matchRow) throw new Error('ไม่พบ MasterData ที่ต้องการแก้ไข');
+
+  var before = sheet.getRange(matchRow, 1, 1, 7).getValues()[0];
+  sheet.getRange(matchRow, 3, 1, 5).setValues([[
+    label,
+    sortOrder,
+    active,
+    now,
+    user.email || ''
+  ]]);
+
+  writeAudit_(
+    user,
+    'UPDATE_MASTER_DATA',
+    CONFIG.SHEETS.MASTER,
+    type + ':' + value,
+    JSON.stringify({
+      type:before[0],
+      value:before[1],
+      label:before[2],
+      sortOrder:before[3],
+      active:String(before[4]).toLowerCase() !== 'false'
+    }),
+    JSON.stringify({type:type,value:value,label:label,sortOrder:sortOrder,active:active})
+  );
+
+  return 'บันทึก MasterData เรียบร้อยแล้ว';
+}
+
 function getPublishedContent() {
   var values = getSheet_(CONFIG.SHEETS.CONTENT).getDataRange().getValues().slice(1);
   return values.filter(function(r){ return String(r[6]).toLowerCase() === 'published'; }).map(function(r){
@@ -1023,12 +2060,10 @@ function getFilteredEventRows_(filter) {
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var data = sheet.getDataRange().getDisplayValues();
   if (data.length <= 1) return [];
-
-  var result = data.slice(1).map(function(row) {
+  var rows = data.slice(1);
+  var result = rows.map(function(row) {
     return rowToObject_(row);
-  }).filter(function(r) {
-    return r.col2 !== '' && String(r.recordStatus || 'active').toLowerCase() !== 'void';
-  });
+  }).filter(function(r) { return r.col2 !== '' && String(r.recordStatus || 'active').toLowerCase() !== 'void'; });
 
   filter = filter || {};
   if (filter.startDate || filter.endDate) {
@@ -1045,99 +2080,288 @@ function getFilteredEventRows_(filter) {
   return result;
 }
 
-function isCriteriaMet_(row) {
-  return String(row && row.col17 || '').trim() === 'เข้าเกณฑ์';
-}
-
-function isInvestigated_(row) {
-  return isCriteriaMet_(row) && String(row && row.col26 || '').trim() !== '';
-}
-
-function aggregateEventRows_(data) {
-  data = data || [];
-  var criteriaRows = data.filter(isCriteriaMet_);
-  var investigatedRows = criteriaRows.filter(isInvestigated_);
-  var criteria = criteriaRows.length;
-  var investigated = investigatedRows.length;
-  var pendingCriteria = criteriaRows.filter(function(r){ return !isInvestigated_(r); }).length;
-
-  return {
-    kpi: {
-      events: data.length,
-      criteria: criteria,
-      investigated: investigated,
-      investigationRate: criteria ? Math.round(investigated / criteria * 100) : 0,
-      pendingCriteria: pendingCriteria
-    },
-    charts: {
-      byVillage: countMap_(data, 'col29'),
-      byMonth: countByMonth_(data),
-      byDiseaseGroup: countMap_(data, 'col5'),
-      byRisk: countMap_(data, 'col19')
-    },
-    insight: {
-      topDisease: topKey_(countMap_(data, 'col6')),
-      topVillage: topKey_(countMap_(data, 'col29')),
-      pendingCriteria: pendingCriteria
-    }
-  };
-}
-
-function countMap_(data, field) {
-  var map = {};
-  (data || []).forEach(function(r) {
-    var key = String(r && r[field] || '').trim() || 'ไม่ระบุ';
-    map[key] = (map[key] || 0) + 1;
-  });
-  return map;
-}
-
-function countByMonth_(data) {
-  var map = {};
-  (data || []).forEach(function(r) {
-    var value = String(r.col2 || '');
-    if (!value) return;
-    var key = value.substring(0, 7);
-    map[key] = (map[key] || 0) + 1;
-  });
-  return map;
-}
-
-function topKey_(map) {
-  var keys = Object.keys(map || {});
-  if (!keys.length) return '';
-  keys.sort(function(a,b){
-    var diff = Number(map[b] || 0) - Number(map[a] || 0);
-    return diff || String(a).localeCompare(String(b), 'th');
-  });
-  return keys[0];
+function getDashboardData(sessionToken, filter) {
+  requireAuth_(sessionToken, 'view');
+  return enrichEventAttachments_(enrichEventOwners_(getFilteredEventRows_(filter || {})));
 }
 
 function getPublicDashboardData(filter) {
-  return aggregateEventRows_(getFilteredEventRows_(filter || {}));
+  return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
 }
 
-function getDashboardData(sessionToken, filter) {
-  requireAuth_(sessionToken, 'view');
-  return getFilteredEventRows_(filter || {});
+function isInvestigationCriteriaMet_(value) {
+  return String(value || '').trim() === 'เข้าเกณฑ์';
 }
 
+function buildDashboardAggregate_(rows) {
+  var byVillage = {};
+  var byMonth = {};
+  var byDiseaseGroup = {};
+  var byRisk = {};
+  var byDisease = {};
+  var criteria = 0;
+  var investigated = 0;
+  var pendingCriteria = 0;
+
+  rows.forEach(function(r) {
+    var village = r.col29
+      ? ('บ้าน' + r.col29 + (r.col10 ? ' หมู่ ' + r.col10 : ''))
+      : (r.col10 ? 'หมู่ ' + r.col10 : 'ไม่ระบุหมู่บ้าน');
+    var month = r.col2 ? String(r.col2).substring(0, 7) : 'ไม่ระบุ';
+    var diseaseGroup = String(r.col5 || 'ไม่ระบุ');
+    var risk = String(r.col19 || 'ไม่ระบุ');
+    var disease = String(r.col6 || 'ไม่ระบุ');
+    var meetsCriteria = isInvestigationCriteriaMet_(r.col17);
+    var hasInvestigationDate = r.col26 !== '';
+
+    byVillage[village] = (byVillage[village] || 0) + 1;
+    byMonth[month] = (byMonth[month] || 0) + 1;
+    byDiseaseGroup[diseaseGroup] = (byDiseaseGroup[diseaseGroup] || 0) + 1;
+    byRisk[risk] = (byRisk[risk] || 0) + 1;
+    byDisease[disease] = (byDisease[disease] || 0) + 1;
+
+    if (meetsCriteria) {
+      criteria++;
+      if (!hasInvestigationDate) pendingCriteria++;
+    }
+    if (hasInvestigationDate) investigated++;
+  });
+
+  function sortedEntries_(map, alpha) {
+    var keys = Object.keys(map);
+    if (alpha) keys.sort();
+    else keys.sort(function(a,b){ return map[b] - map[a] || String(a).localeCompare(String(b), 'th'); });
+    return keys.map(function(k){ return [k, map[k]]; });
+  }
+
+  var diseaseEntries = sortedEntries_(byDisease, false);
+  var villageEntries = sortedEntries_(byVillage, false);
+  var total = rows.length;
+  var rate = criteria
+    ? Math.round(investigated / criteria * 100)
+    : (total ? Math.round(investigated / total * 100) : 0);
+
+  return {
+    kpi: {
+      events: total,
+      criteria: criteria,
+      investigated: investigated,
+      investigationRate: rate,
+      pendingCriteria: pendingCriteria
+    },
+    topDisease: diseaseEntries.length ? diseaseEntries[0][0] : 'ไม่ระบุ',
+    topVillage: villageEntries.length ? villageEntries[0][0] : 'ไม่ระบุ',
+    byVillage: villageEntries,
+    byMonth: sortedEntries_(byMonth, true),
+    byDiseaseGroup: sortedEntries_(byDiseaseGroup, false),
+    byRisk: sortedEntries_(byRisk, false)
+  };
+}
+
+function deriveEventLifecycle_(event) {
+  event = event || {};
+  var recordStatus = String(event.recordStatus || 'active').trim().toLowerCase();
+  var verification = String(event.col15 || '').trim();
+  var criteria = String(event.col17 || '').trim();
+  var investigationDate = String(event.col26 || '').trim();
+
+  if (recordStatus === 'void') {
+    return {code:'voided', label:'ยกเลิก'};
+  }
+  if (recordStatus === 'closed') {
+    return {code:'closed', label:'ปิดเหตุการณ์แล้ว'};
+  }
+
+  // A recorded investigation date is the strongest existing evidence that
+  // the investigation has already taken place. Earlier contradictory fields
+  // are surfaced later by G-04 rather than hidden by lifecycle derivation.
+  if (investigationDate) {
+    return {code:'investigated', label:'สอบสวนแล้ว'};
+  }
+
+  if (isInvestigationCriteriaMet_(criteria)) {
+    return {code:'investigation_required', label:'รอสอบสวน'};
+  }
+  if (criteria === 'ไม่เข้าเกณฑ์') {
+    return {code:'criteria_not_met', label:'ไม่เข้าเกณฑ์สอบสวน'};
+  }
+  if (criteria === 'รอดำเนินการ') {
+    return {code:'criteria_pending', label:'รอประเมินเกณฑ์'};
+  }
+
+  if (verification === 'ตรวจสอบแล้วไม่จริง') {
+    return {code:'verification_rejected', label:'ตรวจสอบแล้วไม่จริง'};
+  }
+  if (verification === 'ตรวจสอบแล้วจริง') {
+    return {code:'criteria_pending', label:'รอประเมินเกณฑ์'};
+  }
+  if (verification === 'รอตรวจสอบ') {
+    return {code:'verification_pending', label:'รอตรวจสอบ'};
+  }
+
+  return {code:'received', label:'รับแจ้งแล้ว'};
+}
+
+function deriveEventConsistencyWarnings_(event) {
+  event = event || {};
+  var recordStatus = String(event.recordStatus || 'active').trim().toLowerCase();
+  if (recordStatus === 'void') return [];
+
+  var verification = String(event.col15 || '').trim();
+  var criteria = String(event.col17 || '').trim();
+  var investigationDecision = String(event.col24 || '').trim();
+  var investigationDate = String(event.col26 || '').trim();
+  var warnings = [];
+
+  function add_(code, message) {
+    warnings.push({code:code, message:message});
+  }
+
+  if (verification === 'ตรวจสอบแล้วไม่จริง' && isInvestigationCriteriaMet_(criteria)) {
+    add_('VERIFY_FALSE_BUT_CRITERIA_MET', 'ตรวจสอบแล้วไม่จริง แต่ระบุว่าเข้าเกณฑ์สอบสวนโรค');
+  }
+  if (verification === 'ตรวจสอบแล้วไม่จริง' && investigationDate) {
+    add_('VERIFY_FALSE_BUT_INVESTIGATED', 'ตรวจสอบแล้วไม่จริง แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (criteria === 'ไม่เข้าเกณฑ์' && investigationDate) {
+    add_('CRITERIA_NOT_MET_BUT_INVESTIGATED', 'ไม่เข้าเกณฑ์สอบสวนโรค แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (criteria === 'รอดำเนินการ' && investigationDate) {
+    add_('CRITERIA_PENDING_BUT_INVESTIGATED', 'ยังรอประเมินเกณฑ์ แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (investigationDecision === 'ไม่ลงสอบสวน' && investigationDate) {
+    add_('NO_INVESTIGATION_BUT_DATE_SET', 'ระบุว่าไม่ลงสอบสวน แต่มีวันที่ลงสอบสวนโรค');
+  }
+  if (investigationDecision === 'ลงสอบสวน' && !investigationDate) {
+    add_('INVESTIGATION_MARKED_WITHOUT_DATE', 'ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค');
+  }
+  if (isInvestigationCriteriaMet_(criteria) && investigationDecision === 'ไม่ลงสอบสวน') {
+    add_('CRITERIA_MET_BUT_NO_INVESTIGATION', 'เข้าเกณฑ์สอบสวนโรค แต่ระบุว่าไม่ลงสอบสวน');
+  }
+
+  return warnings;
+}
+
+function deriveAIReportReadiness_(event) {
+  event = event || {};
+  var warnings = [];
+
+  function has_(value) {
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    return !!text && !/^(?:\.{3,}|…+|[-—]+|ไม่ระบุ|ไม่ทราบ|ไม่มีข้อมูล|ข้อมูลไม่ปรากฏ)$/i.test(text);
+  }
+  function add_(code, severity, field, message) {
+    warnings.push({code:code, severity:severity, field:field, message:message});
+  }
+
+  var hasLocation = [
+    event.col8,
+    event.col10,
+    event.col11,
+    event.col12,
+    event.col13,
+    event.col29
+  ].some(has_);
+
+  if (!has_(event.col2)) {
+    add_('REPORT_CORE_RECEIVED_DATE_MISSING', 'core', 'col2', 'ยังไม่มีวันรับแจ้ง ซึ่งใช้เป็นข้อมูลหลักของความเป็นมา');
+  }
+  if (!has_(event.col6)) {
+    add_('REPORT_CORE_EVENT_MISSING', 'core', 'col6', 'ยังไม่มีโรค/ภัย/เหตุการณ์ ซึ่งเป็นหัวข้อหลักของรายงาน');
+  }
+  if (!hasLocation) {
+    add_('REPORT_CORE_LOCATION_MISSING', 'core', 'col8|col10|col11|col12|col13|col29', 'ยังไม่มีสถานที่หรือข้อมูลพื้นที่สำหรับอธิบายจุดเกิดเหตุ');
+  }
+  if (!has_(event.col14)) {
+    add_('REPORT_CORE_NARRATIVE_MISSING', 'core', 'col14', 'ยังไม่มีรายละเอียดเหตุการณ์/ผลการสอบสวนเบื้องต้นสำหรับใช้วิเคราะห์');
+  }
+
+  if (!has_(event.col3)) {
+    add_('REPORT_REPORTER_MISSING', 'important', 'col3', 'ยังไม่มีผู้แจ้งข่าวหรือหน่วยงานที่แจ้ง');
+  }
+  if (!has_(event.col9)) {
+    add_('REPORT_ONSET_DATE_MISSING', 'important', 'col9', 'ยังไม่มีวันที่เริ่มป่วยของเหตุการณ์');
+  }
+  if (!has_(event.col15)) {
+    add_('REPORT_VERIFICATION_MISSING', 'important', 'col15', 'ยังไม่มีผลการตรวจสอบความจริงของเหตุการณ์');
+  } else if (String(event.col15).trim() === 'รอตรวจสอบ') {
+    add_('REPORT_VERIFICATION_PENDING', 'important', 'col15', 'เหตุการณ์ยังอยู่ระหว่างตรวจสอบความจริง');
+  }
+  if (!has_(event.col17)) {
+    add_('REPORT_CRITERIA_MISSING', 'important', 'col17', 'ยังไม่มีผลประเมินเกณฑ์สอบสวนโรค');
+  } else if (String(event.col17).trim() === 'รอดำเนินการ') {
+    add_('REPORT_CRITERIA_PENDING', 'important', 'col17', 'การประเมินเกณฑ์สอบสวนโรคยังไม่แล้วเสร็จ');
+  }
+  if (!has_(event.col19)) {
+    add_('REPORT_RISK_MISSING', 'important', 'col19', 'ยังไม่มีข้อมูลประเมินความเสี่ยงแจ้งเตือนให้ใช้ตรวจทานการประเมินของ AI');
+  }
+  if (!has_(event.col21)) {
+    add_('REPORT_MEASURES_MISSING', 'important', 'col21', 'ยังไม่มีมาตรการหรือกิจกรรมควบคุมโรคที่ดำเนินการ');
+  }
+  if (!has_(event.col20) && !has_(event.col23)) {
+    add_('REPORT_AGENCY_MISSING', 'important', 'col20|col23', 'ยังไม่มีหน่วยงานแจ้งเตือนหรือหน่วยงานรับแจ้งสำหรับอ้างอิงในรายงาน');
+  }
+
+  var consistency = Array.isArray(event.eventConsistencyWarnings)
+    ? event.eventConsistencyWarnings
+    : deriveEventConsistencyWarnings_(event);
+  var hasG04InvestigationDateWarning = consistency.some(function(w) {
+    return String(w.code || '') === 'INVESTIGATION_MARKED_WITHOUT_DATE';
+  });
+  var lifecycle = String(event.eventLifecycle || deriveEventLifecycle_(event).code || '');
+  var investigationDecision = String(event.col24 || '').trim();
+  if ((lifecycle === 'investigated' || investigationDecision === 'ลงสอบสวน') &&
+      !has_(event.col26) && !hasG04InvestigationDateWarning) {
+    add_('REPORT_INVESTIGATION_DATE_MISSING', 'important', 'col26', 'เหตุการณ์ระบุว่าลงสอบสวนแล้ว แต่ยังไม่มีวันที่ลงสอบสวนโรค');
+  }
+
+  consistency.forEach(function(w) {
+    add_(
+      'REPORT_CONSISTENCY_' + String(w.code || 'WARNING'),
+      'consistency',
+      '',
+      String(w.message || 'พบข้อมูล workflow ที่ควรตรวจสอบก่อนสร้างรายงาน')
+    );
+  });
+
+  var coreMissingCount = warnings.filter(function(w){return w.severity === 'core';}).length;
+  var importantMissingCount = warnings.filter(function(w){return w.severity === 'important';}).length;
+  var consistencyWarningCount = warnings.filter(function(w){return w.severity === 'consistency';}).length;
+  var level = coreMissingCount > 0
+    ? 'limited'
+    : (importantMissingCount > 0 || consistencyWarningCount > 0 ? 'review' : 'ready');
+
+  var label = level === 'ready'
+    ? 'พร้อมสร้างรายงาน'
+    : (level === 'review' ? 'ควรตรวจสอบข้อมูลก่อนสร้างรายงาน' : 'ข้อมูลหลักยังไม่ครบ');
+
+  return {
+    level:level,
+    label:label,
+    canGenerate:true,
+    warningCount:warnings.length,
+    coreMissingCount:coreMissingCount,
+    importantMissingCount:importantMissingCount,
+    consistencyWarningCount:consistencyWarningCount,
+    warnings:warnings
+  };
+}
 
 function rowToObject_(row) {
   var obj = {};
   for (var i=0; i<MAIN_HEADERS.length; i++) obj['col' + (i+1)] = row[i] || '';
   var meta = getEventMetaFromRow_(row);
-  // Raw Event projection is authenticated (P2). Expose only lifecycle metadata
-  // required by the record UI; detailed void metadata remains server-side.
+  // P1 exposes only metadata required for browser identity/concurrency.
+  // Created/void audit metadata remains server-side until a later authenticated contract needs it.
   obj.eventId = meta.eventId;
   obj.revision = meta.revision;
   obj.recordStatus = meta.recordStatus;
-  obj.workflowStatus = meta.workflowStatus || deriveWorkflowStatus_(Object.assign({}, obj, meta));
-  obj.ownerUserId = meta.ownerUserId;
-  obj.closedAt = meta.closedAt;
-  obj.closedBy = meta.closedBy;
-  obj.closeReason = meta.closeReason;
-  obj.consistencyWarnings = getEventConsistencyWarnings_(Object.assign({}, obj, meta, {workflowStatus:obj.workflowStatus}));
+  obj.ownerUserId = String(row[EVENT_OWNER_COL - 1] || '').trim();
+  var lifecycle = deriveEventLifecycle_(obj);
+  obj.eventLifecycle = lifecycle.code;
+  obj.eventLifecycleLabel = lifecycle.label;
+  obj.eventConsistencyWarnings = deriveEventConsistencyWarnings_(obj);
+  obj.aiReportReadiness = deriveAIReportReadiness_(obj);
   return obj;
 }
 
@@ -1168,16 +2392,11 @@ function addRecord(sessionToken, formData) {
     var eventId = Utilities.getUuid();
     var now = new Date();
 
+    validateEventMasterData_(formData || {}, null);
     sheet.getRange(newRow, 1).setValue(newRow - 1);
     saveRowData_(sheet, newRow, formData, user);
-    var ownerUserId = String(formData && formData.ownerUserId || '').trim();
-    if (ownerUserId) findActiveUserById_(ownerUserId);
-    var createdRow = sheet.getRange(newRow, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
-    var createdObj = rowToObject_(createdRow);
-    var workflowStatus = deriveWorkflowStatus_(createdObj);
     sheet.getRange(newRow, EVENT_META_COL.EVENT_ID, 1, EVENT_META_HEADERS.length).setValues([[
-      eventId, 1, 'active', now, user.email, '', '', '',
-      workflowStatus, ownerUserId, ownerUserId ? now : '', '', '', ''
+      eventId, 1, 'active', now, user.email, '', '', ''
     ]]);
 
     writeAudit_(user, 'CREATE_RECORD', CONFIG.SHEETS.MAIN, eventId, '', JSON.stringify(formData));
@@ -1194,6 +2413,8 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
   try {
     var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
     var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    if (status === 'closed') throw new Error('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไขข้อมูล');
     var before = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
     var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
     var expected = Number(expectedRevision);
@@ -1204,30 +2425,96 @@ function updateRecord(sessionToken, eventId, formData, expectedRevision) {
       throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนบันทึกอีกครั้ง');
     }
 
-    var currentWorkflow = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
-    if (currentWorkflow === 'CLOSED') throw new Error('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนแก้ไข');
-
-    var existingOwner = String(sheet.getRange(rowNumber, EVENT_META_COL.OWNER_USER_ID).getValue() || '');
-    var ownerUserId = String(formData && formData.ownerUserId || '').trim();
-    if (ownerUserId) findActiveUserById_(ownerUserId);
-
+    validateEventMasterData_(formData || {}, before);
     saveRowData_(sheet, rowNumber, formData, user);
-    var now = new Date();
-    if (ownerUserId !== existingOwner) {
-      sheet.getRange(rowNumber, EVENT_META_COL.OWNER_USER_ID).setValue(ownerUserId);
-      sheet.getRange(rowNumber, EVENT_META_COL.OWNER_ASSIGNED_AT).setValue(ownerUserId ? now : '');
-    }
     sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
-    var afterRow = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
-    var afterObj = rowToObject_(afterRow);
-    var nextWorkflow = deriveWorkflowStatus_(afterObj);
-    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue(nextWorkflow);
-
-    if (ownerUserId !== existingOwner) {
-      writeAudit_(user, ownerUserId ? 'ASSIGN_EVENT_OWNER' : 'CLEAR_EVENT_OWNER', CONFIG.SHEETS.MAIN, eventId, existingOwner, ownerUserId);
-    }
     writeAudit_(user, 'UPDATE_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify(formData));
     return 'อัปเดตข้อมูลเรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function closeEvent(sessionToken, eventId, closeReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'close_event');
+  var reason = String(closeReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
+
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
+    }
+    if (status === 'closed') return 'เหตุการณ์นี้ถูกปิดไว้แล้ว';
+
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('closed');
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(user.email || '');
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'CLOSE_EVENT',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({recordStatus:status}),
+      JSON.stringify({recordStatus:'closed', reason:reason})
+    );
+    return 'ปิดเหตุการณ์เรียบร้อยแล้ว';
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reopenEvent(sessionToken, eventId, reopenReason, expectedRevision) {
+  var user = requireAuth_(sessionToken, 'close_event');
+  var reason = String(reopenReason || '').trim();
+  if (!reason) throw new Error('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');
+
+  var expected = Number(expectedRevision);
+  if (!expected || expected < 1 || Math.floor(expected) !== expected) {
+    throw new Error('ไม่พบ Revision ของเหตุการณ์ กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+    var rowNumber = findEventRowById_(sheet, eventId, false);
+    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').toLowerCase();
+    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+    if (expected !== currentRevision) {
+      throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
+    }
+    if (status === 'active') return 'เหตุการณ์นี้เปิดใช้งานอยู่แล้ว';
+    if (status !== 'closed') throw new Error('สามารถเปิดเหตุการณ์อีกครั้งได้เฉพาะเหตุการณ์ที่มีสถานะ closed');
+
+    var now = new Date();
+    sheet.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).setValue('active');
+    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
+    sheet.getRange(rowNumber, 27).setValue(user.email || '');
+    sheet.getRange(rowNumber, 28).setValue(now);
+
+    writeAudit_(
+      user,
+      'REOPEN_EVENT',
+      CONFIG.SHEETS.MAIN,
+      eventId,
+      JSON.stringify({recordStatus:'closed'}),
+      JSON.stringify({recordStatus:'active', reason:reason})
+    );
+    return 'เปิดเหตุการณ์อีกครั้งเรียบร้อยแล้ว';
   } finally {
     lock.releaseLock();
   }
@@ -1262,79 +2549,11 @@ function deleteRecord(sessionToken, eventId, voidReason, expectedRevision) {
     sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_AT).setValue(now);
     sheet.getRange(rowNumber, EVENT_META_COL.VOIDED_BY).setValue(user.email);
     sheet.getRange(rowNumber, EVENT_META_COL.VOID_REASON).setValue(reason);
-    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue('VOID');
     sheet.getRange(rowNumber, 27).setValue(user.email);
     sheet.getRange(rowNumber, 28).setValue(now);
 
     writeAudit_(user, 'VOID_RECORD', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify({recordStatus:'void',voidReason:reason}));
     return 'ยกเลิกข้อมูลเหตุการณ์เรียบร้อยแล้ว';
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function closeEvent(sessionToken, eventId, reason, expectedRevision) {
-  var user = requireAuth_(sessionToken, 'edit');
-  reason = String(reason || '').trim();
-  if (!reason) throw new Error('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-    var rowNumber = findEventRowById_(sheet, eventId, false);
-    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
-    if (Number(expectedRevision) !== currentRevision) throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนปิดเหตุการณ์');
-
-    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
-    if (status === 'CLOSED') return 'เหตุการณ์นี้ปิดไว้แล้ว';
-
-    var now = new Date();
-    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
-    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue('CLOSED');
-    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT).setValue(now);
-    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_BY).setValue(user.email);
-    sheet.getRange(rowNumber, EVENT_META_COL.CLOSE_REASON).setValue(reason);
-    sheet.getRange(rowNumber, 27).setValue(user.email);
-    sheet.getRange(rowNumber, 28).setValue(now);
-
-    writeAudit_(user, 'CLOSE_EVENT', CONFIG.SHEETS.MAIN, eventId, '', JSON.stringify({reason:reason}));
-    return 'ปิดเหตุการณ์เรียบร้อยแล้ว';
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function reopenEvent(sessionToken, eventId, expectedRevision) {
-  var user = requireAuth_(sessionToken, 'edit');
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-    var rowNumber = findEventRowById_(sheet, eventId, false);
-    var currentRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
-    if (Number(expectedRevision) !== currentRevision) throw new Error('ข้อมูลเหตุการณ์ถูกแก้ไขจากผู้ใช้อื่นแล้ว กรุณารีเฟรชข้อมูลก่อนเปิดเหตุการณ์อีกครั้ง');
-
-    var status = String(sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
-    if (status !== 'CLOSED') return 'เหตุการณ์นี้ไม่ได้อยู่ในสถานะปิด';
-
-    var before = {
-      closedAt: sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT).getDisplayValue(),
-      closedBy: sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_BY).getDisplayValue(),
-      closeReason: sheet.getRange(rowNumber, EVENT_META_COL.CLOSE_REASON).getDisplayValue()
-    };
-
-    sheet.getRange(rowNumber, EVENT_META_COL.CLOSED_AT, 1, 3).clearContent();
-    var now = new Date();
-    sheet.getRange(rowNumber, EVENT_META_COL.REVISION).setValue(currentRevision + 1);
-    var row = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
-    var nextWorkflow = deriveWorkflowStatus_(rowToObject_(row));
-    sheet.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).setValue(nextWorkflow);
-    sheet.getRange(rowNumber, 27).setValue(user.email);
-    sheet.getRange(rowNumber, 28).setValue(now);
-
-    writeAudit_(user, 'REOPEN_EVENT', CONFIG.SHEETS.MAIN, eventId, JSON.stringify(before), JSON.stringify({workflowStatus:nextWorkflow}));
-    return 'เปิดเหตุการณ์อีกครั้งเรียบร้อยแล้ว';
   } finally {
     lock.releaseLock();
   }
@@ -1354,17 +2573,29 @@ function saveRowData_(sheet, row, data, user) {
 
 function getAnalytics(sessionToken) {
   var user = requireAuth_(sessionToken, 'view');
-  var summary = aggregateEventRows_(getFilteredEventRows_({}));
+  var data = getFilteredEventRows_({});
   var users = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
   var logs = getSheet_(CONFIG.SHEETS.AUDIT).getDataRange().getValues().slice(1);
-
-  summary.kpi.users = users.length;
-  summary.kpi.activeUsers = users.filter(function(r){return r[5] === 'active';}).length;
-  summary.kpi.auditLogs = logs.length;
-  summary.user = publicUser_(user);
-  return summary;
+  var byRisk = countBy_(data, 'col19');
+  var byDisease = countBy_(data, 'col6');
+  var byTambon = countBy_(data, 'col11');
+  var byVillage = countBy_(data, 'col29');
+  return {
+    kpi: {
+      events: data.length,
+      criteria: data.filter(function(r){return isInvestigationCriteriaMet_(r.col17);}).length,
+      investigated: data.filter(function(r){return r.col26 !== '';}).length,
+      users: users.length,
+      activeUsers: users.filter(function(r){return r[5] === 'active';}).length,
+      auditLogs: logs.length
+    },
+    byRisk: byRisk,
+    byDisease: byDisease,
+    byTambon: byTambon,
+    byVillage: byVillage,
+    user: publicUser_(user)
+  };
 }
-
 
 function countBy_(arr, field) {
   var map = {};
@@ -1570,10 +2801,14 @@ function getInstallationStatus(sessionToken) {
     spreadsheetName: ss.getName(),
     systemFolderId: settings.SYSTEM_FOLDER_ID || '',
     reportFolderId: settings.REPORT_FOLDER_ID || '',
+    attachmentFolderId: settings.ATTACHMENT_FOLDER_ID || '',
+    auditArchiveSpreadsheetId: settings.AUDIT_ARCHIVE_SPREADSHEET_ID || '',
+    auditRetentionDays: getAuditRetentionDays_(),
     templateDocId: settings.TEMPLATE_DOC_ID || '',
     logoFileId: settings.LOGO_FILE_ID || '',
     areas: Math.max(getSheet_(CONFIG.SHEETS.AREAS).getLastRow() - 1, 0),
-    events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0)
+    events: Math.max(getSheet_(CONFIG.SHEETS.MAIN).getLastRow() - 1, 0),
+    attachments: Math.max((ss.getSheetByName(CONFIG.SHEETS.ATTACHMENTS) || {getLastRow:function(){return 1;}}).getLastRow() - 1, 0)
   };
 }
 
@@ -1593,18 +2828,30 @@ function listContent(sessionToken) {
 
 function saveContent(sessionToken, item) {
   var user = requireAuth_(sessionToken, 'master');
+  item = item || {};
   var sheet = getSheet_(CONFIG.SHEETS.CONTENT);
+  var category = String(item.category || '').trim();
+  if (!category) throw new Error('กรุณาเลือกหมวดหมู่เนื้อหา');
+
   if (!item.id) {
+    if (!isActiveMasterValue_('content_category', category)) {
+      throw new Error('หมวดหมู่เนื้อหาไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+    }
     item.id = Utilities.getUuid();
-    sheet.appendRow([item.id, item.category, item.title, item.description, item.url, item.fileId, item.status || 'draft', item.sort || 999, new Date(), new Date(), user.email]);
+    sheet.appendRow([item.id,category,item.title,item.description,item.url,item.fileId,item.status || 'draft',item.sort || 999,new Date(),new Date(),user.email]);
     writeAudit_(user, 'CREATE_CONTENT', CONFIG.SHEETS.CONTENT, item.id, '', JSON.stringify(item));
     return 'เพิ่มข้อมูลเนื้อหาเรียบร้อยแล้ว';
   }
+
   var values = sheet.getDataRange().getValues();
   for (var i=1; i<values.length; i++) {
     if (values[i][0] === item.id) {
+      var existingCategory = String(values[i][1] || '').trim();
+      if (category !== existingCategory && !isActiveMasterValue_('content_category', category)) {
+        throw new Error('หมวดหมู่เนื้อหาใหม่ไม่อยู่ใน MasterData ที่เปิดใช้งาน');
+      }
       var before = JSON.stringify(values[i]);
-      sheet.getRange(i+1,2,1,10).setValues([[item.category,item.title,item.description,item.url,item.fileId,item.status,item.sort || 999,values[i][8] || new Date(),new Date(),user.email]]);
+      sheet.getRange(i+1,2,1,10).setValues([[category,item.title,item.description,item.url,item.fileId,item.status,item.sort || 999,values[i][8] || new Date(),new Date(),user.email]]);
       writeAudit_(user, 'UPDATE_CONTENT', CONFIG.SHEETS.CONTENT, item.id, before, JSON.stringify(item));
       return 'อัปเดตข้อมูลเนื้อหาเรียบร้อยแล้ว';
     }
@@ -1621,7 +2868,7 @@ function getSystemSettings(sessionToken) {
 function saveSystemSettings(sessionToken, settingsArray) {
   var user = requireAuth_(sessionToken, 'settings');
   var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
-  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','ATTACHMENT_FOLDER_ID','LOGO_FILE_ID','INSTALL_VERSION','SCHEMA_VERSION'];
+  var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','ATTACHMENT_FOLDER_ID','AUDIT_ARCHIVE_SPREADSHEET_ID','AUDIT_RETENTION_DAYS','INSTALL_VERSION','SCHEMA_VERSION'];
   settingsArray.forEach(function(s) {
     if (!s.key || blockedKeys.indexOf(String(s.key)) >= 0) return;
     upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
@@ -1630,148 +2877,328 @@ function saveSystemSettings(sessionToken, settingsArray) {
   return 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว';
 }
 
-function getAttachmentFolder_() {
-  var settings = getSettingsMap_();
-  var folderId = String(settings.ATTACHMENT_FOLDER_ID || '');
+function getAuditRetentionDays_() {
+  var settings = {};
+  try { settings = getSettingsMap_(); } catch (ignore) {}
+  var days = Number(settings.AUDIT_RETENTION_DAYS || CONFIG.DEFAULT_AUDIT_RETENTION_DAYS);
+  if (!isFinite(days)) days = CONFIG.DEFAULT_AUDIT_RETENTION_DAYS;
+  days = Math.floor(days);
+  if (days < 90) days = 90;
+  if (days > 3650) days = 3650;
+  return days;
+}
+
+function auditTimestampToDate_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+  if (value === null || value === undefined || value === '') return null;
+  var parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getAuditArchiveSpreadsheet_(dbSs) {
+  dbSs = dbSs || getDb_();
+  var settings = {};
+  try { settings = getSettingsMap_(); } catch (ignore) {}
+  var props = PropertiesService.getScriptProperties();
+  var configuredId = String(settings.AUDIT_ARCHIVE_SPREADSHEET_ID || props.getProperty('AUDIT_ARCHIVE_SPREADSHEET_ID') || '').trim();
+
+  if (configuredId) {
+    try {
+      var existing = SpreadsheetApp.openById(configuredId);
+      existing.getName();
+      return existing;
+    } catch (ignoreConfigured) {}
+  }
+
+  var systemFolderId = String(settings.SYSTEM_FOLDER_ID || props.getProperty('SYSTEM_FOLDER_ID') || '').trim();
+  var systemFolder;
+  if (systemFolderId) {
+    try { systemFolder = DriveApp.getFolderById(systemFolderId); } catch (ignoreFolder) {}
+  }
+  if (!systemFolder) {
+    var assets = ensureSystemAssets_(dbSs);
+    systemFolder = DriveApp.getFolderById(assets.systemFolderId);
+  }
+
+  var archiveName = 'Smart SRRT Audit Archive - ' + dbSs.getName();
+  var matches = systemFolder.getFilesByName(archiveName);
+  while (matches.hasNext()) {
+    var candidate = matches.next();
+    try {
+      var found = SpreadsheetApp.openById(candidate.getId());
+      found.getName();
+      return found;
+    } catch (ignoreCandidate) {}
+  }
+
+  var archive = SpreadsheetApp.create(archiveName);
+  DriveApp.getFileById(archive.getId()).moveTo(systemFolder);
+  return archive;
+}
+
+function ensureAuditArchiveSpreadsheet_(dbSs) {
+  return getAuditArchiveSpreadsheet_(dbSs);
+}
+
+function ensureAuditArchiveYearSheet_(archiveSs, year) {
+  var name = 'Y' + String(year);
+  var sheet = archiveSs.getSheetByName(name);
+
+  if (!sheet) {
+    var sheets = archiveSs.getSheets();
+    if (sheets.length === 1 && sheets[0].getLastRow() === 0 && sheets[0].getName() === 'Sheet1') {
+      sheet = sheets[0];
+      sheet.setName(name);
+    } else {
+      sheet = archiveSs.insertSheet(name);
+    }
+  }
+
+  if (sheet.getMaxColumns() < AUDIT_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), AUDIT_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(AUDIT_HEADERS);
+  } else {
+    var current = sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).getValues()[0];
+    for (var i = 0; i < AUDIT_HEADERS.length; i++) {
+      var actual = String(current[i] || '').trim();
+      if (actual && actual !== AUDIT_HEADERS[i]) {
+        throw new Error('Audit archive ' + name + ' มีหัวข้อไม่ตรงที่คอลัมน์ ' + (i + 1));
+      }
+      if (!actual && sheet.getLastRow() > 1) {
+        var existing = sheet.getRange(2, i + 1, sheet.getLastRow() - 1, 1).getValues();
+        for (var r = 0; r < existing.length; r++) {
+          if (String(existing[r][0] || '').trim() !== '') {
+            throw new Error('Audit archive ' + name + ' มีข้อมูลใต้หัวข้อว่างที่คอลัมน์ ' + (i + 1));
+          }
+        }
+      }
+    }
+    var patched = current.slice();
+    var changed = false;
+    for (var h = 0; h < AUDIT_HEADERS.length; h++) {
+      if (!String(patched[h] || '').trim()) {
+        patched[h] = AUDIT_HEADERS[h];
+        changed = true;
+      }
+    }
+    if (changed) sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).setValues([patched]);
+  }
+
   try {
-    if (folderId) return DriveApp.getFolderById(folderId);
-  } catch (ignore) {}
-  var assets = ensureSystemAssets_(getDb_());
-  var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
-  upsertSettingDirect_(sheet, 'ATTACHMENT_FOLDER_ID', assets.attachmentFolderId, 'โฟลเดอร์เก็บเอกสารแนบเหตุการณ์', true);
-  return DriveApp.getFolderById(assets.attachmentFolderId);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, AUDIT_HEADERS.length).setFontWeight('bold');
+  } catch (ignoreFormat) {}
+  return sheet;
 }
 
-function allowedAttachmentMime_(mimeType) {
-  return [
-    'application/pdf',
-    'image/png','image/jpeg','image/webp',
-    'text/plain','text/csv',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  ].indexOf(String(mimeType || '').toLowerCase()) >= 0;
-}
-
-function listEventAttachments(sessionToken, eventId) {
-  requireAuth_(sessionToken, 'view');
-  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  findEventRowById_(main, eventId, true);
-  return getSheet_(CONFIG.SHEETS.ATTACHMENTS).getDataRange().getValues().slice(1).filter(function(r){
-    return String(r[1]) === String(eventId) && String(r[8] || 'active').toLowerCase() === 'active';
-  }).map(function(r){
-    return {
-      attachmentId:r[0], eventId:r[1], fileName:r[3], mimeType:r[4], fileSize:Number(r[5] || 0),
-      description:r[7] || '', createdAt:r[9] || '', createdBy:r[10] || ''
-    };
+function getAuditArchiveIds_(sheet) {
+  var out = {};
+  var count = Math.max(sheet.getLastRow() - 1, 0);
+  if (!count) return out;
+  var ids = sheet.getRange(2, AUDIT_COL.AUDIT_ID, count, 1).getValues();
+  ids.forEach(function(r) {
+    var id = String(r[0] || '').trim();
+    if (id) out[id] = true;
   });
+  return out;
 }
 
-function uploadEventAttachment(sessionToken, eventId, payload) {
-  var user = requireAuth_(sessionToken, 'edit');
-  payload = payload || {};
-  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
-  var rowNumber = findEventRowById_(main, eventId, false);
-  var workflow = String(main.getRange(rowNumber, EVENT_META_COL.WORKFLOW_STATUS).getValue() || '').toUpperCase();
-  if (workflow === 'CLOSED') throw new Error('เหตุการณ์นี้ปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเพิ่มเอกสารแนบ');
+function deleteAuditSourceRows_(sheet, rowNumbers) {
+  if (!rowNumbers.length) return;
+  var sorted = rowNumbers.slice().sort(function(a,b){return b-a;});
+  var high = sorted[0];
+  var low = high;
 
-  var mimeType = String(payload.mimeType || '').toLowerCase();
-  if (!allowedAttachmentMime_(mimeType)) throw new Error('ประเภทไฟล์เอกสารแนบไม่รองรับ');
-  var bytes = Utilities.base64Decode(String(payload.base64 || ''));
-  if (!bytes.length) throw new Error('ไม่พบข้อมูลไฟล์');
-  if (bytes.length > CONFIG.MAX_ATTACHMENT_BYTES) throw new Error('ไฟล์เอกสารแนบต้องมีขนาดไม่เกิน 5 MB');
+  function flush_() {
+    sheet.deleteRows(low, high - low + 1);
+  }
 
-  var cleanName = String(payload.name || 'attachment').replace(/[^\wก-๙.\- ]+/g,'_').trim() || 'attachment';
-  var folder = getAttachmentFolder_();
-  var file = folder.createFile(Utilities.newBlob(bytes, mimeType, new Date().getTime() + '_' + cleanName));
-  // Deliberately keep Event attachments private; do not alter Drive sharing.
-
-  var attachmentId = Utilities.getUuid();
-  var description = String(payload.description || '').trim();
-  getSheet_(CONFIG.SHEETS.ATTACHMENTS).appendRow([
-    attachmentId, eventId, file.getId(), cleanName, mimeType, bytes.length, file.getUrl(),
-    description, 'active', new Date(), user.email
-  ]);
-  writeAudit_(user, 'UPLOAD_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, '', JSON.stringify({eventId:eventId,fileName:cleanName,fileSize:bytes.length}));
-  return {ok:true, attachmentId:attachmentId, fileName:cleanName, message:'แนบไฟล์เรียบร้อยแล้ว'};
-}
-
-function downloadEventAttachment(sessionToken, attachmentId) {
-  requireAuth_(sessionToken, 'view');
-  var rows = getSheet_(CONFIG.SHEETS.ATTACHMENTS).getDataRange().getValues().slice(1);
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(attachmentId) && String(rows[i][8] || 'active').toLowerCase() === 'active') {
-      var file = DriveApp.getFileById(String(rows[i][2]));
-      var blob = file.getBlob();
-      return {
-        fileName:String(rows[i][3] || file.getName()),
-        mimeType:String(rows[i][4] || blob.getContentType()),
-        base64:Utilities.base64Encode(blob.getBytes())
-      };
+  for (var i = 1; i < sorted.length; i++) {
+    if (sorted[i] === low - 1) {
+      low = sorted[i];
+    } else {
+      flush_();
+      high = sorted[i];
+      low = high;
     }
   }
-  throw new Error('ไม่พบเอกสารแนบที่ระบุ');
+  flush_();
 }
 
-function archiveEventAttachment(sessionToken, attachmentId) {
-  var user = requireAuth_(sessionToken, 'edit');
-  var sheet = getSheet_(CONFIG.SHEETS.ATTACHMENTS);
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(attachmentId)) {
-      if (String(rows[i][8] || '').toLowerCase() === 'archived') return 'เอกสารแนบนี้ถูกเก็บเข้าคลังแล้ว';
-      sheet.getRange(i+1,9).setValue('archived');
-      writeAudit_(user, 'ARCHIVE_EVENT_ATTACHMENT', CONFIG.SHEETS.ATTACHMENTS, attachmentId, JSON.stringify({status:rows[i][8]}), JSON.stringify({status:'archived'}));
-      return 'เก็บเอกสารแนบเข้าคลังเรียบร้อยแล้ว';
+function getAuditRetentionStatus(sessionToken) {
+  requireAuth_(sessionToken, 'audit');
+  var ss = getDb_();
+  var audit = ensureAuditSchema_(ss);
+  var sheet = audit.sheet;
+  var days = getAuditRetentionDays_();
+  var cutoff = new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
+  var values = sheet.getLastRow() > 1
+    ? sheet.getRange(2, 1, sheet.getLastRow() - 1, AUDIT_HEADERS.length).getValues()
+    : [];
+  var eligible = 0;
+  var malformed = 0;
+  var oldest = null;
+
+  values.forEach(function(r) {
+    var d = auditTimestampToDate_(r[AUDIT_COL.TIMESTAMP - 1]);
+    if (!d) {
+      malformed++;
+      return;
     }
-  }
-  throw new Error('ไม่พบเอกสารแนบที่ระบุ');
+    if (!oldest || d.getTime() < oldest.getTime()) oldest = d;
+    if (d.getTime() < cutoff.getTime()) eligible++;
+  });
+
+  var settings = getSettingsMap_();
+  return {
+    activeRows: values.length,
+    retentionDays: days,
+    eligibleRows: eligible,
+    malformedTimestampRows: malformed,
+    cutoff: Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+    oldestTimestamp: oldest ? Utilities.formatDate(oldest, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss') : '',
+    archiveSpreadsheetId: String(settings.AUDIT_ARCHIVE_SPREADSHEET_ID || '')
+  };
 }
 
-function auditArchiveKey_(row) {
-  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(row), Utilities.Charset.UTF_8);
-  return raw.map(function(b){ var v=(b<0?b+256:b).toString(16); return v.length===1?'0'+v:v; }).join('');
-}
-
-function archiveAuditLogs(sessionToken, olderThanDays) {
+function archiveAuditLogs(sessionToken) {
   var user = requireAuth_(sessionToken, 'audit');
-  var days = Number(olderThanDays);
-  if (!isFinite(days) || days < 1 || Math.floor(days) !== days) throw new Error('จำนวนวันที่สำหรับ Archive ไม่ถูกต้อง');
+  return archiveAuditLogsCore_(user);
+}
 
+function archiveAuditLogsFromSheetMenu() {
+  var email = '';
+  try { email = String(Session.getActiveUser().getEmail() || '').trim(); } catch (ignore) {}
+  var user = email ? findUserByEmail_(email) : null;
+  if (!user || user.status !== 'active' || !hasPermission_(user.role, 'audit')) {
+    throw new Error('ไม่สามารถยืนยันสิทธิ์ผู้ดูแลจากบัญชี Google นี้ได้ กรุณาใช้ปุ่ม Archive ในหน้า Admin');
+  }
+  var result = archiveAuditLogsCore_(user);
+  var message = [
+    'จัดเก็บ Audit เรียบร้อยแล้ว',
+    'รายการที่เข้าเกณฑ์: ' + result.eligibleRows,
+    'เพิ่มเข้า Archive ใหม่: ' + result.newlyArchivedRows,
+    'ลบออกจาก AuditLogs หลัง verify: ' + result.removedFromActiveRows,
+    'รายการ timestamp ผิดรูปแบบที่คงไว้: ' + result.malformedTimestampRows
+  ].join('\n');
+  try { SpreadsheetApp.getUi().alert(message); } catch (ignoreUi) {}
+  return message;
+}
+
+function archiveAuditLogsCore_(user) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    var active = getSheet_(CONFIG.SHEETS.AUDIT);
-    var archive = getSheet_(CONFIG.SHEETS.AUDIT_ARCHIVE);
-    var rows = active.getDataRange().getValues();
-    if (rows.length <= 1) return 'ไม่มี Audit Logs สำหรับ Archive';
-
-    var existingKeys = {};
-    archive.getDataRange().getValues().slice(1).forEach(function(r){ if (r[0]) existingKeys[String(r[0])] = true; });
-    var cutoff = new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
-    var move = [];
-
-    for (var i = 1; i < rows.length; i++) {
-      var ts = rows[i][0] instanceof Date ? rows[i][0] : new Date(rows[i][0]);
-      if (isNaN(ts.getTime()) || ts >= cutoff) continue;
-      var key = auditArchiveKey_(rows[i]);
-      move.push({rowNumber:i+1,key:key,row:rows[i]});
-    }
-
-    if (!move.length) return 'ไม่มี Audit Logs ที่เก่ากว่าเกณฑ์';
-
+    var ss = getDb_();
+    var audit = ensureAuditSchema_(ss);
+    var source = audit.sheet;
+    var days = getAuditRetentionDays_();
     var now = new Date();
-    var appendRows = move.filter(function(x){ return !existingKeys[x.key]; }).map(function(x){
-      return [x.key].concat(x.row).concat([now,user.email]);
-    });
-    if (appendRows.length) {
-      archive.getRange(archive.getLastRow()+1,1,appendRows.length,12).setValues(appendRows);
+    var cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    var count = Math.max(source.getLastRow() - 1, 0);
+    var values = count ? source.getRange(2, 1, count, AUDIT_HEADERS.length).getValues() : [];
+    var candidates = [];
+    var malformed = 0;
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var d = auditTimestampToDate_(row[AUDIT_COL.TIMESTAMP - 1]);
+      if (!d) {
+        malformed++;
+        continue;
+      }
+      if (d.getTime() >= cutoff.getTime()) continue;
+
+      var auditId = String(row[AUDIT_COL.AUDIT_ID - 1] || '').trim();
+      if (!isUuid_(auditId)) throw new Error('AuditID ไม่ถูกต้องที่ AuditLogs แถว ' + (i + 2));
+      candidates.push({
+        sourceRow:i + 2,
+        row:row,
+        auditId:auditId,
+        year:Number(Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy'))
+      });
     }
 
-    for (var j = move.length - 1; j >= 0; j--) active.deleteRow(move[j].rowNumber);
-    writeAudit_(user, 'ARCHIVE_AUDIT_LOGS', CONFIG.SHEETS.AUDIT_ARCHIVE, String(move.length), '', JSON.stringify({olderThanDays:days,archived:move.length}));
-    return 'Archive Audit Logs จำนวน ' + move.length + ' รายการเรียบร้อยแล้ว';
+    if (!candidates.length) {
+      return {
+        retentionDays:days,
+        eligibleRows:0,
+        newlyArchivedRows:0,
+        removedFromActiveRows:0,
+        malformedTimestampRows:malformed,
+        archiveSpreadsheetId:String(getSettingsMap_().AUDIT_ARCHIVE_SPREADSHEET_ID || '')
+      };
+    }
+
+    var archiveSs = ensureAuditArchiveSpreadsheet_(ss);
+    var byYear = {};
+    candidates.forEach(function(c) {
+      if (!byYear[c.year]) byYear[c.year] = [];
+      byYear[c.year].push(c);
+    });
+
+    var newlyArchived = 0;
+    Object.keys(byYear).forEach(function(yearKey) {
+      var yearSheet = ensureAuditArchiveYearSheet_(archiveSs, yearKey);
+      var existingIds = getAuditArchiveIds_(yearSheet);
+      var toAppend = byYear[yearKey].filter(function(c){ return !existingIds[c.auditId]; });
+      if (toAppend.length) {
+        yearSheet.getRange(yearSheet.getLastRow() + 1, 1, toAppend.length, AUDIT_HEADERS.length)
+          .setValues(toAppend.map(function(c){ return c.row; }));
+        newlyArchived += toAppend.length;
+      }
+    });
+
+    var verified = {};
+    Object.keys(byYear).forEach(function(yearKey) {
+      var yearSheet = ensureAuditArchiveYearSheet_(archiveSs, yearKey);
+      var ids = getAuditArchiveIds_(yearSheet);
+      byYear[yearKey].forEach(function(c) {
+        if (!ids[c.auditId]) throw new Error('Archive verification ล้มเหลวสำหรับ AuditID ' + c.auditId);
+        verified[c.auditId] = true;
+      });
+    });
+
+    var rowsToDelete = candidates.filter(function(c){ return verified[c.auditId]; }).map(function(c){ return c.sourceRow; });
+    if (rowsToDelete.length !== candidates.length) {
+      throw new Error('Archive verification ไม่ครบทุก Audit row จึงยังไม่ลบข้อมูลต้นทาง');
+    }
+
+    deleteAuditSourceRows_(source, rowsToDelete);
+
+    var settingsSheet = getSheet_(CONFIG.SHEETS.SETTINGS);
+    upsertSettingDirect_(settingsSheet, 'AUDIT_ARCHIVE_SPREADSHEET_ID', archiveSs.getId(), 'Spreadsheet ID สำหรับเก็บ Audit archive', true);
+    PropertiesService.getScriptProperties().setProperty('AUDIT_ARCHIVE_SPREADSHEET_ID', archiveSs.getId());
+
+    writeAudit_(
+      user,
+      'ARCHIVE_AUDIT_LOGS',
+      CONFIG.SHEETS.AUDIT,
+      archiveSs.getId(),
+      '',
+      JSON.stringify({
+        retentionDays:days,
+        cutoff:Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+        eligibleRows:candidates.length,
+        newlyArchivedRows:newlyArchived,
+        removedFromActiveRows:rowsToDelete.length,
+        malformedTimestampRows:malformed
+      })
+    );
+
+    return {
+      retentionDays:days,
+      eligibleRows:candidates.length,
+      newlyArchivedRows:newlyArchived,
+      removedFromActiveRows:rowsToDelete.length,
+      malformedTimestampRows:malformed,
+      archiveSpreadsheetId:archiveSs.getId()
+    };
   } finally {
     lock.releaseLock();
   }
@@ -1780,18 +3207,41 @@ function archiveAuditLogs(sessionToken, olderThanDays) {
 function listAuditLogs(sessionToken, limit) {
   requireAuth_(sessionToken, 'audit');
   var rows = getSheet_(CONFIG.SHEETS.AUDIT).getDataRange().getDisplayValues().slice(1).reverse();
-  return rows.slice(0, Number(limit || 100)).map(function(r){return {timestamp:r[0], email:r[1], role:r[2], action:r[3], targetSheet:r[4], targetId:r[5], before:r[6], after:r[7]};});
+  return rows.slice(0, Number(limit || 100)).map(function(r){
+    return {
+      timestamp:r[0],
+      email:r[1],
+      role:r[2],
+      action:r[3],
+      targetSheet:r[4],
+      targetId:r[5],
+      before:r[6],
+      after:r[7],
+      auditId:r[9] || ''
+    };
+  });
 }
 
 function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValue) {
   try {
-    getSheet_(CONFIG.SHEETS.AUDIT).appendRow([new Date(), user.email || '', user.role || '', action, targetSheet, targetId, beforeValue, afterValue, '']);
+    getSheet_(CONFIG.SHEETS.AUDIT).appendRow([
+      new Date(),
+      user.email || '',
+      user.role || '',
+      action,
+      targetSheet,
+      targetId,
+      beforeValue,
+      afterValue,
+      '',
+      Utilities.getUuid()
+    ]);
   } catch(e) {}
 }
 
-function logVisit_(e) {
+function logVisit_() {
   try {
-    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', JSON.stringify(e && e.parameter ? e.parameter : {})]);
+    getSheet_(CONFIG.SHEETS.VISITS).appendRow([new Date(), 'doGet', '']);
   } catch(err) {}
 }
 
@@ -1811,10 +3261,142 @@ function exportData(sessionToken, format) {
   return {url:ss.getUrl(), message:'สร้างไฟล์ Export แล้ว', format:format || 'xlsx'};
 }
 
+function appendReportRegistry_(record) {
+  record = record || {};
+  var reportId = String(record.reportId || '').trim();
+  var eventId = String(record.eventId || '').trim();
+  var documentId = String(record.documentId || '').trim();
 
+  if (!isUuid_(reportId)) throw new Error('ReportID ไม่ถูกต้อง');
+  if (!isUuid_(eventId)) throw new Error('EventID ของรายงานไม่ถูกต้อง');
+  if (!documentId) throw new Error('ไม่พบ DocumentID สำหรับทะเบียนรายงาน');
+
+  var ss = getDb_();
+  var registry = ensureReportRegistrySheet_(ss).sheet;
+  registry.appendRow([
+    reportId,
+    eventId,
+    Number(record.sourceRevision || 0),
+    documentId,
+    String(record.documentUrl || ''),
+    record.generatedAt || new Date(),
+    String(record.generatedBy || ''),
+    String(record.geminiModels || ''),
+    String(record.geminiApiVersions || ''),
+    String(record.promptVersion || CONFIG.REPORT_PROMPT_VERSION),
+    String(record.templateDocId || '')
+  ]);
+
+  return reportId;
+}
+
+
+/**
+ * G-27: Read-only ReportRegistry history for a non-void Event.
+ * The user's existing report permission is authoritative.
+ */
+function listReportsForEvent(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var main = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(main, eventId, false);
+  var revision = Number(main.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
+  var recordStatus = String(main.getRange(rowNumber, EVENT_META_COL.RECORD_STATUS).getValue() || 'active').trim().toLowerCase();
+  var stableEventId = String(eventId || '').trim();
+
+  // No implicit migration or sheet mutation on a read-only endpoint.
+  var registry = getDb_().getSheetByName(CONFIG.SHEETS.REPORTS);
+  if (!registry || registry.getLastRow() < 1 || registry.getLastColumn() < REPORT_REGISTRY_HEADERS.length) {
+    throw new Error('ยังไม่มีทะเบียน ReportRegistry ที่พร้อมใช้งาน กรุณาดำเนินการ migration G-17 ก่อน');
+  }
+  var actualHeaders = registry.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).getDisplayValues()[0];
+  for (var h = 0; h < REPORT_REGISTRY_HEADERS.length; h++) {
+    if (String(actualHeaders[h] || '').trim() !== REPORT_REGISTRY_HEADERS[h]) {
+      throw new Error('หัวข้อ ReportRegistry ไม่ตรงกับ schema v7 ที่คอลัมน์ ' + (h + 1));
+    }
+  }
+
+  var rows = registry.getLastRow() > 1
+    ? registry.getRange(2, 1, registry.getLastRow() - 1, REPORT_REGISTRY_HEADERS.length).getValues()
+    : [];
+  var seen = {};
+  var invalidCount = 0;
+  var matches = [];
+  rows.forEach(function(r, index) {
+    if (String(r[REPORT_REGISTRY_COL.EVENT_ID - 1] || '').trim() !== stableEventId) return;
+    var reportId = String(r[REPORT_REGISTRY_COL.REPORT_ID - 1] || '').trim();
+    var docId = String(r[REPORT_REGISTRY_COL.DOCUMENT_ID - 1] || '').trim();
+    if (!isUuid_(reportId) || !docId || Object.prototype.hasOwnProperty.call(seen, reportId)) {
+      invalidCount++;
+      return;
+    }
+    seen[reportId] = true;
+    var rawDate = r[REPORT_REGISTRY_COL.GENERATED_AT - 1];
+    var millis = rawDate instanceof Date && !isNaN(rawDate.getTime()) ? rawDate.getTime() : NaN;
+    var dateText = isFinite(millis) ? rawDate.toISOString() : String(rawDate || '');
+    var storedUrl = String(r[REPORT_REGISTRY_COL.DOCUMENT_URL - 1] || '').trim();
+    var urlMatch = /^https:\/\/docs\.google\.com\/document\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(storedUrl);
+    var safeUrl = urlMatch && urlMatch[1] === docId ? storedUrl : '';
+
+    matches.push({
+      order:index,
+      timestamp:millis,
+      report:{
+        reportId:reportId,
+        sourceRevision:Number(r[REPORT_REGISTRY_COL.SOURCE_REVISION - 1] || 0),
+        documentURL:safeUrl,
+        generatedAt:dateText,
+        generatedBy:String(r[REPORT_REGISTRY_COL.GENERATED_BY - 1] || ''),
+        geminiModels:String(r[REPORT_REGISTRY_COL.GEMINI_MODELS - 1] || ''),
+        geminiApiVersions:String(r[REPORT_REGISTRY_COL.GEMINI_API_VERSIONS - 1] || ''),
+        promptVersion:String(r[REPORT_REGISTRY_COL.PROMPT_VERSION - 1] || '')
+      }
+    });
+  });
+  // Timestamp is authoritative; the append order breaks ties deterministically.
+  matches.sort(function(a, b) {
+    var av = isFinite(a.timestamp), bv = isFinite(b.timestamp);
+    if (av && bv && a.timestamp !== b.timestamp) return b.timestamp - a.timestamp;
+    if (av !== bv) return av ? -1 : 1;
+    return b.order - a.order;
+  });
+  var reports = matches.map(function(item){ return item.report; });
+  return {
+    eventId:stableEventId,
+    currentRevision:revision,
+    recordStatus:recordStatus,
+    count:reports.length,
+    latest:reports.length ? reports[0] : null,
+    invalidCount:invalidCount,
+    reports:reports
+  };
+}
+
+function getAIReportReadiness(sessionToken, eventId) {
+  requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  var rowNumber = findEventRowById_(sheet, eventId, false);
+  var row = sheet.getRange(rowNumber, 1, 1, Math.max(MAIN_SCHEMA_HEADERS.length, EVENT_OWNER_COL)).getDisplayValues()[0];
+  return deriveAIReportReadiness_(rowToObject_(row));
+}
 
 function generateReportFromWeb(sessionToken, eventId) {
   var user = requireAuth_(sessionToken, 'report');
+  // G-32 intentionally fails closed for stale V4 pages and direct RPC bypass.
+  // The private execution nonce is minted only by runReportJob, not returned to the UI.
+  var reportJobId = arguments.length > 2 ? arguments[2] : '';
+  var executionNonce = arguments.length > 3 ? arguments[3] : '';
+  if (!reportJobId || !executionNonce) {
+    throw new Error('กรุณารีเฟรชหน้า Smart SRRT เพื่อสร้างรายงานด้วยระบบงาน G-32');
+  }
+  withReportJobLock_(function(props) {
+    var authorizedJob = reportJobOwned_(props,reportJobId,user);
+    if (authorizedJob.eventId !== String(eventId || '').trim() ||
+        authorizedJob.status !== 'running' ||
+        authorizedJob.executionNonce !== executionNonce) {
+      throw new Error('ไม่สามารถใช้สิทธิ์คำขอรายงานนี้ซ้ำหรือข้ามขั้นตอน');
+    }
+  });
+  reportJobCheckpoint_(reportJobId, 'preparing');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   var settings = getSettingsMap_();
   var templateId = settings.TEMPLATE_DOC_ID;
@@ -1822,6 +3404,7 @@ function generateReportFromWeb(sessionToken, eventId) {
   if (!templateId || !folderId) throw new Error('กรุณาตั้งค่า Template และโฟลเดอร์รายงานในหน้า Admin ก่อน');
 
   var rowNumber = findEventRowById_(sheet, eventId, false);
+  var sourceRevision = Number(sheet.getRange(rowNumber, EVENT_META_COL.REVISION).getValue() || 1);
   var rowData = sheet.getRange(rowNumber, 1, 1, MAIN_SCHEMA_HEADERS.length).getDisplayValues()[0];
   var disease = rowData[5] || '..........';
   var place = rowData[7] || '..........';
@@ -1837,37 +3420,314 @@ function generateReportFromWeb(sessionToken, eventId) {
     villageCode ? '(รหัสหมู่บ้าน ' + villageCode + ')' : ''
   ].filter(function(x){return x;}).join(' ');
   var title = 'รายงานการสอบสวนเบื้องต้น ผู้ป่วยสงสัยโรค' + disease + ' ' + locationInfo;
-  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings);
+  var reportMeta = {models:[], apiVersions:[]};
+  var aiAnalysis = analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJobId);
+  // Atomic finalization boundary: a cancel request after this point is too late
+  // and must not be represented to the user as successfully cancelled.
+  reportJobCheckpoint_(reportJobId, 'finalizing');
 
-  var newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
-  var document = DocumentApp.openById(newDocFile.getId());
-  var body = document.getBody();
-  var replacements = {
-    '<<ชื่อเรื่อง>>': title,
-    '<<วันที่>>': rowData[1] || '..........',
-    '<<ผู้แจ้ง>>': rowData[2] || '..........',
-    '<<โรค>>': disease,
-    '<<สถานที่>>': locationInfo,
-    '<<หมู่บ้าน>>': villageName || '..........',
-    '<<รหัสหมู่บ้าน>>': villageCode || '..........',
-    '<<วันเริ่มป่วย>>': rowData[8] || '..........',
-    '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
-    '<<มาตรการ>>': rowData[20] || '..........',
-    '<<ผลวิเคราะห์จากAI>>': aiAnalysis
-  };
-  Object.keys(replacements).forEach(function(k) {
-  if (k === '<<ผลวิเคราะห์จากAI>>') {
-    replacePlaceholderWithParagraphs_(body, k, replacements[k]);
-  } else {
-    body.replaceText(k, replacements[k]);
+  var reportId = Utilities.getUuid();
+  var newDocFile = null;
+  var registered = false;
+
+  try {
+    newDocFile = DriveApp.getFileById(templateId).makeCopy(title, DriveApp.getFolderById(folderId));
+    var document = DocumentApp.openById(newDocFile.getId());
+    var body = document.getBody();
+    var replacements = {
+      '<<ชื่อเรื่อง>>': title,
+      '<<วันที่>>': rowData[1] || '..........',
+      '<<ผู้แจ้ง>>': rowData[2] || '..........',
+      '<<โรค>>': disease,
+      '<<สถานที่>>': locationInfo,
+      '<<หมู่บ้าน>>': villageName || '..........',
+      '<<รหัสหมู่บ้าน>>': villageCode || '..........',
+      '<<วันเริ่มป่วย>>': rowData[8] || '..........',
+      '<<รายละเอียดเหตุการณ์>>': rowData[13] || '..........',
+      '<<มาตรการ>>': rowData[20] || '..........',
+      '<<ผลวิเคราะห์จากAI>>': aiAnalysis
+    };
+
+    Object.keys(replacements).forEach(function(k) {
+      if (k === '<<ผลวิเคราะห์จากAI>>') {
+        replacePlaceholderWithParagraphs_(body, k, replacements[k]);
+      } else {
+        body.replaceText(k, replacements[k]);
+      }
+    });
+    document.saveAndClose();
+
+    var generatedAt = new Date();
+    appendReportRegistry_({
+      reportId:reportId,
+      eventId:eventId,
+      sourceRevision:sourceRevision,
+      documentId:newDocFile.getId(),
+      documentUrl:newDocFile.getUrl(),
+      generatedAt:generatedAt,
+      generatedBy:user.email || '',
+      geminiModels:(reportMeta.models || []).join(' | '),
+      geminiApiVersions:(reportMeta.apiVersions || []).join(' | '),
+      promptVersion:CONFIG.REPORT_PROMPT_VERSION,
+      templateDocId:templateId
+    });
+    registered = true;
+
+    // Once ReportRegistry is committed, the report is durable. An audit
+    // transport failure cannot truthfully turn an already-created Doc into
+    // "generation failed" and invite a duplicate retry.
+    try {
+      writeAudit_(
+        user,
+        'GENERATE_REPORT',
+        CONFIG.SHEETS.REPORTS,
+        reportId,
+        '',
+        JSON.stringify({
+          eventId:eventId,
+          sourceRevision:sourceRevision,
+          documentId:newDocFile.getId(),
+          promptVersion:CONFIG.REPORT_PROMPT_VERSION
+        })
+      );
+    } catch (auditError) {
+      Logger.log('G-32 WARNING: ReportRegistry committed but report audit logging failed; investigate using ReportID=' + reportId);
+    }
+
+    return newDocFile.getUrl();
+  } catch (error) {
+    if (newDocFile && !registered) {
+      try { newDocFile.setTrashed(true); } catch (ignoreTrash) {}
+    }
+    throw error;
   }
-});
-  document.saveAndClose();
-  writeAudit_(user, 'GENERATE_REPORT', CONFIG.SHEETS.MAIN, eventId, '', newDocFile.getId());
-  return newDocFile.getUrl();
 }
 
-function analyzeWithGemini_(rowData, locationInfo, settings) {
+// G-32: Cooperative cancellation and recoverable report-job metadata.
+// PropertiesService stores small status records, not prompts, patient narratives,
+// access tokens, API keys or other sensitive event content.
+var REPORT_JOB_PREFIX_ = 'SRRT_G32_JOB_';
+var REPORT_JOB_ACTIVE_KEY_ = 'SRRT_G32_ACTIVE';
+var REPORT_JOB_TTL_MS_ = 24 * 60 * 60 * 1000;
+var REPORT_JOB_STALE_MS_ = 8 * 60 * 1000;
+
+function withReportJobLock_(fn) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('ระบบรายงานกำลังจัดการคำขอ กรุณาลองใหม่');
+  try { return fn(PropertiesService.getScriptProperties()); }
+  finally { lock.releaseLock(); }
+}
+
+function readReportJob_(props, jobId) {
+  if (!isUuid_(String(jobId || ''))) throw new Error('Report Job ID ไม่ถูกต้อง');
+  var raw = props.getProperty(REPORT_JOB_PREFIX_ + jobId);
+  if (!raw) throw new Error('ไม่พบคำขอสร้างรายงาน หรือข้อมูลหมดอายุแล้ว');
+  return JSON.parse(raw);
+}
+function saveReportJob_(props, job) {
+  job.updatedAt = Date.now();
+  props.setProperty(REPORT_JOB_PREFIX_ + job.id, JSON.stringify(job));
+}
+function reportJobTerminal_(status) {
+  return ['cancelled','completed','failed','unknown'].indexOf(status) !== -1;
+}
+function releaseReportJobSlot_(props, jobId) {
+  if (props.getProperty(REPORT_JOB_ACTIVE_KEY_) === jobId) props.deleteProperty(REPORT_JOB_ACTIVE_KEY_);
+}
+function expireStaleReportJob_(props, job) {
+  if (!reportJobTerminal_(job.status) &&
+      Date.now() - Number(job.createdAt || 0) > REPORT_JOB_STALE_MS_) {
+    job.status = 'unknown';
+    job.stage = 'unknown';
+    job.message = 'ไม่สามารถยืนยันสถานะการทำงานหลังหมดเวลารอ กรุณาตรวจประวัติรายงานก่อนเริ่มใหม่';
+    saveReportJob_(props, job);
+    releaseReportJobSlot_(props, job.id);
+  }
+  return job;
+}
+function reportJobOwned_(props, jobId, user) {
+  // Check ownership BEFORE any stale-state cleanup, so a foreign user cannot
+  // mutate another owner's status or release the global job slot.
+  var job = readReportJob_(props, jobId);
+  if (String(job.ownerId) !== String(user.userId)) {
+    throw new Error('ไม่มีสิทธิ์ดูหรือจัดการคำขอรายงานนี้');
+  }
+  return expireStaleReportJob_(props, job);
+}
+function publicReportJob_(job) {
+  return {
+    id:job.id,eventId:job.eventId,status:job.status,stage:job.stage,
+    createdAt:job.createdAt,updatedAt:job.updatedAt,
+    message:job.message || '', documentUrl:job.status === 'completed' ? (job.documentUrl || '') : ''
+  };
+}
+function cleanupOldReportJobs_(props) {
+  var all = props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(REPORT_JOB_PREFIX_) !== 0) return;
+    try {
+      var job = JSON.parse(all[key]);
+      if (Date.now() - Number(job.createdAt || 0) > REPORT_JOB_TTL_MS_) props.deleteProperty(key);
+    } catch(ignore) { props.deleteProperty(key); }
+  });
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf('SRRT_G32_USER_') !== 0) return;
+    if (!props.getProperty(REPORT_JOB_PREFIX_ + all[key])) props.deleteProperty(key);
+  });
+}
+function createReportJob(sessionToken, eventId) {
+  var user = requireAuth_(sessionToken, 'report');
+  var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
+  findEventRowById_(sheet, eventId, false);
+  var stableEventId = String(eventId || '').trim();
+  if (!isUuid_(stableEventId)) throw new Error('EventID ไม่ถูกต้อง');
+  return withReportJobLock_(function(props) {
+    cleanupOldReportJobs_(props);
+    var existingId = props.getProperty(REPORT_JOB_ACTIVE_KEY_);
+    if (existingId) {
+      var existing;
+      try { existing = expireStaleReportJob_(props, readReportJob_(props, existingId)); }
+      catch(ignore) { releaseReportJobSlot_(props, existingId); }
+      if (existing && !reportJobTerminal_(existing.status)) {
+        if (existing.ownerId === String(user.userId)) {
+          return publicReportJob_(existing); // Idempotent same-owner retry; never start another.
+        }
+        throw new Error('มีการสร้างรายงานอื่นกำลังทำงานอยู่ กรุณารอจนเสร็จ');
+      }
+      releaseReportJobSlot_(props, existingId);
+    }
+    var job = {
+      id:Utilities.getUuid(),eventId:stableEventId,
+      ownerId:String(user.userId),
+      status:'queued',stage:'queued',createdAt:Date.now(),updatedAt:Date.now(),
+      message:'รอเริ่มสร้างรายงาน',documentUrl:''
+    };
+    saveReportJob_(props, job);
+    props.setProperty(REPORT_JOB_ACTIVE_KEY_, job.id);
+    props.setProperty('SRRT_G32_USER_' + job.ownerId, job.id);
+    return publicReportJob_(job);
+  });
+}
+function getReportJobStatus(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    return publicReportJob_(reportJobOwned_(props, jobId, user));
+  });
+}
+function getCurrentReportJob(sessionToken) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var pointer = 'SRRT_G32_USER_' + user.userId;
+    var id = props.getProperty(pointer);
+    if (!id) return null;
+    try { return publicReportJob_(reportJobOwned_(props, id, user)); }
+    catch(ignore) {
+      // Clear an expired/unreadable pointer instead of retaining stale keys.
+      props.deleteProperty(pointer);
+      return null;
+    }
+  });
+}
+function cancelReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var job = reportJobOwned_(props, jobId, user);
+    if (job.status === 'queued') {
+      job.status = 'cancelled';job.stage = 'cancelled';
+      job.message = 'ยกเลิกก่อนเริ่มสร้างรายงานแล้ว';
+      releaseReportJobSlot_(props,job.id);
+      saveReportJob_(props,job);
+    } else if (job.status === 'running') {
+      job.status = 'cancel_requested';
+      job.message = 'รับคำขอยกเลิกแล้ว จะหยุดเมื่อ Gemini ส่งคำตอบกลับและถึงจุดตรวจสอบ';
+      saveReportJob_(props,job);
+    } else if (job.status === 'finalizing') {
+      job.message = 'กำลังบันทึกเอกสารและทะเบียนรายงาน ไม่สามารถยกเลิกได้แล้ว';
+      saveReportJob_(props,job);
+    }
+    // cancel_requested/terminal states are idempotent and never revert.
+    return publicReportJob_(job);
+  });
+}
+function dismissReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  return withReportJobLock_(function(props) {
+    var job = reportJobOwned_(props, jobId, user);
+    if (!reportJobTerminal_(job.status)) throw new Error('งานยังไม่สิ้นสุด ไม่สามารถล้างการแจ้งเตือนได้');
+    var pointer = 'SRRT_G32_USER_' + user.userId;
+    if (props.getProperty(pointer) === jobId) props.deleteProperty(pointer);
+    return publicReportJob_(job);
+  });
+}
+function reportJobCheckpoint_(jobId, stage) {
+  if (!jobId) return;
+  return withReportJobLock_(function(props) {
+    var job = expireStaleReportJob_(props,readReportJob_(props,jobId));
+    if (job.status === 'cancel_requested' || job.status === 'cancelled') {
+      throw new Error('REPORT_JOB_CANCELLED');
+    }
+    if (job.status !== 'running') throw new Error('คำขอรายงานไม่อยู่ในสถานะที่ทำงานได้');
+    job.stage = stage;
+    if (stage === 'finalizing') job.status = 'finalizing';
+    saveReportJob_(props,job);
+  });
+}
+function finalizeReportJob_(jobId, status, url, message) {
+  return withReportJobLock_(function(props) {
+    var job = readReportJob_(props,jobId);
+    if (reportJobTerminal_(job.status)) return publicReportJob_(job);
+    if (status === 'failed' && job.status === 'cancel_requested') status = 'cancelled';
+    job.status = status;job.stage = status;
+    job.documentUrl = status === 'completed' ? String(url || '') : '';
+    job.message = String(message || '').slice(0,220);
+    saveReportJob_(props,job);
+    releaseReportJobSlot_(props,jobId);
+    return publicReportJob_(job);
+  });
+}
+function runReportJob(sessionToken, jobId) {
+  var user = requireAuth_(sessionToken, 'report');
+  var job = withReportJobLock_(function(props) {
+    var current = reportJobOwned_(props,jobId,user);
+    if (current.status === 'cancelled') return current;
+    if (current.status !== 'queued') throw new Error('คำขอรายงานนี้เริ่มแล้วหรือเสร็จสิ้นแล้ว โปรดตรวจสถานะเดิม');
+    if (props.getProperty(REPORT_JOB_ACTIVE_KEY_) !== current.id) {
+      throw new Error('คำขอรายงานไม่ใช่งานที่กำลังรออยู่');
+    }
+    current.status = 'running';current.stage = 'preparing';current.message = '';
+    current.executionNonce = Utilities.getUuid();
+    saveReportJob_(props,current);
+    return current;
+  });
+  if (job.status === 'cancelled') return publicReportJob_(job);
+  try {
+    var url = generateReportFromWeb(sessionToken,job.eventId,job.id,job.executionNonce);
+    return finalizeReportJob_(job.id,'completed',url,'สร้างรายงานเรียบร้อยแล้ว');
+  } catch(error) {
+    var internalError = String(error.message || error);
+    var safeMessage = internalError === 'REPORT_JOB_CANCELLED'
+      ? 'ยกเลิกการสร้างรายงานแล้ว'
+      : (/^Gemini 3\.8 Flash/.test(internalError)
+        ? internalError
+        : 'สร้างรายงานไม่สำเร็จ กรุณาตรวจ Execution Logs และประวัติรายงาน');
+    var final = finalizeReportJob_(job.id,'failed','',safeMessage);
+    // Return only a scrubbed terminal status, never raw patient content.
+    return final;
+  }
+}
+
+function recordSuccessfulGeminiModel_(reportMeta, modelInfo) {
+  if (!reportMeta || !modelInfo) return;
+  if (!reportMeta.models) reportMeta.models = [];
+  if (!reportMeta.apiVersions) reportMeta.apiVersions = [];
+
+  var modelName = String(modelInfo.modelName || '').trim();
+  var apiVersion = String(modelInfo.apiVersion || '').trim();
+  if (modelName && reportMeta.models.indexOf(modelName) < 0) reportMeta.models.push(modelName);
+  if (apiVersion && reportMeta.apiVersions.indexOf(apiVersion) < 0) reportMeta.apiVersions.push(apiVersion);
+}
+
+function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJobId) {
   settings = settings || getSettingsMap_();
   var apiKey = String(settings.GEMINI_API_KEY || '').trim();
 
@@ -1875,10 +3735,10 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
     throw new Error('ยังไม่ได้ตั้งค่า Gemini API Key กรุณาใส่ในหน้า Admin ก่อนสร้างรายงาน AI');
   }
 
-  var modelInfo = resolveGeminiModelInfo_(apiKey, settings, false);
+  var modelInfo = resolveReportGeminiModelInfo_(apiKey);
 
   if (!modelInfo || !modelInfo.modelName) {
-    throw new Error('ไม่พบโมเดล Gemini ที่รองรับ generateContent สำหรับ API Key นี้ กรุณาตรวจสอบ API Key, Gemini API และ Quota/Billing แล้ว Run testGeminiConnection() อีกครั้ง');
+    throw new Error('ไม่พบ Gemini 3.8 Flash ที่รองรับ generateContent สำหรับ API Key นี้ ระบบจะไม่สลับไปโมเดลอื่น กรุณาตรวจสอบสิทธิ์หรือสถานะ API แล้วลองใหม่ภายหลัง');
   }
 
   Logger.log('AI Reporter split mode: start');
@@ -1888,14 +3748,24 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
   var promptPart1 = buildReportPromptPart_(rowData, locationInfo, '1-3');
   var promptPart2 = buildReportPromptPart_(rowData, locationInfo, '4-6');
 
-  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3');
+  var startedAt = Date.now();
+  reportJobCheckpoint_(reportJobId,'gemini_1');
+  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta,
+    reportJobId, 'gemini_1', startedAt);
+  reportJobCheckpoint_(reportJobId,'gemini_2');
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
-  Utilities.sleep(500);
+  // Synchronous UrlFetchApp.fetch cannot be interrupted. Retrying part 1 must
+  // never consume so much time that we then start part 2 too late.
+  if (Date.now() - startedAt > 120000) {
+    throw new Error('Gemini 3.8 Flash ตอบช้าเกินไป ระบบยุติก่อนเริ่มส่วนที่สองเพื่อเลี่ยง Apps Script Timeout กรุณาลองใหม่ภายหลัง');
+  }
 
-  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6');
+  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta,
+    reportJobId, 'gemini_2', startedAt);
+  reportJobCheckpoint_(reportJobId,'post_gemini');
   if (String(part2 || '').indexOf('🚨') === 0) {
     throw new Error(String(part2).replace(/^🚨\s*/, ''));
   }
@@ -1907,6 +3777,25 @@ function analyzeWithGemini_(rowData, locationInfo, settings) {
   Logger.log('AI Reporter final length: ' + finalText.length);
 
   return finalText.replace(/\*/g, '').replace(/```/g, '').trim();
+}
+
+var REPORT_GEMINI_MODEL = 'models/gemini-3.8-flash';
+
+// AI reports are pinned, regardless of AUTO settings or a stale cache entry.
+// Do not silently substitute another model when Gemini 3.8 is unavailable.
+function resolveReportGeminiModelInfo_(apiKey) {
+  var cache = CacheService.getScriptCache();
+  var cachedName = cache.get('GEMINI_AVAILABLE_MODEL');
+  var cachedVersion = cache.get('GEMINI_AVAILABLE_ENDPOINT');
+  if (cachedName === REPORT_GEMINI_MODEL && (cachedVersion === 'v1' || cachedVersion === 'v1beta')) {
+    return {modelName:REPORT_GEMINI_MODEL, apiVersion:cachedVersion};
+  }
+  // Ignoring another model's cached selection is essential after changing AUTO.
+  var modelInfo = findGeminiModelInList_(apiKey, REPORT_GEMINI_MODEL);
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL) return null;
+  cache.put('GEMINI_AVAILABLE_MODEL', REPORT_GEMINI_MODEL, 21600);
+  cache.put('GEMINI_AVAILABLE_ENDPOINT', modelInfo.apiVersion, 21600);
+  return modelInfo;
 }
 
 function resolveGeminiModel_(apiKey, settings) {
@@ -2064,27 +3953,6 @@ function clearGeminiModelCache() {
   return 'ล้าง Cache โมเดล Gemini เรียบร้อยแล้ว';
 }
 
-function forceGeminiModelAuto() {
-  var ss = getDb_();
-  var sheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
-  if (!sheet) throw new Error('ไม่พบชีท SystemSettings');
-  var values = sheet.getDataRange().getValues();
-  var found = false;
-  for (var i = 1; i < values.length; i++) {
-    if (String(values[i][0] || '').trim() === 'GEMINI_MODEL') {
-      sheet.getRange(i + 1, 2).setValue('AUTO');
-      sheet.getRange(i + 1, 4).setValue(new Date());
-      sheet.getRange(i + 1, 5).setValue('system');
-      found = true;
-      break;
-    }
-  }
-  if (!found) sheet.appendRow(['GEMINI_MODEL', 'AUTO', 'AUTO = เลือกโมเดล Gemini ที่รองรับ generateContent อัตโนมัติ', new Date(), 'system']);
-  clearGeminiModelCache_();
-  Logger.log('ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว');
-  return 'ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว';
-}
-
 function listAvailableGeminiModels() {
   clearGeminiModelCache_();
   var settings = getSettingsMap_();
@@ -2151,173 +4019,90 @@ function testGeminiConnection() {
   Logger.log(response.getContentText());
   return 'API Version: ' + modelInfo.apiVersion + '\nModel: ' + modelInfo.modelName + '\nStatus: ' + response.getResponseCode() + '\n' + response.getContentText();
 }
-function getGeminiRetryModelQueue_(apiKey, primaryModelInfo) {
-  var queue = [];
-  var seen = {};
+// G-32 V8: One bounded HTTP-503-only retry per section, never a model fallback.
+// Budget leaves time for Apps Script to finalize the Google Doc and registry.
+var REPORT_GEMINI_MAX_ELAPSED_MS_ = 210000;
+var REPORT_GEMINI_RETRY_BASE_MS_ = 1500;
+var REPORT_GEMINI_RETRY_JITTER_MS_ = 1500;
+var REPORT_GEMINI_MIN_FETCH_MS_ = 15000;
+var REPORT_GEMINI_FINALIZE_RESERVE_MS_ = 10000;
 
-  function add(info) {
-    if (!info || !info.modelName || !info.apiVersion) return;
-    if (String(info.modelName).indexOf('gemini-1.5') !== -1) return;
-
-    var key = info.apiVersion + '|' + info.modelName;
-    if (seen[key]) return;
-
-    seen[key] = true;
-    queue.push({
-      modelName: info.modelName,
-      apiVersion: info.apiVersion
-    });
+function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta, reportJobId, stage, reportStartedAt) {
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL || !['v1','v1beta'].includes(modelInfo.apiVersion)) {
+    throw new Error('ไม่อนุญาตให้สร้างรายงานด้วยโมเดลอื่นนอกจาก Gemini 3.8 Flash');
   }
-
-  add(primaryModelInfo);
-
-  var preferred = [
-    'models/gemini-3.8-flash',
-    'models/gemini-3.7-flash',
-    'models/gemini-3.6-flash',
-    'models/gemini-3.5-flash',
-    'models/gemini-3.5-flash-lite',
-    'models/gemini-3.1-flash-lite',
-    'models/gemini-pro'
-  ];
-
-  for (var i = 0; i < preferred.length; i++) {
-    var info = findGeminiModelInList_(apiKey, preferred[i]);
-    if (info) add(info);
-  }
-
-  if (queue.length === 0 && primaryModelInfo) {
-    add(primaryModelInfo);
-  }
-
-  Logger.log('Gemini retry queue: ' + queue.map(function(x) {
-    return x.apiVersion + '/' + x.modelName;
-  }).join(' -> '));
-
-  return queue;
-}
-
-function callGeminiForReport_(apiKey, modelInfo, promptText, label) {
-  var attempts = getGeminiRetryModelQueue_(apiKey, modelInfo);
-  var lastErrorText = '';
-
-  for (var attempt = 0; attempt < attempts.length; attempt++) {
-    var currentModelInfo = attempts[attempt];
-
-    var apiUrl = 'https://generativelanguage.googleapis.com/' +
-      currentModelInfo.apiVersion + '/' +
-      currentModelInfo.modelName +
-      ':generateContent?key=' + encodeURIComponent(apiKey);
-
-    var payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: promptText
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.15,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 12000
-      }
-    };
-
-    try {
-      var response = UrlFetchApp.fetch(apiUrl, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      });
-
-      var statusCode = response.getResponseCode();
-      var responseText = response.getContentText();
-      var json = JSON.parse(responseText);
-
-      Logger.log('AI Reporter ' + label + ' attempt: ' + (attempt + 1));
-      Logger.log('AI Reporter ' + label + ' API Version: ' + currentModelInfo.apiVersion);
-      Logger.log('AI Reporter ' + label + ' Model: ' + currentModelInfo.modelName);
-      Logger.log('AI Reporter ' + label + ' status: ' + statusCode);
-
-      if (statusCode >= 200 && statusCode < 300) {
-        if (
-          json.candidates &&
-          json.candidates.length > 0 &&
-          json.candidates[0].content &&
-          json.candidates[0].content.parts &&
-          json.candidates[0].content.parts.length > 0
-        ) {
-          var finishReason = json.candidates[0].finishReason || '';
-
-          var text = json.candidates[0].content.parts.map(function(p) {
-            return p.text || '';
-          }).join('\n');
-
-          text = String(text || '')
-            .replace(/\*/g, '')
-            .replace(/```/g, '')
-            .trim();
-
-          Logger.log('AI Reporter ' + label + ' finishReason: ' + finishReason);
-          Logger.log('AI Reporter ' + label + ' output length: ' + text.length);
-
-          CacheService.getScriptCache().put('GEMINI_AVAILABLE_MODEL', currentModelInfo.modelName, 21600);
-          CacheService.getScriptCache().put('GEMINI_AVAILABLE_ENDPOINT', currentModelInfo.apiVersion, 21600);
-
-          if (finishReason === 'MAX_TOKENS') {
-            text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
-          }
-
-          return text;
-        }
-
-        return '🚨 Gemini ตอบกลับสำเร็จ แต่ไม่พบข้อความรายงานใน candidates (' + label + '): ' + responseText;
-      }
-
-      var errorMessage = json && json.error && json.error.message
-        ? json.error.message
-        : responseText;
-
-      lastErrorText =
-        'Google AI (' + statusCode + ') ขณะสร้าง' + label + ': ' + errorMessage +
-        '\nAPI Version: ' + currentModelInfo.apiVersion +
-        '\nModel: ' + currentModelInfo.modelName;
-
-      if (
-        statusCode === 404 ||
-        statusCode === 410 ||
-        statusCode === 429 ||
-        statusCode === 500 ||
-        statusCode === 502 ||
-        statusCode === 503 ||
-        statusCode === 504
-      ) {
-        Logger.log('Gemini model/API error, fallback to next model: ' + lastErrorText);
-        clearGeminiModelCache_();
-        Utilities.sleep(800 * (attempt + 1));
-        continue;
-      }
-
-      clearGeminiModelCache_();
-
-      return '🚨 พบปัญหาจาก ' + lastErrorText +
-        '\nข้อแนะนำ: ตรวจว่า หน้า Admin > Gemini Model เป็น AUTO แล้ว Run testGeminiConnection() ใหม่';
-
-    } catch (error) {
-      lastErrorText = 'Apps Script error ขณะเรียก Gemini API (' + label + '): ' + error.toString();
-      Logger.log(lastErrorText);
-      clearGeminiModelCache_();
-      Utilities.sleep(800 * (attempt + 1));
+  var apiUrl = 'https://generativelanguage.googleapis.com/' + modelInfo.apiVersion + '/' +
+    REPORT_GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(apiKey);
+  var payload = {
+    contents:[{parts:[{text:promptText}]}],
+    generationConfig:{temperature:0.15, topP:0.8, topK:40, maxOutputTokens:12000}
+  };
+  var fetchBody = JSON.stringify(payload);
+  var budgetStart = Number(reportStartedAt) || Date.now();
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    // This check must run both before the initial fetch and after retry backoff.
+    // It rejects cancellation without launching another Gemini request.
+    reportJobCheckpoint_(reportJobId, stage);
+    var remainingMs = REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+      REPORT_GEMINI_FINALIZE_RESERVE_MS_;
+    if (remainingMs < REPORT_GEMINI_MIN_FETCH_MS_) {
+      throw new Error('Gemini 3.8 Flash ใช้เวลานานเกินกรอบความปลอดภัยของ Apps Script กรุณาตรวจประวัติรายงานก่อนเริ่มใหม่');
     }
+    var requestTimeoutSeconds = Math.min(110, Math.floor(remainingMs / 1000));
+    var fetchStartedAt = Date.now();
+    var response;
+    try {
+      response = UrlFetchApp.fetch(apiUrl, {
+        method:'post', contentType:'application/json', payload:fetchBody,
+        muteHttpExceptions:true, timeoutSeconds:requestTimeoutSeconds
+      });
+    } catch (error) {
+      Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+        ' transport failure durationMs=' + (Date.now() - fetchStartedAt));
+      throw new Error('เชื่อมต่อ Gemini 3.8 Flash ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ภายหลัง');
+    }
+    var statusCode = response.getResponseCode();
+    Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+      ' model=' + REPORT_GEMINI_MODEL + ' API=' + modelInfo.apiVersion +
+      ' status=' + statusCode + ' durationMs=' + (Date.now() - fetchStartedAt));
+    if (statusCode === 503) {
+      if (attempt === 1) {
+        var waitMs = REPORT_GEMINI_RETRY_BASE_MS_ +
+          Math.floor(Math.random() * (REPORT_GEMINI_RETRY_JITTER_MS_ + 1));
+        // Do not sleep/retry if too little time remains to make a useful fetch.
+        if (REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+            REPORT_GEMINI_FINALIZE_RESERVE_MS_ - waitMs >= REPORT_GEMINI_MIN_FETCH_MS_) {
+          reportJobCheckpoint_(reportJobId, stage);
+          Logger.log('AI Reporter ' + label + ' 503 retry scheduled attempt=2 delayMs=' + waitMs);
+          Utilities.sleep(waitMs);
+          continue;
+        }
+        Logger.log('AI Reporter ' + label + ' 503 retry skipped: time budget');
+      }
+      throw new Error('Gemini 3.8 Flash กำลังมีการใช้งานสูง (HTTP 503) กรุณาลองใหม่ภายหลัง ระบบไม่ได้สลับโมเดลอื่น');
+    }
+    if (statusCode === 429) {
+      throw new Error('Gemini 3.8 Flash เกินขีดจำกัดการใช้งาน (HTTP 429) กรุณารอให้โควตาพร้อมแล้วลองใหม่');
+    }
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error('Gemini 3.8 Flash ตอบกลับ HTTP ' + statusCode + ' กรุณาลองใหม่ภายหลัง');
+    }
+    var json;
+    try { json = JSON.parse(response.getContentText()); }
+    catch (error) { throw new Error('Gemini 3.8 Flash ส่งข้อมูลตอบกลับที่อ่านไม่ได้'); }
+    var candidate = json.candidates && json.candidates[0];
+    if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) {
+      throw new Error('Gemini 3.8 Flash ไม่ส่งเนื้อหารายงานในส่วน ' + label);
+    }
+    var text = candidate.content.parts.map(function(p){return p.text || '';}).join('\n')
+      .replace(/\*/g,'').replace(/```/g,'').trim();
+    if (!text) throw new Error('Gemini 3.8 Flash ส่งรายงานว่างเปล่าในส่วน ' + label);
+    recordSuccessfulGeminiModel_(reportMeta, modelInfo);
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
+    }
+    return text;
   }
-
-  return '🚨 พบปัญหาจาก Google AI หลังจากลองหลายโมเดลแล้ว: ' + lastErrorText +
-    '\n\nข้อแนะนำ: อาจเป็นช่วงที่ Gemini มีการใช้งานสูง ให้ลอง Run clearGeminiModelCache() แล้วสร้างรายงานใหม่อีกครั้ง หรือกำหนด Gemini Model ในหน้า Admin';
 }
 
 function buildReportPromptPart_(rowData, locationInfo, sectionRange) {

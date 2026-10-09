@@ -1,0 +1,102 @@
+# P6 — Offline G-30 Review & Release Evidence Ledger
+
+**Reviewed on:** 2026-10-08 (Asia/Bangkok)  
+**Repository:** 9GotStory/smart-srrt  
+**Issue:** #53  
+**Draft PR:** #54  
+**Compared base:** G-27 `feat/g27-event-report-history@3da49536cfdaf9bef3e368a202e3396b94751cbe`  
+**Reviewed code head:** `68caeab3d14147ea2b9b0f5157e35ba9b05b49ed`
+
+**Decision:** **CODE GATES PASS; PRODUCTION RELEASE NOT AUTHORIZED.**
+
+This is an **offline code review and evidence inventory**, not independent human approval, not a live Google Apps Script runtime validation, and not a record of a successful migration or recovery drill.
+
+## Read-only review observations
+
+| Scope | Evidence | Offline result |
+|---|---|---|
+| Stacked lineage | G-17 PR #44 -> G-26 PR #50 -> G-27 PR #52 -> G-30 PR #54; base G-27 exact SHA above | Consistent and unmerged (Draft) at review time |
+| Code change boundary | G-27 vs G-30 compare, first canonical server artifact modified with **21 deletions / 0 additions**, HTML artifact unchanged | PASS: deletion is only the earlier shadowed `forceGeminiModelAuto()` declaration |
+| Development source | `src/server/` seven contiguous modules; `src/web/` five contiguous modules | PASS: two artifact assembly order lists are explicit |
+| Artifact parity | `npm run build:check` on committed source, both artifact bytes compared | PASS |
+| Contract & syntax tests | `npm run check:contracts` (7 cases) | PASS |
+| Regression | `npm test` (146 cases) | PASS |
+| Negative drift | Isolated temp fixture: mutation of compiled GS, mutation of CSS module, deletion of generated HTML; each must cause check failure; rebuilt artifact must restore parity; check must not alter a drifted artifact | PASS |
+| Apps Script RPCs | 40 literal `gs('name')` targets, all resolve to top-level server declarations | PASS in static contract |
+| Duplicate server functions | One shadowed `forceGeminiModelAuto()` removed; 154 top-level declarations left | PASS in static contract |
+| Stored schema | G-17 ReportRegistry, schema v7; G-26/G-27 read-only/advisory interfaces retained | PASS in regression/contract checks |
+| Actual Web App runtime | Google Apps Script staging deployment and authentication | **NOT RUN** |
+| Data migration | Existing district dataset backup, migration, idempotency, header conflicts, restore verification | **NOT RUN** |
+| Gemini / Google Docs / Drive | Real API authorization, template replacement, report registry/history links, access control | **NOT RUN** |
+| Production deployment | Explicit Owner approval, change window, deployment and rollback | **NOT AUTHORIZED** |
+
+## GitHub Actions evidence
+
+**CI:** [Run #230](https://github.com/9GotStory/smart-srrt/actions/runs/37735623488), **SUCCESS**, on the reviewed code head.
+
+- Byte-parity build: SUCCESS
+- Syntax, duplicate declaration and RPC contracts: 7/7 PASS
+- Complete regression: 146/146 PASS, 0 FAIL
+- Compiled server SHA-256: `975e6b49bebf00a47331af567f1af0065aab3fb15f1d8c155af3fa8ad7ca5fbc`
+- Compiled HTML SHA-256: `30474f2b4a88cda96b3449c02e80453283d501ca69eb7864145a204f448d969a`
+
+These hashes identify development release *candidate bytes* and must be rechecked on the eventually approved and deployed SHA. They **do not** indicate a production release.
+
+## Human-controlled follow-up evidence template
+
+Complete the following only when staging execution is separately authorized; do **not** mark the tasks done based on this offline review.
+
+| Gate | Operator/evidence reference | Status |
+|---|---|---|
+| Representative staging dataset chosen, privacy controls checked | ______ | NOT RUN |
+| Initial live Apps Script deployment/version recorded | ______ | NOT RUN |
+| Verified spreadsheet, configuration, Docs and Drive backups | ______ | NOT RUN |
+| Baseline sheet/event/report counts and schema recorded | ______ | NOT RUN |
+| Migration rehearsal on an isolated staging copy and per-version idempotent re-run (migration entrypoints are mutating; no built-in dry-run) | ______ | NOT RUN |
+| EventID/Revision integrity and non-destructive void checks | ______ | NOT RUN |
+| Public Dashboard cannot return private Event/ReportRegistry data | ______ | NOT RUN |
+| RBAC denied/allowed RPCs, including report/readiness/history | ______ | NOT RUN |
+| Gemini output, document template, registered reports and Docs link | ______ | NOT RUN |
+| Rollback to previous Apps Script release and data recovery rehearsal | ______ | NOT RUN |
+| Independent reviewer signature and Owner go/no-go | ______ | NOT RUN |
+
+## Risks and decision
+
+**Remaining release blockers are environmental and operational, not cleared by Node tests:** current installation inventory, reliable restricted backups, legacy data migration, Google Apps Script execution identity and quotas, Gemini/API behavior, actual Docs/Drive access, privacy checks, rollback rehearsal, and human acceptance.
+
+Do not close #53 as accepted, merge any of the stacked Draft PRs, infer a deployed schema v7, or operate on production data from this evidence alone. The old divergent P6 PR #17 is **not** an approved merge source.
+
+For the detailed step-by-step operator checklist see `docs/deployment/p6-release-readiness-checklist.md`.
+
+## Follow-up — Offline release preflight (2026-10-08)
+
+Implemented in `tools/p6-release-preflight.mjs` with a new npm command `npm run release:preflight`. The command reads only repository-local files; it cannot query a live Apps Script installation and does not execute any migration. It returns structured JSON with distinct `codeGate` and `releaseDecision` fields. Its intentionally conservative result is **codeGate=PASS; releaseDecision=HOLD**.
+
+- **Verified commit:** `02daeb8d84bf920d6c546a51e2aff370d4a5449d`
+- **CI:** [Run #242](https://github.com/9GotStory/smart-srrt/actions/runs/37736095061) **SUCCESS**.
+- **Full regression:** 151 passed / 0 failed (five new offline-preflight tests).
+- **Static checks:** migration sequence and schema floors 2–7, Script Lock contracts, v7 headers, read-only build parity, report-access RPCs, public aggregate boundary, unique function names and RPC targets.
+- **Negative tests:** missing compiled artifact, modified v7 migration floor with artifact parity still intact, rejected write-mode CLI argument, no source-file timestamps changed.
+- **Operational boundary confirmed:** `installSmartSRRT()`, `setupDatabase()` and all migration entrypoints can write Google Sheets/Drive/Docs state; none is a dry-run. Restricted backups and supervised staging exercises remain mandatory before any deployment.
+- **Artifact hashes:** identical to the earlier reviewed code, because this follow-up adds tooling/tests/docs only.
+
+**No live migration, installer, Google Workspace API, real credential, Apps Script deployment or rollback has been executed in this follow-up.** Historic review evidence above is retained rather than silently overwritten.
+
+
+## Follow-up — AI report authorization regression gates (2026-10-08)
+
+The offline preflight now independently checks that these current application entry points retain the `report` permission and exclude void Event identity:
+
+- `getAIReportReadiness(sessionToken,eventId)`
+- `generateReportFromWeb(sessionToken,eventId)`
+- existing `listReportsForEvent(sessionToken,eventId)`
+
+It additionally checks that report generation still saves the Google Doc before appending ReportRegistry and retains orphan-Doc compensation on failure. These are **static checks**, not live authorization or Google Workspace tests.
+
+The new negative regression intentionally removes the `report` authorization check from an isolated fixture's modular source **and** its compiled One-Click artifact. Byte parity still passes, while the release preflight must fail closed. No working repository files, user data or Google service are mutated by this test.
+
+- **Implementation:** `d8947f2bc048bd08a4f726966766b8edba684c27`
+- **Negative regression:** `239f6e5e1ff7e4817b68bc9b0ed40afe3165ac6d`
+- **GitHub Actions run:** [Run #37738182444](https://github.com/9GotStory/smart-srrt/actions/runs/37738182444) — **SUCCESS**
+- **Full Node regression:** **153 passed / 0 failed**
+- **Release decision remains: HOLD.** Actual Apps Script roles, deployment, migrations, backups, Gemini/Docs and recovery checks are still human-controlled and NOT RUN.

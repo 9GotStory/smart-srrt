@@ -4,7 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "build": "node tools/build-one-click.mjs --write",
+    "build:check": "node tools/build-one-click.mjs --check",
+    "check:contracts": "node --test tests/g30-release-parity.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "release:preflight": "node tools/p6-release-preflight.mjs"
   },
   "engines": {
     "node": ">=20"

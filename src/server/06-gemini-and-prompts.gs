@@ -1,0 +1,360 @@
+// G-32 V8: One bounded HTTP-503-only retry per section, never a model fallback.
+// Budget leaves time for Apps Script to finalize the Google Doc and registry.
+var REPORT_GEMINI_MAX_ELAPSED_MS_ = 210000;
+var REPORT_GEMINI_RETRY_BASE_MS_ = 1500;
+var REPORT_GEMINI_RETRY_JITTER_MS_ = 1500;
+var REPORT_GEMINI_MIN_FETCH_MS_ = 15000;
+var REPORT_GEMINI_FINALIZE_RESERVE_MS_ = 10000;
+
+function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta, reportJobId, stage, reportStartedAt) {
+  if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL || !['v1','v1beta'].includes(modelInfo.apiVersion)) {
+    throw new Error('ไม่อนุญาตให้สร้างรายงานด้วยโมเดลอื่นนอกจาก Gemini 3.8 Flash');
+  }
+  var apiUrl = 'https://generativelanguage.googleapis.com/' + modelInfo.apiVersion + '/' +
+    REPORT_GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(apiKey);
+  var payload = {
+    contents:[{parts:[{text:promptText}]}],
+    generationConfig:{temperature:0.15, topP:0.8, topK:40, maxOutputTokens:12000}
+  };
+  var fetchBody = JSON.stringify(payload);
+  var budgetStart = Number(reportStartedAt) || Date.now();
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    // This check must run both before the initial fetch and after retry backoff.
+    // It rejects cancellation without launching another Gemini request.
+    reportJobCheckpoint_(reportJobId, stage);
+    var remainingMs = REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+      REPORT_GEMINI_FINALIZE_RESERVE_MS_;
+    if (remainingMs < REPORT_GEMINI_MIN_FETCH_MS_) {
+      throw new Error('Gemini 3.8 Flash ใช้เวลานานเกินกรอบความปลอดภัยของ Apps Script กรุณาตรวจประวัติรายงานก่อนเริ่มใหม่');
+    }
+    var requestTimeoutSeconds = Math.min(110, Math.floor(remainingMs / 1000));
+    var fetchStartedAt = Date.now();
+    var response;
+    try {
+      response = UrlFetchApp.fetch(apiUrl, {
+        method:'post', contentType:'application/json', payload:fetchBody,
+        muteHttpExceptions:true, timeoutSeconds:requestTimeoutSeconds
+      });
+    } catch (error) {
+      Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+        ' transport failure durationMs=' + (Date.now() - fetchStartedAt));
+      throw new Error('เชื่อมต่อ Gemini 3.8 Flash ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ภายหลัง');
+    }
+    var statusCode = response.getResponseCode();
+    Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+      ' model=' + REPORT_GEMINI_MODEL + ' API=' + modelInfo.apiVersion +
+      ' status=' + statusCode + ' durationMs=' + (Date.now() - fetchStartedAt));
+    if (statusCode === 503) {
+      if (attempt === 1) {
+        var waitMs = REPORT_GEMINI_RETRY_BASE_MS_ +
+          Math.floor(Math.random() * (REPORT_GEMINI_RETRY_JITTER_MS_ + 1));
+        // Do not sleep/retry if too little time remains to make a useful fetch.
+        if (REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+            REPORT_GEMINI_FINALIZE_RESERVE_MS_ - waitMs >= REPORT_GEMINI_MIN_FETCH_MS_) {
+          reportJobCheckpoint_(reportJobId, stage);
+          Logger.log('AI Reporter ' + label + ' 503 retry scheduled attempt=2 delayMs=' + waitMs);
+          Utilities.sleep(waitMs);
+          continue;
+        }
+        Logger.log('AI Reporter ' + label + ' 503 retry skipped: time budget');
+      }
+      throw new Error('Gemini 3.8 Flash กำลังมีการใช้งานสูง (HTTP 503) กรุณาลองใหม่ภายหลัง ระบบไม่ได้สลับโมเดลอื่น');
+    }
+    if (statusCode === 429) {
+      throw new Error('Gemini 3.8 Flash เกินขีดจำกัดการใช้งาน (HTTP 429) กรุณารอให้โควตาพร้อมแล้วลองใหม่');
+    }
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error('Gemini 3.8 Flash ตอบกลับ HTTP ' + statusCode + ' กรุณาลองใหม่ภายหลัง');
+    }
+    var json;
+    try { json = JSON.parse(response.getContentText()); }
+    catch (error) { throw new Error('Gemini 3.8 Flash ส่งข้อมูลตอบกลับที่อ่านไม่ได้'); }
+    var candidate = json.candidates && json.candidates[0];
+    if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) {
+      throw new Error('Gemini 3.8 Flash ไม่ส่งเนื้อหารายงานในส่วน ' + label);
+    }
+    var text = candidate.content.parts.map(function(p){return p.text || '';}).join('\n')
+      .replace(/\*/g,'').replace(/```/g,'').trim();
+    if (!text) throw new Error('Gemini 3.8 Flash ส่งรายงานว่างเปล่าในส่วน ' + label);
+    recordSuccessfulGeminiModel_(reportMeta, modelInfo);
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
+    }
+    return text;
+  }
+}
+
+function buildReportPromptPart_(rowData, locationInfo, sectionRange) {
+  var base = buildReportPrompt_(rowData, locationInfo);
+
+  if (sectionRange === '1-3') {
+    return base + '\n\n' +
+      'คำสั่งเฉพาะรอบนี้: ให้เขียนเฉพาะหัวข้อ 1. ความเป็นมา, 2. ผลการสอบสวนโรค และ 3. กิจกรรมควบคุมโรคที่ดำเนินการไปแล้ว เท่านั้น ' +
+      'ห้ามเขียนหัวข้อ 4, 5, 6 ในรอบนี้ และต้องเขียนหัวข้อ 1-3 ให้ละเอียดครบถ้วนตามกฎด้านบน';
+  }
+
+  if (sectionRange === '4-6') {
+    return base + '\n\n' +
+      'คำสั่งเฉพาะรอบนี้: ให้เขียนเฉพาะหัวข้อ 4. แนวโน้มของการระบาด, 5. สรุปความสำคัญทางสาธารณสุข และความเร่งด่วน และ 6. ข้อเสนอเพื่อพิจารณาดำเนินการ เท่านั้น ' +
+      'ห้ามเขียนหัวข้อ 1, 2, 3 ซ้ำในรอบนี้ ต้องเริ่มที่หัวข้อ 4. แนวโน้มของการระบาด ทันที ' +
+      'ห้ามปล่อยหัวข้อ 4 เป็นจุดไข่ปลา และข้อ 6 ต้องมีข้อเสนอเชิงปฏิบัติอย่างน้อย 5 ข้อ';
+  }
+
+  return base;
+}
+
+
+function replacePlaceholderWithParagraphs_(body, placeholder, text) {
+  text = String(text || '').replace(/\r/g, '\n');
+
+  var found = body.findText(placeholder);
+
+  if (!found) {
+    body.appendParagraph(text);
+    return;
+  }
+
+  var element = found.getElement();
+  var paragraph = element.getParent();
+
+  while (paragraph.getType && paragraph.getType() !== DocumentApp.ElementType.PARAGRAPH) {
+    paragraph = paragraph.getParent();
+  }
+
+  var parent = paragraph.getParent();
+  var insertIndex = parent.getChildIndex(paragraph);
+
+  parent.removeChild(paragraph);
+
+  var lines = text.split('\n');
+  var currentIndex = insertIndex;
+
+  lines.forEach(function(line) {
+    line = String(line || '').trim();
+
+    if (line === '') {
+      parent.insertParagraph(currentIndex, '');
+      currentIndex++;
+      return;
+    }
+
+    var p = parent.insertParagraph(currentIndex, line);
+
+    if (/^[1-6]\.\s/.test(line)) {
+      p.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+      p.setBold(true);
+    } else if (/^2\.[1-7]\s/.test(line)) {
+      p.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+      p.setBold(true);
+    } else {
+      p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+      p.setBold(false);
+    }
+
+    currentIndex++;
+  });
+}
+
+function buildReportPrompt_(rowData, locationInfo) {
+  var reporter = safePromptValue_(rowData[2]);
+  var notifyAgency = safePromptValue_(rowData[19] || 'ไม่ระบุ');
+  var receiveAgency = safePromptValue_(rowData[22] || 'ไม่ระบุ');
+  var reportDate = safePromptValue_(rowData[1]);
+  var disease = safePromptValue_(rowData[5]);
+  var location = safePromptValue_(locationInfo);
+  var onsetDate = safePromptValue_(rowData[8]);
+  var criteria = safePromptValue_(rowData[16]);
+  var dateInv = safePromptValue_(rowData[25]);
+  var details = safePromptValue_(rowData[13]);
+  var measures = safePromptValue_(rowData[20]);
+
+  return `
+จงเขียนเนื้อหารายงานสอบสวนโรคเบื้องต้น จำนวน 6 หัวข้อ โดยใช้ข้อมูลดิบที่กำหนดให้
+
+ข้อมูลดิบ:
+- แหล่งข่าว/ผู้แจ้ง: ${reporter}
+- หน่วยงานแจ้งเตือน: ${notifyAgency}
+- หน่วยงานรับแจ้ง: ${receiveAgency}
+- วันที่รับแจ้ง: ${reportDate}
+- โรค/เหตุการณ์: ${disease}
+- สถานที่เกิดเหตุ: ${location}
+- วันที่เริ่มป่วย (Index case): ${onsetDate}
+- การเข้าเกณฑ์สอบสวนโรค: ${criteria}
+- วันที่ลงสอบสวนโรค: ${dateInv}
+- ผลการสอบสวนโรค (รายละเอียด): ${details}
+- กิจกรรมควบคุมโรคที่ทำแล้ว: ${measures}
+
+กฎการเขียน (บังคับใช้ขั้นเด็ดขาด):
+1. ห้ามใช้เครื่องหมาย * หรือ ** ในการจัดรูปแบบข้อความเด็ดขาด ให้พิมพ์ข้อความธรรมดา
+2. ห้ามพิมพ์คำขึ้นต้นจดหมาย เช่น "รายงานสอบสวนโรค...", "เรียน...", "จาก..." ให้เริ่มพิมพ์ที่ข้อ "1. ความเป็นมา" ได้เลย
+3. ข้อมูลหัวข้อใดที่ไม่มีในข้อมูลดิบ ให้พิมพ์ ".........." แทนที่ข้อมูลนั้น ห้ามจินตนาการเนื้อหาขึ้นเองเด็ดขาด
+4. ใช้ภาษาราชการ และภาษาทางการแพทย์ที่กระชับ
+5. ต้องเขียนให้ครบทุกหัวข้อที่ได้รับมอบหมายในรอบนั้น ห้ามปล่อยหัวข้อใหญ่ใดหัวข้อหนึ่งเป็นเพียง ".........."
+6. หากข้อมูลไม่ครบ ให้เขียนวิเคราะห์จากข้อมูลที่มี และระบุข้อจำกัดว่า "ข้อมูลไม่ปรากฏในข้อมูลดิบ" หรือ "อยู่ระหว่างสอบสวนโรค"
+7. ห้ามแนะนำให้ผู้ใช้กรอกข้อมูลเพิ่ม ให้เขียนรายงานจากข้อมูลที่มีทันที
+
+รูปแบบเนื้อหาที่ต้องการ ให้เขียนเรียงลำดับ 1 ถึง 6:
+
+1. ความเป็นมา
+- การรับแจ้ง: บังคับให้ขึ้นต้นประโยคแรกว่า "ศูนย์ระบาดวิทยาอำเภอ[ระบุชื่ออำเภอที่เกิดเหตุ] ได้รับแจ้งจาก ${reporter}..."
+- หากระบุชื่ออำเภอได้จากสถานที่เกิดเหตุ ให้เติมชื่ออำเภอในประโยคแรก เช่น "ศูนย์ระบาดวิทยาอำเภอเมืองอุดรธานี ได้รับแจ้งจาก..."
+- รูปแบบวันเวลา: บังคับให้แปลงวันที่รับแจ้งเป็นรูปแบบภาษาไทยแบบเต็ม เช่น วันที่ 10 ตุลาคม 2569 และต้องระบุเวลาเสมอ หากไม่มีข้อมูลเวลาให้พิมพ์ต่อท้ายวันที่ว่า "เวลา..... น."
+- เนื้อหา: สรุปข้อมูลเบื้องต้นของ Index case ขนาดและความรุนแรงของปัญหา การเข้าเกณฑ์สอบสวนโรค หน่วยงานที่แจ้งเตือน หน่วยงานรับแจ้ง และหน่วยงานที่เข้าดำเนินการ
+- วัตถุประสงค์ของการสอบสวนโรค: ให้วิเคราะห์จากจำนวนผู้ป่วยในข้อมูลดิบ
+  หากพบผู้ป่วยเพียง 1 ราย หรือข้อมูลมีลักษณะสอบสวนเฉพาะราย ให้เขียนวัตถุประสงค์ทิ้งท้ายข้อนี้ว่า "เพื่อยืนยันการวินิจฉัยโรค เพื่อค้นหาแหล่งโรค/แหล่งรังโรค และลักษณะของการเกิดโรค และเพื่อหาแนวทางควบคุมป้องกันไม่ให้แพร่กระจายออกไป"
+  หากพบผู้ป่วยมากกว่า 1 ราย หรือเป็นกลุ่มก้อน หรือมีคำว่า cluster/กลุ่มก้อน/ระบาด ให้เขียนวัตถุประสงค์ทิ้งท้ายข้อนี้ว่า "เพื่อยืนยันการวินิจฉัยและการระบาดของโรค เพื่อศึกษาลักษณะทางระบาดวิทยาของโรคตาม บุคคล เวลา สถานที่ เพื่อค้นหาแหล่งโรค วิธีการถ่ายทอดโรค และเพื่อหามาตรการในการควบคุมป้องกันการระบาดในครั้งนี้และป้องกันการระบาดในอนาคต"
+
+2. ผลการสอบสวนโรค
+เขียนอธิบายรายละเอียดโดยครอบคลุมประเด็นต่อไปนี้ให้ครบถ้วนตามลำดับ ห้ามเขียนสั้นเพียงย่อหน้าเดียว
+
+2.1 ข้อมูลทั่วไป
+- อธิบายข้อมูลทั่วไปของสถานที่เกิดเหตุ หรือจุดเกิดเหตุ เช่น บ้านพัก โรงเรียน ศูนย์เด็กเล็ก ชุมชน หมู่บ้าน สถานประกอบการ โรงพยาบาล หรือสถานที่อื่น
+- หากไม่มีข้อมูลส่วนนี้ ให้เขียนว่า "ข้อมูลทั่วไปของสถานที่เกิดเหตุ .........." แต่ยังต้องเชื่อมโยงว่าสถานที่เกิดเหตุอยู่ที่ ${location}
+
+2.2 สถานการณ์การระบาด
+- ระบุจำนวนผู้ป่วยทั้งหมดเท่าที่พบในข้อมูลดิบ
+- ระบุจำนวนผู้เสียชีวิต หากไม่มีให้เขียนว่า "ไม่พบข้อมูลผู้เสียชีวิตในข้อมูลดิบ"
+- ระบุอัตราป่วย หากไม่มีตัวหารประชากรให้เขียนว่า "ไม่สามารถคำนวณอัตราป่วยได้ เนื่องจากไม่ปรากฏจำนวนประชากรกลุ่มเสี่ยงในข้อมูลดิบ"
+- ระบุสถานะผู้ป่วย เช่น สงสัย เข้าข่าย ยืนยัน หรืออยู่ระหว่างรอผล หากมีในข้อมูลดิบ
+
+2.3 ลักษณะทางระบาดวิทยา
+ให้แยกเขียนเป็น 3 ประเด็นย่อยดังนี้
+1) บุคคล: อธิบายลักษณะผู้ป่วยตามกลุ่ม เพศ อายุ อาชีพ กลุ่มเสี่ยง ภาวะเฉพาะ เช่น หญิงตั้งครรภ์ เด็ก ผู้สูงอายุ ผู้มีโรคประจำตัว หรือบุคลากรสาธารณสุข หากข้อมูลใดไม่มี ให้ใช้ ".........."
+2) เวลา: ระบุวันที่เริ่มป่วยของ Index case วันที่รับแจ้ง วันที่ลงสอบสวน และวันที่พบผู้ป่วยรายล่าสุด หากไม่ทราบให้ระบุว่า "ไม่ปรากฏในข้อมูลดิบ"
+3) สถานที่: ระบุสถานที่เกิดเหตุ หมู่บ้าน ตำบล อำเภอ จังหวัด หรือสถานที่เฉพาะ เช่น ชั้นเรียน หอผู้ป่วย แผนก โรงงาน หรือชุมชน
+
+2.4 กลุ่มเสี่ยงและผู้สัมผัส
+- ระบุว่ากลุ่มเสี่ยงที่พบเป็นกลุ่มใด
+- ระบุจำนวนผู้สัมผัส หากมีในข้อมูลดิบ
+- หากไม่มีจำนวนผู้สัมผัส ให้เขียนว่า "จำนวนผู้สัมผัสยังไม่ปรากฏในข้อมูลดิบ และควรดำเนินการค้นหาเพิ่มเติม"
+
+2.5 แหล่งรังโรค แหล่งโรค และการถ่ายทอดโรค
+- ระบุแหล่งรังโรค หากในข้อมูลดิบไม่ระบุ ให้พิมพ์ว่า "อยู่ระหว่างสอบสวนโรค"
+- ระบุแหล่งโรค วิธีการแพร่กระจาย และสาเหตุของการระบาด เช่น เชื้อโรค สัตว์ พาหะ อาหาร น้ำ สิ่งแวดล้อม หรือสารเคมี
+- หากเป็นโรคติดต่อนำโดยแมลง ให้เชื่อมโยงกับแหล่งเพาะพันธุ์พาหะ ค่า HI ค่า CI หรือสิ่งแวดล้อมที่เอื้อต่อการแพร่โรค เฉพาะเมื่อมีข้อมูลในข้อมูลดิบ
+- หากเป็นโรคอาหารเป็นพิษ ให้เชื่อมโยงกับอาหาร น้ำ แหล่งปรุง ประวัติรับประทานร่วมกัน หรือสุขาภิบาลอาหาร เฉพาะเมื่อมีข้อมูลในข้อมูลดิบ
+- หากเป็นโรคทางเดินหายใจ ให้เชื่อมโยงกับผู้สัมผัสใกล้ชิด พื้นที่แออัด ระบบระบายอากาศ หรือประวัติสัมผัสผู้ป่วย เฉพาะเมื่อมีข้อมูลในข้อมูลดิบ
+
+2.6 ปัจจัยเสี่ยง
+- ระบุปัจจัยเสี่ยงที่เกี่ยวข้องของกลุ่มผู้ป่วยและพื้นที่
+- หากข้อมูลไม่ครบ ให้เขียนว่า "ปัจจัยเสี่ยงเพิ่มเติมอยู่ระหว่างสอบสวนโรค" แต่ต้องไม่เว้นว่าง
+
+2.7 ผลตรวจทางห้องปฏิบัติการ
+- ระบุว่ามีผลตรวจหรือไม่
+- ระบุชนิดตัวอย่าง วิธีตรวจ สถานที่ตรวจ วันที่เก็บตัวอย่าง วันที่ทราบผล และผลการตรวจ หากมีในข้อมูลดิบ
+- หากไม่มีข้อมูล ให้เขียนว่า "ผลตรวจทางห้องปฏิบัติการ .........." หรือ "อยู่ระหว่างสอบสวน/รอผลตรวจ" ตามความเหมาะสมจากข้อมูลดิบ
+
+3. กิจกรรมควบคุมโรคที่ดำเนินการไปแล้ว
+นำข้อมูล "กิจกรรมควบคุมโรคที่ทำแล้ว" มาแยกเขียนเป็นข้อๆ ย่อย 1), 2), 3)...
+- บังคับให้ระบุชื่อหน่วยงานที่ปฏิบัติไว้ที่หน้าสุดของแต่ละข้อ แล้วตามด้วยรายละเอียดกิจกรรม
+- ให้อนุมานชื่อหน่วยงานจาก "หน่วยงานแจ้งเตือน", "หน่วยงานรับแจ้ง" หรือ "แหล่งข่าว/ผู้แจ้ง"
+- หากข้อใดไม่สามารถระบุชื่อหน่วยงานได้ ให้พิมพ์คำว่า "หน่วยงาน ....." ขึ้นต้นประโยคแทน
+- ห้ามเขียนรวมเป็นย่อหน้าความเรียงเด็ดขาด
+- ต้องพยายามแยกกิจกรรมให้เป็นหลายข้อ เช่น การสอบสวนโรค การค้นหาผู้ป่วยเพิ่มเติม การค้นหาผู้สัมผัส การควบคุมสิ่งแวดล้อม การให้สุขศึกษา การติดตามอาการ และการประสานหน่วยงาน
+- ตัวอย่างรูปแบบที่ต้องการ:
+1) รพ.สต.บ้านตาด ดำเนินการคัดกรองอุณหภูมิและค้นหาผู้ป่วยเพิ่มเติมในพื้นที่
+2) หน่วยงาน ..... ให้สุขศึกษาเรื่องการสวมหน้ากากและการป้องกันโรค
+3) อปท.ในพื้นที่ สนับสนุนการควบคุมสิ่งแวดล้อมและกำจัดแหล่งเสี่ยง
+
+4. แนวโน้มของการระบาด
+วิเคราะห์ตามหลัก Single Algorithm จากปัจจัยต่างๆ ดังนี้:
+1) กลุ่มเสี่ยงที่มีโอกาสได้รับเชื้อหรือผลกระทบเพิ่มขึ้น
+2) โอกาสสัมผัสโรค (Exposure) หรือความหนาแน่นของผู้สัมผัสในพื้นที่
+3) ความผิดปกติของเหตุการณ์ (Unusualness) ว่าเคยเกิดขึ้นมาก่อนหรือไม่
+4) โอกาสที่จะแพร่กระจายไปพื้นที่อื่น (Spreading)
+5) ขนาดผลกระทบทางสุขภาพ (Impact) ต่อประชาชน
+6) มาตรการควบคุมที่มีประสิทธิภาพ (Control measures)
+
+ข้อกำหนดสำคัญของหัวข้อ 4:
+- ห้ามตอบเพียง ".........." ทั้งหัวข้อ
+- ให้พรรณนาวิเคราะห์จากข้อมูลที่มี แม้ข้อมูลไม่ครบ
+- หากข้อมูลไม่ชัดเจน ให้ระบุว่า "ข้อมูลไม่ปรากฏในข้อมูลดิบ" หรือ "อยู่ระหว่างสอบสวนโรค" แล้วประเมินในระดับที่สูงกว่าหรือรุนแรงไว้ก่อนตามหลักความปลอดภัย (Precautionary Principle)
+- ต้องสรุปสุดท้ายว่าเหตุการณ์นี้เป็นความเสี่ยงระดับใด ได้แก่ ต่ำมาก, ต่ำ, ปานกลาง, สูง หรือสูงมาก พร้อมเหตุผลสนับสนุน
+- หากพบกลุ่มเสี่ยงพิเศษ เช่น หญิงตั้งครรภ์ เด็กเล็ก ผู้สูงอายุ ผู้ป่วยโรคเรื้อรัง หรือผู้สัมผัสจำนวนมาก ให้สะท้อนในระดับความเสี่ยงและความเร่งด่วน
+
+5. สรุปความสำคัญทางสาธารณสุข และความเร่งด่วน
+เขียนสรุปเป็นความเรียงเชิงบริหาร (Executive Summary) ที่กระชับและตรงประเด็น โดยต้องครอบคลุมเนื้อหาดังนี้:
+- ขนาดของปัญหาและผลกระทบโดยตรงต่อสุขภาพของประชาชนในพื้นที่
+- ระบุและฟันธงให้ชัดเจนว่าเหตุการณ์นี้จัดเป็น "การระบาด", "โรคอุบัติใหม่/อุบัติซ้ำ", "โรคติดต่ออันตราย" หรือ "การสอบสวนเฉพาะราย" หรือไม่
+- ประเมินความเร่งด่วนในการแก้ไขปัญหา โดยต้องนำระดับความเสี่ยงที่วิเคราะห์ได้จากข้อ 4 มาเป็นเหตุผลสนับสนุนความเร่งด่วน
+- ประเมินผลกระทบเชิงวงกว้างด้านเศรษฐกิจ การท่องเที่ยว และสังคม ว่ามีหรือไม่ อยู่ในระดับใด สูง, ปานกลาง, ต่ำ หรือไม่มีผลกระทบ พร้อมอธิบายเหตุผลสั้นๆ
+- ต้องเขียนให้เหมาะกับการเสนอผู้บริหารอำเภอ/จังหวัด
+
+6. ข้อเสนอเพื่อพิจารณาดำเนินการ
+นำเสนอข้อพิจารณาสั่งการและมาตรการที่ควรทำเพิ่มเติม โดยให้ครอบคลุมอย่างน้อย 5 มิติ ดังนี้:
+1) การค้นหาผู้ป่วยเพิ่มเติมและการเฝ้าระวังเชิงรุก
+2) การค้นหาและติดตามผู้สัมผัสหรือกลุ่มเสี่ยง
+3) การจัดการควบคุมสิ่งแวดล้อม พาหะ แหล่งโรค หรือปัจจัยเสี่ยง
+4) การสื่อสารความเสี่ยงและให้สุขศึกษาแก่ประชาชน
+5) การประสานงาน/สนับสนุนทรัพยากร/ติดตามประเมินผล
+
+กติกาบังคับของหัวข้อ 6:
+- ต้องแยกเขียนเป็นข้อย่อย 1), 2), 3), 4), 5)
+- ทุกข้อต้องระบุชื่อหน่วยงานที่ควรรับผิดชอบไว้เป็นประธานหน้าสุดของประโยค
+- ให้อนุมานชื่อหน่วยงานจากบริบทของสถานที่เกิดเหตุ เช่น สสจ., สสอ., รพ.สต., อปท., ปศุสัตว์, โรงเรียน, โรงพยาบาล หรือพิมพ์ "หน่วยงาน ....." หากระบุไม่ได้
+- ห้ามเขียนรวมเป็นย่อหน้าความเรียงเด็ดขาด
+- ห้ามเขียนเพียงชื่อหน่วยงานตามด้วย ".........." ต้องมีข้อเสนอเชิงปฏิบัติอย่างน้อย 1 ประโยคในแต่ละข้อ
+- ตัวอย่างรูปแบบที่ถูกต้อง:
+1) รพ.สต.[ชื่อตำบล] ควรเฝ้าระวังค้นหาผู้ป่วยรายใหม่และติดตามกลุ่มเสี่ยงในพื้นที่ต่อเนื่อง
+2) อปท.ในพื้นที่ ควรสนับสนุนวัสดุอุปกรณ์และกำลังคนในการควบคุมสิ่งแวดล้อม
+3) สสอ.[ชื่ออำเภอ] ควรประสานหน่วยงานที่เกี่ยวข้องเพื่อกำกับติดตามการดำเนินงานและสรุปผลเสนอผู้บริหาร
+`.trim();
+}
+
+function safePromptValue_(value) {
+  var text = String(value || '..........').trim();
+
+  if (!text) {
+    text = '..........';
+  }
+
+  text = text
+    .replace(/`/g, "'")
+    .replace(/\$\{/g, "{")
+    .replace(/\r/g, "\n");
+
+  return text;
+}
+function forceGeminiModelAuto() {
+  var ss = getDb_();
+  var sheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
+
+  if (!sheet) {
+    throw new Error('ไม่พบชีท SystemSettings');
+  }
+
+  var preferred = 'AUTO';
+  var values = sheet.getDataRange().getValues();
+  var found = false;
+
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0] || '').trim() === 'GEMINI_MODEL') {
+      sheet.getRange(i + 1, 2).setValue(preferred);
+      sheet.getRange(i + 1, 3).setValue('AUTO = ตรวจโมเดลที่ API Key ใช้งานได้จริง แล้วเลือก Stable Flash รุ่นใหม่อัตโนมัติ');
+      sheet.getRange(i + 1, 4).setValue(new Date());
+      sheet.getRange(i + 1, 5).setValue('system');
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    sheet.appendRow([
+      'GEMINI_MODEL',
+      preferred,
+      'AUTO = ตรวจโมเดลที่ API Key ใช้งานได้จริง แล้วเลือก Stable Flash รุ่นใหม่อัตโนมัติ',
+      new Date(),
+      'system'
+    ]);
+  }
+
+  clearGeminiModelCache_();
+
+  Logger.log('ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว');
+  return 'ตั้งค่า GEMINI_MODEL เป็น AUTO และล้าง Cache เรียบร้อยแล้ว';
+}
+
+// ชื่อเดิมยังใช้ได้ เพื่อไม่ให้เมนูหรือคู่มือเก่าเสีย
+function forceGeminiModelStable() {
+  return forceGeminiModelAuto();
+}
