@@ -74,3 +74,21 @@ Before any real-data handling, the following decisions remain open:
 **Migration Readiness: HOLD.** Draft PR #64 stays Draft until the independent evidence and human gates are satisfied. No merging into main, live Google Workspace read/export/write, Apps Script installer/migrations/archiving, Drive document mutations, Gemini calls, staging/production deploy, data migration or restoration is authorized by this rehearsal.
 
 Related: [Readiness 15-gate checklist](p4-v7-migration-readiness-2026-10-09.md), [P4 migration design](p4-to-v7-migration-design-2026-10-09.md), [P4 v7 governance reconciliation](p4-v7-governance-reconciliation-2026-10-09.md).
+
+## 7. Adversarial pre-review hardening — 2026-10-09
+
+**Technical finding (author self-review, NOT independent acceptance):** the initial disposable replay checked strict *target-to-candidate* row-prefix equality, yet it did not require a consistent declared P4 source row count and historical evidence length for each target table. A crafted synthetic proposal could drop one main/attachment/audit candidate row, recompute the candidate digest and adjust candidate counts, leaving the original source counts untouched. This was not a real-data attack or production-executable migration because this prototype never accepts operational input or writes externally, but it weakens the completeness claim of the synthetic rehearsal.
+
+**Integration-only correction** (`tools/p4-v7-synthetic-replay.mjs`):
+1. Require per-sheet `counts.source` and `counts.candidate` for all five named datasets, with exact expected counts for main, active attachments and active audit; source AuditArchive/VisitLogs must be zero.
+2. Require `legacyEvidence.workflow` and `legacyEvidence.attachments` to match candidate row count, row number, EventID and attachment FileID/Status/identity. No silent loss or substitution of these local synthetic references.
+3. Check **headers even on excluded, empty** AuditArchive and VisitLogs: a zero-row sheet with conflicting schema is not silently accepted as equivalent.
+4. Continue refusing any `plan.findings` or nonempty legacy archive/visit evidence and do not change unconditional `HOLD` output.
+
+**New adversarial tests:** five cases in `tests/integration-p4-v7-synthetic-replay.test.mjs`: dropped main row, dropped audit/attachment row, missing/substituted source evidence, forged excluded-sheet headers and nonzero excluded source counts. Some recompute `candidateDigest` to prove digest matching alone is insufficient. No original tests removed.
+
+**Verified CI:** [run 37893694807](https://github.com/9GotStory/smart-srrt/actions/runs/37893694807) at `45e55c95c9c8e7ce944c7e6dbface1c1571a0e23` — **303/303 tests PASS**, zero failures/skips, One-Click byte parity, syntax/RPC and offline P6 preflight PASS. This is a code/test result pending independent reviewer scrutiny.
+
+**Remaining trust limitations:** The source counts, `sourceDigest`, snapshot marker and synthetic legacy evidence still originate from the same in-memory proposal and are not attested against an immutable original snapshot or backup. A party able to forge *all* input fields consistently may still construct a deceptive plan. The user-provided `syntheticOnly` flag cannot detect sensitive data. The checker is a technical fixture exercise, not a cryptographic chain of custody, durable replay of a partially written Google Sheet, or authorization control.
+
+**Gate decision stays HOLD:** No actual Google Workspace data access, storage writes, source migration, external archive copy, signed reviewer result, deployment or merge authorized. An independent reviewer is still required for the final SHA and the historical P4 lineage/privacy/restore design.
