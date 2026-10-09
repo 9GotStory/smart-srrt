@@ -347,7 +347,8 @@
         (Number(result.invalidCount||0)?' · พบแถวทะเบียนที่ไม่สมบูรณ์ '+Number(result.invalidCount)+' รายการ':'');
       el('reportHistoryWarning').textContent=latest&&Number(result.currentRevision)>Number(latest.sourceRevision)
         ?'ข้อมูลเหตุการณ์มีการปรับปรุงหลังสร้างรายงานล่าสุด คุณยังเปิดอ่านรายงานเดิมได้':'';
-      el('reportHistoryNewBtn').style.display=entries.length&&!Number(result.invalidCount||0)?'inline-flex':'none';
+      el('reportHistoryNewBtn').style.display=entries.length&&!Number(result.invalidCount||0)&&!reportUnknownNeedsVerification&&
+        !(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))?'inline-flex':'none';
       el('reportHistoryList').innerHTML=entries.length?entries.map((r,i)=>{
         const url=String(r.documentURL||'');
         const link=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url)
@@ -371,7 +372,7 @@
 
   function requestNewReportFromHistory(){
     if(reportNewConfirmSubmitting||!currentUser||!roleCanRecord()||!reportHistoryEventId)return;
-    if(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
+    if(reportUnknownNeedsVerification||activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
       toast('กรุณาตรวจสอบสถานะงานรายงานเดิมก่อน');return;
     }
     if(reportSummaryState.status!=='ready'||!reportSummaryState.summaries[reportHistoryEventId]||
