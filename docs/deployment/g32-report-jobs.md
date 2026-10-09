@@ -59,3 +59,15 @@ The corrective candidate (on this **Draft PR #60**, not yet deployed) replaces o
 Regression tests drive the actual extracted One-Click report browser code under a mocked DOM and simulate ready, warnings, failure to create job, terminal cancellation, confirmation back/escape, duplicate confirmation while pending, completed/late-terminal state and cancellation transport error.
 
 **Existing V5 remains unchanged** until the Product Owner separately approves an updated test-only deployment (next version, expected V6). No spreadsheet migration, installer, manual Gemini retry or PR merge is authorized by these source fixes.
+## G-32 V6 progress-state follow-up — 2026-10-09
+
+Owner feedback after V6 HTML acceptance: the styled cancellation modal looked correct, but immediately reverting the Reporter action to its idle label after `createReportJob` made it unclear whether the report request had been submitted. In V6 this was introduced while correcting the stuck `กำลังตรวจข้อมูล` state.
+
+Next candidate changes **frontend only** in stacked Draft PR #60:
+
+- Report generation buttons in both the Events table and Reporter table are rendered by a shared `reportActionButton` helper bound to the active authenticated job, not solely to a previous DOM element's innerHTML.
+- During readiness checks, the affected action indicates **กำลังตรวจข้อมูล**. Once queued/running, the same event action stays visually active and says **ดูสถานะ**, opening the existing task rather than resubmitting. When cancellation is pending it says **กำลังขอยกเลิก · ดูสถานะ**. Other event actions are disabled while one script-wide job is non-terminal.
+- When the job becomes `completed`, `cancelled`, `failed` or `unknown`, event and Reporter action buttons return to their original **AI** / **สร้างรายงาน AI** labels. The task result remains accessible through the separate persistent chip until acknowledgement. Navigation/table rerenders derive the same state from the job object.
+- Active, hover, focus-visible, disabled and pressed appearances are styled for report buttons; themed confirmation buttons have clear pressed/hover/focus feedback.
+
+CI regression tests simulate action display through job creation, active polling, cancellation, terminal states and table rerenders, and continue verifying non-duplicating task semantics. **No V7 deployment, migration, new Gemini call or backend mutation is authorized by this code change.** User-deployed test V6 stays authoritative until a later explicit approval; confirm visual status before any further live model requests.
