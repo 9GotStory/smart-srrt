@@ -460,7 +460,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -962,6 +962,7 @@
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
   let reportSummaryRequest=0,reportSummaryState={status:'idle',summaries:{}};
   let reportUnknownNeedsVerification=false,reportJobRecoveryRequest=0;
+  let reportJobCreateInFlight=false,reportJobCreateRequest=0;
   async function refreshReportSummaries(){
     const request=++reportSummaryRequest,session=token;
     reportSummaryState={status:'loading',summaries:{}};
@@ -1008,6 +1009,10 @@
       }
       return {disabled:false,busy:false,active:false,mode:'verify',
         html:'<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ตรวจสอบสถานะรายงาน'};
+    }
+    if(reportJobCreateInFlight){
+      return {disabled:true,busy:true,active:true,mode:'blocked',
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> กำลังส่งคำขอรายงาน'};
     }
     if(matching){
       let label='กำลังสร้างรายงาน · ดูสถานะ';
@@ -1364,27 +1369,42 @@
     if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
       toast('ยังไม่สามารถยืนยันงานรายงานเดิมได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');return;
     }
-    if(reportGenerationInFlight.size > 0 || reportReadinessInFlight.size > 1){
-      toast('มีงานสร้างรายงานอยู่แล้ว เปิดสถานะงานเดิมแทนการส่งซ้ำ');
+    if(reportJobCreateInFlight||reportGenerationInFlight.size > 0 || reportReadinessInFlight.size > 1){
+      toast('มีคำขอสร้างรายงานอยู่แล้ว กรุณาตรวจสอบสถานะงานเดิมก่อน');
       if(activeReportJob)reopenReportTask();
       return;
     }
+    // The browser must not issue concurrent create RPCs before the G-32 server
+    // returns a job pointer. An RPC timeout is NOT proof the server did not queue.
+    const session=token,user=currentUser,request=++reportJobCreateRequest;
     const old=btn?btn.innerHTML:'';
-    const session=token;
+    reportJobCreateInFlight=true;
+    refreshReportActionButtons();
     try{
       if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังเริ่มงาน'}
       const job=await gs('createReportJob',session,eventId);
-      if(session!==token||!currentUser)return;
+      if(session!==token||user!==currentUser||request!==reportJobCreateRequest)return;
+      if(!job||!job.id||!job.eventId)throw new Error('ยังไม่สามารถยืนยันข้อมูลงานรายงานที่สร้างได้');
       if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob)){
-        toast('มีงานเดิมอยู่แล้ว กรุณารอตรวจสถานะก่อน');return;
+        reportUnknownNeedsVerification=true;
+        toast('มีงานเดิมอยู่แล้ว กรุณาตรวจสอบสถานะก่อนสร้างซ้ำ');return;
       }
       paintReportTask(job);
       openModal('reportResultModal');
       if(job.status==='queued')void runReportJobClient(job.id,session);
-    }catch(e){toast('เริ่มสร้างรายงานไม่สำเร็จ: '+String(e.message||e))}
-    finally{
-      if(btn){btn.disabled=false;btn.innerHTML=old}
-      refreshReportActionButtons();
+    }catch(e){
+      if(session===token&&user===currentUser&&request===reportJobCreateRequest){
+        // Network failure may happen AFTER the server accepted createReportJob.
+        // Fail closed and require an authenticated G-32 recovery before retry.
+        reportUnknownNeedsVerification=true;
+        toast('ยังยืนยันผลคำขอสร้างรายงานไม่ได้ กรุณากดตรวจสอบสถานะก่อนสั่งสร้างใหม่: '+String(e.message||e));
+      }
+    }finally{
+      if(request===reportJobCreateRequest){
+        reportJobCreateInFlight=false;
+        if(btn){btn.disabled=false;btn.innerHTML=old}
+        refreshReportActionButtons();
+      }
     }
   }
   async function makeReport(eventId,btn,allowExistingReport){
@@ -1392,7 +1412,7 @@
     if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
       toast('ยังไม่สามารถยืนยันผลของงานรายงานก่อนหน้าได้ กรุณาตรวจสอบสถานะก่อนสร้างซ้ำ');return;
     }
-    if(reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
+    if(reportJobCreateInFlight||reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
       toast('มีคำขอรายงานอยู่แล้ว กรุณาเปิดสถานะงานเดิม');
       if(activeReportJob)reopenReportTask();
       return;
