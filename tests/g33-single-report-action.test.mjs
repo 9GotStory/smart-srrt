@@ -148,7 +148,7 @@ test('G33 button states are history-first, not permanent regenerate',()=>{
   h.ctx.paintReportTask({id:'job-x',eventId:EVENT,status:'unknown',stage:'unknown'});
   assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/);
   seed({count:2,invalidCount:0,latestSourceRevision:4});
-  assert.match(h.ctx.reportActionButton(EVENT,false),/ดูรายงาน \\(2\\).*ตรวจสอบงานค้าง/);
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ดูรายงาน \(2\).*ตรวจสอบงานค้าง/);
   assert.doesNotMatch(h.ctx.reportActionButton(EVENT,false),/สร้างรายงาน AI/);
 });
 
