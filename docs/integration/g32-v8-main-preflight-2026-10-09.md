@@ -359,3 +359,13 @@ The checker enumerates **15** independent preservation/security/recovery/review/
 **CI of code/test candidate:** [run 37889166420](https://github.com/9GotStory/smart-srrt/actions/runs/37889166420) on `533521929a894b0457cdfb91916d41643a72280d`: **278/278 PASS**, zero failures, deterministic One-Click byte parity, syntax/RPC and offline P6 preflight PASS. Document-only follow-up commits require a final HEAD CI recheck.
 
 **Gate distinction:** P1–P4 *automated v7 behavior* is green; **real P4 historical migration, source export, staging, merger, operator decision and Independent Review remain HOLD**. No reviewer approval or operator authorization exists in this test result. PR #64 stays Draft. Do not run installer, archival, Gemini, deployment, real Drive/Sheets operations or merge.
+
+## Rehearsal 8: synthetic partial-copy / crash / replay — 2026-10-09
+
+**Details:** [P4→v7 Synthetic Partial-Copy Recovery](p4-v7-synthetic-replay-2026-10-09.md).
+
+Created only `tools/p4-v7-synthetic-replay.mjs` and `tests/integration-p4-v7-synthetic-replay.test.mjs`, with no production code changes. The pure in-memory simulator accepts only a synthetic planner proposal without findings or unresolved AuditArchive/VisitLogs, and an empty/prefix-only disposable target matching the exact source and candidate fingerprints. It interrupts after chosen row writes, validates existing rows byte/logically by exact cell identity, refuses mismatched IDs/data, unexpected cross-table progress and changed snapshots, and deterministically resumes; output **always** declares `HOLD`, never permits real-data export or migration.
+
+**CI:** [GitHub Actions run 37893200166](https://github.com/9GotStory/smart-srrt/actions/runs/37893200166) on implementation commit `06d99ee130777c7510f547085e2038671167043d`: **298 tests / 298 PASS**, no skipped/failures, including 20 new in-memory recovery tests; deterministic One-Click parity, syntax/RPC and offline P6 preflight PASS. Subsequent documentation-only commits require checking CI on the final HEAD.
+
+**Explicitly NOT proven:** backup/restore of real Sheets, typed original Date values, cross-file writes, Drive asset continuity, operator ACL and retention, non-atomic remote writes, approval of archived attachments/AuditArchive/RequestParams, or independent review. `partial_copy_recovery` readiness gate is still HOLD. `main` and approved G32 V8 remain unchanged; PR #64 stays Draft without merge, deploy or actual migration.
