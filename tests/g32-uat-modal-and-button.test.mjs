@@ -48,6 +48,7 @@ function browserHarness(overrides={}){
     },
     setInterval(){return ++nextTimer},clearInterval(){},
     el,
+    escapeHtml:value=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     openModal:id=>el(id).classList.add('open'),
     closeModal:id=>el(id).classList.remove('open'),
     toast:msg=>toasts.push(String(msg)),
