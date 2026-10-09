@@ -106,11 +106,11 @@ test('G33 browser removes both duplicate history buttons while preserving the hi
 
 function clientHarness() {
   const elements=new Map(),calls=[],toasts=[],buttons=[];
-  const document={querySelectorAll:s=>s==='button[data-report-event-id]'?buttons:[]};
+  const document={querySelectorAll:s=>s==='button[data-report-event-id]'?buttons:[],addEventListener(){}};
   function el(id) {
     if(!elements.has(id)){
       const classes=new Set();
-      elements.set(id,{id,style:{display:'none'},innerHTML:'',textContent:'',disabled:false,
+      elements.set(id,{id,style:{display:'none'},innerHTML:'',textContent:'',disabled:false,removeAttribute(){},
         classList:{contains:n=>classes.has(n),add:n=>classes.add(n),remove:n=>classes.delete(n),
           toggle:(n,on)=>on?classes.add(n):classes.delete(n)}});
     }
