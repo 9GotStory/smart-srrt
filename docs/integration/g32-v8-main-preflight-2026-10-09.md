@@ -292,3 +292,11 @@ Apps Script** until independent review, P1–P4 reconciliation,
 and a separate deployment authorization. The verified staging positive-path
 UAT for the *unchanged* V8 release remains historical evidence, but
 does not implicitly validate this later integration-only KPI correction.
+
+## Gate 1: P4 to Schema v7 migration design — 2026-10-09
+
+**Design-only candidate:** [P4 -> v7 data-preserving field map and offline test matrix](p4-to-v7-migration-design-2026-10-09.md).
+
+The design covers MainData 39-44 owner/lifecycle collision, P4 11-field versus V8 13-field attachments, separate P4 AuditArchive versus G-21 external archive/AuditID, and P4 VisitLogs RequestParams versus G-29 privacy-clean headers. It includes typed field mapping, synthetic fixture cases, idempotent identity ledger requirements, archival provenance, rollback/stop gates and unresolved policy decisions.
+
+**Gate status: DESIGN CANDIDATE — INDEPENDENT REVIEW REQUIRED.** This is not an implementation, a completed migration rehearsal, permission to alter real workbooks, or an Integration CI PASS. Existing 22 P1-P4 compatibility test failures remain open. The accepted V8 staging UAT, G-32 PR #60 and main remain untouched; Draft PR #64 remains HOLD. Application source, build artifacts and regression tests are unchanged by this Gate 1 documentation work.
