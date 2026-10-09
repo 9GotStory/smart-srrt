@@ -3750,19 +3750,21 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJ
 
   var startedAt = Date.now();
   reportJobCheckpoint_(reportJobId,'gemini_1');
-  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
+  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta,
+    reportJobId, 'gemini_1', startedAt);
   reportJobCheckpoint_(reportJobId,'gemini_2');
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
-  // Synchronous UrlFetchApp.fetch cannot be interrupted; avoid STARTING part 2
-  // if the first call has already consumed the safe request budget.
+  // Synchronous UrlFetchApp.fetch cannot be interrupted. Retrying part 1 must
+  // never consume so much time that we then start part 2 too late.
   if (Date.now() - startedAt > 120000) {
     throw new Error('Gemini 3.8 Flash ตอบช้าเกินไป ระบบยุติก่อนเริ่มส่วนที่สองเพื่อเลี่ยง Apps Script Timeout กรุณาลองใหม่ภายหลัง');
   }
 
-  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
+  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta,
+    reportJobId, 'gemini_2', startedAt);
   reportJobCheckpoint_(reportJobId,'post_gemini');
   if (String(part2 || '').indexOf('🚨') === 0) {
     throw new Error(String(part2).replace(/^🚨\s*/, ''));
@@ -4017,9 +4019,15 @@ function testGeminiConnection() {
   Logger.log(response.getContentText());
   return 'API Version: ' + modelInfo.apiVersion + '\nModel: ' + modelInfo.modelName + '\nStatus: ' + response.getResponseCode() + '\n' + response.getContentText();
 }
-// Only Gemini 3.8 Flash is authorized for Smart SRRT report generation.
-// One synchronous request per section; HTTP 503/429 fails immediately without retry.
-function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) {
+// G-32 V8: One bounded HTTP-503-only retry per section, never a model fallback.
+// Budget leaves time for Apps Script to finalize the Google Doc and registry.
+var REPORT_GEMINI_MAX_ELAPSED_MS_ = 210000;
+var REPORT_GEMINI_RETRY_BASE_MS_ = 1500;
+var REPORT_GEMINI_RETRY_JITTER_MS_ = 1500;
+var REPORT_GEMINI_MIN_FETCH_MS_ = 15000;
+var REPORT_GEMINI_FINALIZE_RESERVE_MS_ = 10000;
+
+function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta, reportJobId, stage, reportStartedAt) {
   if (!modelInfo || modelInfo.modelName !== REPORT_GEMINI_MODEL || !['v1','v1beta'].includes(modelInfo.apiVersion)) {
     throw new Error('ไม่อนุญาตให้สร้างรายงานด้วยโมเดลอื่นนอกจาก Gemini 3.8 Flash');
   }
@@ -4029,43 +4037,72 @@ function callGeminiForReport_(apiKey, modelInfo, promptText, label, reportMeta) 
     contents:[{parts:[{text:promptText}]}],
     generationConfig:{temperature:0.15, topP:0.8, topK:40, maxOutputTokens:12000}
   };
-  var startedAt = Date.now();
-  var response;
-  try {
-    response = UrlFetchApp.fetch(apiUrl, {
-      method:'post', contentType:'application/json', payload:JSON.stringify(payload), muteHttpExceptions:true, timeoutSeconds:110
-    });
-  } catch (error) {
-    Logger.log('AI Reporter ' + label + ' transport failure, ms=' + (Date.now() - startedAt));
-    throw new Error('เชื่อมต่อ Gemini 3.8 Flash ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ภายหลัง');
+  var fetchBody = JSON.stringify(payload);
+  var budgetStart = Number(reportStartedAt) || Date.now();
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    // This check must run both before the initial fetch and after retry backoff.
+    // It rejects cancellation without launching another Gemini request.
+    reportJobCheckpoint_(reportJobId, stage);
+    var remainingMs = REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+      REPORT_GEMINI_FINALIZE_RESERVE_MS_;
+    if (remainingMs < REPORT_GEMINI_MIN_FETCH_MS_) {
+      throw new Error('Gemini 3.8 Flash ใช้เวลานานเกินกรอบความปลอดภัยของ Apps Script กรุณาตรวจประวัติรายงานก่อนเริ่มใหม่');
+    }
+    var requestTimeoutSeconds = Math.min(110, Math.floor(remainingMs / 1000));
+    var fetchStartedAt = Date.now();
+    var response;
+    try {
+      response = UrlFetchApp.fetch(apiUrl, {
+        method:'post', contentType:'application/json', payload:fetchBody,
+        muteHttpExceptions:true, timeoutSeconds:requestTimeoutSeconds
+      });
+    } catch (error) {
+      Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+        ' transport failure durationMs=' + (Date.now() - fetchStartedAt));
+      throw new Error('เชื่อมต่อ Gemini 3.8 Flash ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ภายหลัง');
+    }
+    var statusCode = response.getResponseCode();
+    Logger.log('AI Reporter ' + label + ' attempt=' + attempt +
+      ' model=' + REPORT_GEMINI_MODEL + ' API=' + modelInfo.apiVersion +
+      ' status=' + statusCode + ' durationMs=' + (Date.now() - fetchStartedAt));
+    if (statusCode === 503) {
+      if (attempt === 1) {
+        var waitMs = REPORT_GEMINI_RETRY_BASE_MS_ +
+          Math.floor(Math.random() * (REPORT_GEMINI_RETRY_JITTER_MS_ + 1));
+        // Do not sleep/retry if too little time remains to make a useful fetch.
+        if (REPORT_GEMINI_MAX_ELAPSED_MS_ - (Date.now() - budgetStart) -
+            REPORT_GEMINI_FINALIZE_RESERVE_MS_ - waitMs >= REPORT_GEMINI_MIN_FETCH_MS_) {
+          reportJobCheckpoint_(reportJobId, stage);
+          Logger.log('AI Reporter ' + label + ' 503 retry scheduled attempt=2 delayMs=' + waitMs);
+          Utilities.sleep(waitMs);
+          continue;
+        }
+        Logger.log('AI Reporter ' + label + ' 503 retry skipped: time budget');
+      }
+      throw new Error('Gemini 3.8 Flash กำลังมีการใช้งานสูง (HTTP 503) กรุณาลองใหม่ภายหลัง ระบบไม่ได้สลับโมเดลอื่น');
+    }
+    if (statusCode === 429) {
+      throw new Error('Gemini 3.8 Flash เกินขีดจำกัดการใช้งาน (HTTP 429) กรุณารอให้โควตาพร้อมแล้วลองใหม่');
+    }
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new Error('Gemini 3.8 Flash ตอบกลับ HTTP ' + statusCode + ' กรุณาลองใหม่ภายหลัง');
+    }
+    var json;
+    try { json = JSON.parse(response.getContentText()); }
+    catch (error) { throw new Error('Gemini 3.8 Flash ส่งข้อมูลตอบกลับที่อ่านไม่ได้'); }
+    var candidate = json.candidates && json.candidates[0];
+    if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) {
+      throw new Error('Gemini 3.8 Flash ไม่ส่งเนื้อหารายงานในส่วน ' + label);
+    }
+    var text = candidate.content.parts.map(function(p){return p.text || '';}).join('\n')
+      .replace(/\*/g,'').replace(/```/g,'').trim();
+    if (!text) throw new Error('Gemini 3.8 Flash ส่งรายงานว่างเปล่าในส่วน ' + label);
+    recordSuccessfulGeminiModel_(reportMeta, modelInfo);
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
+    }
+    return text;
   }
-  var statusCode = response.getResponseCode();
-  Logger.log('AI Reporter ' + label + ' model=' + REPORT_GEMINI_MODEL +
-    ' API=' + modelInfo.apiVersion + ' status=' + statusCode + ' durationMs=' + (Date.now() - startedAt));
-  if (statusCode === 503) {
-    throw new Error('Gemini 3.8 Flash กำลังมีการใช้งานสูง (HTTP 503) กรุณาลองใหม่ภายหลัง ระบบไม่ได้สลับโมเดลอื่น');
-  }
-  if (statusCode === 429) {
-    throw new Error('Gemini 3.8 Flash เกินขีดจำกัดการใช้งาน (HTTP 429) กรุณารอให้โควตาพร้อมแล้วลองใหม่');
-  }
-  if (statusCode < 200 || statusCode >= 300) {
-    throw new Error('Gemini 3.8 Flash ตอบกลับ HTTP ' + statusCode + ' กรุณาลองใหม่ภายหลัง');
-  }
-  var json;
-  try { json = JSON.parse(response.getContentText()); }
-  catch (error) { throw new Error('Gemini 3.8 Flash ส่งข้อมูลตอบกลับที่อ่านไม่ได้'); }
-  var candidate = json.candidates && json.candidates[0];
-  if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) {
-    throw new Error('Gemini 3.8 Flash ไม่ส่งเนื้อหารายงานในส่วน ' + label);
-  }
-  var text = candidate.content.parts.map(function(p){return p.text || '';}).join('\n')
-    .replace(/\*/g,'').replace(/```/g,'').trim();
-  if (!text) throw new Error('Gemini 3.8 Flash ส่งรายงานว่างเปล่าในส่วน ' + label);
-  recordSuccessfulGeminiModel_(reportMeta, modelInfo);
-  if (candidate.finishReason === 'MAX_TOKENS') {
-    text += '\n\nหมายเหตุ: ระบบ AI สร้างเนื้อหา' + label + 'ถึงขีดจำกัดความยาวของโมเดล ข้อความส่วนนี้อาจยังไม่สมบูรณ์';
-  }
-  return text;
 }
 
 function buildReportPromptPart_(rowData, locationInfo, sectionRange) {
