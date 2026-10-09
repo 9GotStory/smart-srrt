@@ -162,8 +162,7 @@ test('G-32 status update restores consolidated report actions when job ends',asy
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'completed',stage:'completed',documentUrl:'https://docs.google.com/document/d/example/edit'});
   // A newly completed job must re-check the durable registry before offering another generation.
   assert.match(main.innerHTML,/ตรวจสอบสถานะรายงาน/);
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(main.innerHTML,'สร้างรายงาน AI');
   assert.equal(mini.innerHTML,'AI');
   assert.equal(other.disabled,false);
