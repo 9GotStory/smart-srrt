@@ -26,6 +26,14 @@
     .closed{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;border-radius:16px;padding:14px;margin-bottom:14px;font-weight:700}.help{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:14px;padding:12px;font-size:12px;line-height:1.65}.logo-preview{display:flex;align-items:center;gap:14px;padding:12px;border:1px dashed var(--line);border-radius:14px;margin:10px 0}.logo-preview img{width:80px;height:80px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.setting-group{border:1px solid var(--line);border-radius:16px;padding:14px}.setting-group h4{margin:0 0 12px;color:var(--primary)}.mini{font-size:11px;color:var(--muted)}.progress{display:none;margin-top:10px;color:var(--primary);font-weight:700}.progress.show{display:block}
     .report-task-indicator{position:fixed;bottom:78px;right:18px;z-index:59;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--primary);box-shadow:var(--shadow);max-width:min(420px,calc(100vw - 36px));padding:12px 15px;font-weight:700;cursor:pointer;align-items:center;gap:8px;text-align:left}
     .report-task-indicator span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .report-cancel-confirm-modal{z-index:72}
+    .report-cancel-confirm-modal .modal-box{border:1px solid #fecaca}
+    .report-cancel-confirm-modal .modal-title{color:#b91c1c}
+    .report-cancel-confirm-modal p{margin:0 0 14px;line-height:1.7}
+    .report-cancel-confirm-modal .help{margin-bottom:16px}
+    .report-cancel-confirm-modal .actions{margin-top:16px}
+    .report-cancel-confirm-modal button:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
+    .report-cancel-error{padding:10px 12px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:12px}
     .mobile-overlay{display:none}
     @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.settings-grid{grid-template-columns:1fr}}
     @media(max-width:980px){.sidebar{transform:translateX(-105%);transition:.25s}.sidebar.open{transform:none}.mobile-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}.main{margin-left:0;width:100%;padding:16px}.hamb{display:block}.topbar{align-items:stretch}.banner{flex-direction:column;align-items:flex-start}.charts{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span-3{grid-column:span 1}.chart{height:285px}}
