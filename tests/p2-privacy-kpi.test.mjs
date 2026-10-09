@@ -40,9 +40,10 @@ test('raw Event RPC requires authentication and public RPC is aggregate-only', (
 
 test('browser chooses aggregate public dashboard and authenticated raw rows', () => {
   const loader = html.match(/async function loadDashboard\(\)\{[\s\S]*?(?=\n  function resetFilter\()/)?.[0] ?? '';
-  assert.match(loader, /if\(currentUser\)\{/);
-  assert.match(loader, /allData=await gs\('getDashboardData',token,filter\)/);
-  assert.match(loader, /allData=\[\];\s*dashboardSummary=await gs\('getPublicDashboardData',filter\)/);
+  assert.match(loader,/const response=hasUser\s*\?await gs\('getDashboardData',session,filter\)\s*:await gs\('getPublicDashboardData',filter\)/);
+  assert.match(loader,/if\(request!==dashboardLoadRequest\|\|session!==token\|\|hasUser!==!!currentUser\)return/);
+  assert.match(loader,/if\(hasUser\)\{allData=response;dashboardSummary=null\}/);
+  assert.match(loader,/else\{allData=\[\];dashboardSummary=response\}/);
   assert.match(html, /function exportClientExcel\(\)\{\s*if\(!currentUser\)/);
   assert.match(html, /if\(!currentUser\)\{el\('eventBody'\)\.innerHTML='';/);
 });
