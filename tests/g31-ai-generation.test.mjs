@@ -57,12 +57,14 @@ test('G-31 report selector fails closed if Gemini 3.8 is unavailable',()=>{
   assert.equal(context.resolveReportGeminiModelInfo_('mock-key'),null);
 });
 
-test('G-31 HTTP 503 makes exactly one request to Gemini 3.8, never attempts fallback',()=>{
+test('G-32 V8 HTTP 503 retries one time on Gemini 3.8, never attempts model fallback',()=>{
   const {context,requests}=scriptWithMocks(()=>response(503,{error:{message:'High demand'}}));
   assert.throws(()=>context.callGeminiForReport_('mock-key',chosen,'prompt','part1',{}),/503/);
-  assert.equal(requests.length,1);
-  assert.match(requests[0].url,/\/v1\/models\/gemini-3\.8-flash:generateContent/);
-  assert.doesNotMatch(requests[0].url,/gemini-3\.[567]-flash/);
+  assert.equal(requests.length,2,'one retry on 503, no unbounded loop');
+  for(const request of requests){
+    assert.match(request.url,/\/v1\/models\/gemini-3\.8-flash:generateContent/);
+    assert.doesNotMatch(request.url,/gemini-3\.[567]-flash/);
+  }
 });
 
 test('G-31 HTTP 429 has clear error and does not retry',()=>{
