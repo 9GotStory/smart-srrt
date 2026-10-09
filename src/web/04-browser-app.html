@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -396,7 +396,7 @@
       const verified=await gs('listReportsForEvent',session,eventId);
       if(token!==session||!currentUser||reportHistoryEventId!==eventId)return;
       if(!verified||verified.invalidCount||!verified.count)throw new Error('ไม่สามารถยืนยันประวัติรายงานเดิมได้');
-      if(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
+      if(reportUnknownNeedsVerification||activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
         throw new Error('ยังมีงานรายงานที่ต้องตรวจสอบสถานะก่อน');
       }
       closeModal('reportNewConfirmModal');
@@ -569,7 +569,7 @@
   const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
   let reportSummaryRequest=0,reportSummaryState={status:'idle',summaries:{}};
-  let reportUnknownNeedsVerification=false;
+  let reportUnknownNeedsVerification=false,reportJobRecoveryRequest=0;
   async function refreshReportSummaries(){
     const request=++reportSummaryRequest,session=token;
     reportSummaryState={status:'loading',summaries:{}};
@@ -580,11 +580,20 @@
     const ids=[...new Set(allData.map(e=>String(e.eventId||'').trim()).filter(Boolean))];
     if(!ids.length){reportSummaryState={status:'ready',summaries:{}};refreshReportActionButtons();return}
     try {
-      const response=await gs('getReportSummariesForEvents',session,ids);
-      if(request!==reportSummaryRequest||session!==token||!currentUser)return;
-      if(!response||!response.summaries||typeof response.summaries!=='object')throw new Error('ผลสรุปทะเบียนรายงานไม่ถูกต้อง');
-      if(ids.some(id=>!Object.prototype.hasOwnProperty.call(response.summaries,id)))throw new Error('สรุปรายงานไม่ครบทุกเหตุการณ์');
-      reportSummaryState={status:'ready',summaries:response.summaries};
+      // The server limits a single request to 500 IDs. One bounded request per batch,
+      // not an N+1 history RPC per Event. Publish only after ALL batches succeeded.
+      const summaries=Object.create(null);
+      for(let offset=0;offset<ids.length;offset+=500){
+        const batch=ids.slice(offset,offset+500);
+        const response=await gs('getReportSummariesForEvents',session,batch);
+        if(request!==reportSummaryRequest||session!==token||!currentUser)return;
+        if(!response||!response.summaries||typeof response.summaries!=='object')
+          throw new Error('ผลสรุปทะเบียนรายงานไม่ถูกต้อง');
+        if(batch.some(id=>!Object.prototype.hasOwnProperty.call(response.summaries,id)))
+          throw new Error('สรุปรายงานไม่ครบทุกเหตุการณ์');
+        batch.forEach(id=>{summaries[id]=response.summaries[id]});
+      }
+      reportSummaryState={status:'ready',summaries:summaries};
     }catch(e){
       if(request!==reportSummaryRequest||session!==token||!currentUser)return;
       reportSummaryState={status:'error',summaries:{}};
@@ -663,6 +672,8 @@
     if(state.mode==='verify'){
       if(activeReportJob&&activeReportJob.status==='unknown')reopenReportTask();
       toast('ยังไม่สามารถยืนยันสถานะรายงานได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');
+      if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown')
+        void recoverReportJob();
       void refreshReportSummaries();
       return;
     }
@@ -873,22 +884,33 @@
   });
   async function recoverReportJob(){
     if(!currentUser||!token)return;
-    const session=token;
+    const session=token,request=++reportJobRecoveryRequest;
+    // A disconnected status lookup never proves that the old job stopped.
+    // Gate generation until a successful authenticated status lookup completes.
+    reportUnknownNeedsVerification=true;
+    refreshReportActionButtons();
     try{
-      // The authenticated server pointer, not a prior user's browser key,
-      // is authoritative after login or full page reload.
       const state=await gs('getCurrentReportJob',session);
-      if(token!==session||!currentUser)return;
+      if(request!==reportJobRecoveryRequest||token!==session||!currentUser)return;
       if(state){
+        reportUnknownNeedsVerification=state.status==='unknown';
         paintReportTask(state);
         if(state.status==='queued') void runReportJobClient(state.id,session);
       }else{
+        reportUnknownNeedsVerification=false;
+        if(activeReportJob&&activeReportJob.status==='unknown'){
+          activeReportJob=null;
+          el('reportTaskIndicator').style.display='none';
+        }
         localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
         refreshReportActionButtons();
       }
     }catch(error){
-      // A network failure is not proof the previous task has stopped.
-      if(token===session&&currentUser)toast('ยังตรวจสอบงานรายงานเดิมไม่ได้ โปรดตรวจประวัติก่อนสร้างซ้ำ');
+      if(request===reportJobRecoveryRequest&&token===session&&currentUser){
+        reportUnknownNeedsVerification=true;
+        refreshReportActionButtons();
+        toast('ยังตรวจสอบงานรายงานเดิมไม่ได้ โปรดตรวจประวัติก่อนสร้างซ้ำ');
+      }
     }
   }
   async function runReportJobClient(jobId,session){
@@ -904,6 +926,9 @@
     }
   }
   async function executeReport(eventId,btn){
+    if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
+      toast('ยังไม่สามารถยืนยันงานรายงานเดิมได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');return;
+    }
     if(reportGenerationInFlight.size > 0 || reportReadinessInFlight.size > 1){
       toast('มีงานสร้างรายงานอยู่แล้ว เปิดสถานะงานเดิมแทนการส่งซ้ำ');
       if(activeReportJob)reopenReportTask();
@@ -929,6 +954,9 @@
   }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
+    if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
+      toast('ยังไม่สามารถยืนยันผลของงานรายงานก่อนหน้าได้ กรุณาตรวจสอบสถานะก่อนสร้างซ้ำ');return;
+    }
     if(reportGenerationInFlight.size > 0||reportReadinessInFlight.size > 0){
       toast('มีคำขอรายงานอยู่แล้ว กรุณาเปิดสถานะงานเดิม');
       if(activeReportJob)reopenReportTask();
