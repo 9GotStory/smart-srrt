@@ -68,6 +68,19 @@
   </div>
 </div></div>
 
+<div class="modal report-cancel-confirm-modal" id="reportCancelConfirmModal" role="alertdialog" aria-modal="true" aria-labelledby="reportCancelConfirmTitle" aria-describedby="reportCancelConfirmDescription">
+  <div class="modal-box modal-sm" tabindex="-1">
+    <div class="modal-title" id="reportCancelConfirmTitle"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ยืนยันยกเลิกการสร้างรายงาน</div>
+    <p id="reportCancelConfirmDescription">ต้องการยกเลิกการสร้างรายงาน AI รายการนี้หรือไม่?</p>
+    <div class="help">หาก Gemini 3.8 Flash กำลังตอบกลับ ระบบจะส่งคำขอยกเลิกและรอจนถึงจุดที่สามารถหยุดได้อย่างปลอดภัย การยกเลิกอาจไม่เกิดขึ้นทันที</div>
+    <p id="reportCancelConfirmError" class="report-cancel-error" role="alert" style="display:none"></p>
+    <div class="actions">
+      <button type="button" class="btn light" id="reportCancelKeepBtn" onclick="closeReportCancelConfirm()">กลับไปดูสถานะ</button>
+      <button type="button" class="btn red" id="reportCancelConfirmBtn" onclick="confirmReportCancelRequest()"><i class="fa-solid fa-ban" aria-hidden="true"></i> ยืนยันยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="reportReadinessModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ความพร้อมก่อนสร้างรายงาน AI</div>
   <input type="hidden" id="pendingReportEventId">
