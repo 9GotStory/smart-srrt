@@ -92,11 +92,16 @@ test('authenticated browser KPI and insight use exact criteria semantics', () =>
   );
   assert.match(
     html,
-    /allData\.filter\(r=>isInvestigationCriteriaMet\(r\.col17\)\)\.length/
+    /const qualifying=allData\.filter\(r=>isInvestigationCriteriaMet\(r\.col17\)\)/
   );
   assert.match(
     html,
-    /allData\.filter\(r=>isInvestigationCriteriaMet\(r\.col17\)&&!r\.col26\)\.length/
+    /const investigated=qualifying\.filter\(r=>String\(r\.col26\|\|''\)\.trim\(\)!==''\)\.length/
+  );
+  // Whitespace-only dates are pending; the old !r.col26 check missed them.
+  assert.match(
+    html,
+    /pending=allData\.filter\(r=>isInvestigationCriteriaMet\(r\.col17\)&&String\(r\.col26\|\|''\)\.trim\(\)===''\)\.length/
   );
 
   assert.doesNotMatch(html, /includes\(['"]เข้าเกณฑ์['"]\)/);
