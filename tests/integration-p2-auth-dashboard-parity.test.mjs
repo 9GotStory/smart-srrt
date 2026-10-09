@@ -51,10 +51,10 @@ test('anonymous browser consumes only public aggregates',()=>{
     {kpi:{events:7,criteria:4,investigated:1,investigationRate:25}},false);
   assert.deepEqual([r.kpiTotal,r.kpiCriteria,r.kpiInvestigated,r.kpiRate],[7,4,1,'25%']);
   const load=web.slice(web.indexOf('async function loadDashboard(){'),web.indexOf('function resetFilter(){'));
-  assert.match(load,/const response=hasUser\\s*\\?await gs\\('getDashboardData',session,filter\\)\\s*:await gs\\('getPublicDashboardData',filter\\)/);
-  assert.match(load,/if\\(request!==dashboardLoadRequest\\|\\|session!==token\\|\\|hasUser!==!!currentUser\\)return/);
-  assert.match(load,/if\\(hasUser\\)\\{allData=response;dashboardSummary=null\\}/);
-  assert.match(load,/else\\{allData=\\[\\];dashboardSummary=response\\}/);
+  assert.match(load,/const response=hasUser\s*\?await gs\('getDashboardData',session,filter\)\s*:await gs\('getPublicDashboardData',filter\)/);
+  assert.match(load,/if\(request!==dashboardLoadRequest\|\|session!==token\|\|hasUser!==!!currentUser\)return/);
+  assert.match(load,/if\(hasUser\)\{allData=response;dashboardSummary=null\}/);
+  assert.match(load,/else\{allData=\[\];dashboardSummary=response\}/);
 });
 test('compiled One-Click preserves correct KPI expression',()=>{
   const declaration="const investigated=qualifying.filter(r=>String(r.col26||'').trim()!=='').length;";
