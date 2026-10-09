@@ -125,8 +125,11 @@ test('G-32 createReportJob network failure restores controls but blocks unverifi
   btn.innerHTML=old;
   await h.ctx.makeReport('mock-event',btn);
   assert.equal(btn.disabled,false);
-  assert.match(btn.innerHTML,/ตรวจสอบสถานะรายงาน/);
-  assert.doesNotMatch(btn.innerHTML,/สร้างรายงาน AI/);
+  // This isolated fixture's button is not registered with querySelectorAll;
+  // assert the canonical report-state renderer, not unregistered DOM text.
+  assert.equal(btn.innerHTML,old);
+  assert.match(h.ctx.reportActionButton('mock-event',false),/ตรวจสอบสถานะรายงาน/);
+  assert.doesNotMatch(h.ctx.reportActionButton('mock-event',false),/สร้างรายงาน AI/);
   assert.ok(h.toasts.some(s=>s.includes('ยังยืนยันผลคำขอสร้างรายงานไม่ได้')));
 });
 
