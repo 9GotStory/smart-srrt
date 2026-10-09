@@ -181,3 +181,74 @@ accepted V8 runtime must **not** be migrated or altered during this phase.
 **Current state:** Only a new isolated branch and this governance/preflight
 document exist. **No application source integration yet; no claim of
 integration CI PASS.** Staging V8 acceptance remains valid and independent.
+
+## Rehearsal 1: isolated v7 source import and CI evidence (2026-10-09)
+
+**Branch and Draft PR:** `integration/g32-v8-main-preflight-20261009`,
+[Draft PR #64](https://github.com/9GotStory/smart-srrt/pull/64) → `main`.
+A snapshot of 50 V8 app/module/test/build/document paths was imported
+**only into the isolated preflight branch**, while original P1–P4
+`main` tests and P1–P4 docs were preserved. This is an **incomplete
+compatibility candidate**, not a merge decision or staging deployment.
+
+**CI run:** https://github.com/9GotStory/smart-srrt/actions/runs/37883220420
+`FAIL`: 219 Node tests: **197 PASS / 22 FAIL**; G-30 modular-to-One-Click
+byte parity PASS; 7/7 contract tests PASS; offline release code check PASS.
+A failing integration rehearsal is useful evidence, NOT an approved release.
+
+Test-group failures:
+- **P1 1:** legacy updateRecord fixture is missing `PropertiesService` because
+  V8 uses additional server/job/config guards. Reconcile test harness and
+  required authorization checks; do not simply delete the fixture.
+- **P2 6:** original `aggregateEventRows_` helper and exact public browser
+  expressions differ from V8's `buildDashboardAggregate_` architecture.
+  Revalidate public aggregate-only data boundary, criteria exactness and
+  private EventID suppression with behavioral tests.
+- **P3 8:** main P3's 44-column workflow/owner metadata and
+  `deriveWorkflowStatus_`/`ensureWorkflowData_` API differ from
+  V8's G-03/G-04/G-05/G-19 lifecycle/status model.
+  Preserve EventID/Revision semantics and reject schema-offset collisions.
+- **P4 7:** P4's archive, MasterData, VisitLogs, Attachment and UI RPC shapes
+  differ from V8's stricter G-series contracts.
+  Tests that assert the legacy spelling/API must not be satisfied by unsafe
+  aliases that bypass V8's permissions, revision checks, retention policy,
+  or data redaction.
+
+**Crucial evidence from actual pinned source (not inferred):**
+- Main P3/P4 MainData columns 39–44:
+  `WorkflowStatus, OwnerUserID, OwnerAssignedAt, ClosedAt, ClosedBy, CloseReason`.
+  **G-32 V8 expects `OwnerUserID` at column 39**. G-05's
+  `ensureEventOwnerSchema_` correctly throws on a nonempty header collision,
+  rather than guessing a column mapping. A P4→v7 data conversion must not run
+  without explicit mapping, verification and backup.
+- Main P4 `EventAttachments` **11 columns**:
+  `AttachmentID, EventID, FileID, FileName, MimeType, FileSize, DriveUrl,
+  Description, Status, CreatedAt, CreatedBy`. V8 G-11 **13 columns**:
+  `AttachmentID, EventID, FileID, FileName, MimeType, SizeBytes, Description,
+  Status, UploadedAt, UploadedBy, RemovedAt, RemovedBy, RemoveReason`.
+  Column 6 and all later positional meanings differ, and P4 `archived`
+  must not be confused with V8 `removed`. Existing G-11 header
+  validation rejects nonmatching populated headers.
+- Main P4 VisitLogs `Timestamp, Page, RequestParams` versus V8 G-29
+  `Timestamp, EntryPoint, LegacyRequestParams`; G-29 recognizes older
+  `Timestamp, Page, UserAgent` but **not** the P4 `RequestParams` variant.
+  V8 must not re-label columns containing sensitive raw request values
+  without review/redaction.
+- P4's `AuditArchive` is inside the primary workbook, with an
+  `ArchiveKey` scheme. G-21 uses an external Audit archive keyed
+  by `AuditID`; these are not interchangeable stores.
+
+**Safeguard added:** a pure offline scanner,
+`tools/p4-v7-schema-preflight.mjs`, plus
+`tests/integration-p4-v7-preflight.test.mjs` (10 mock tests).
+The scanner accepts header arrays only, performs **no** Google Workspace
+reads/writes, reports version/offset conflicts and never authorizes
+migration. It does not modify the Apps Script server or automatically
+convert workbook data. A real migration needs separate design, fixtures,
+backups, operator approval and post-migration verification.
+
+**Current integration state:** intentionally **HOLD**. P1–P4 legacy tests
+remain in place and can fail; do not remove/skip or silently rewrite them
+to create a false green CI. Resolve behavioral and migration differences
+with independent review and equivalent v7 regression coverage before
+marking Draft PR #64 ready, merging, or altering the accepted staging V8.
