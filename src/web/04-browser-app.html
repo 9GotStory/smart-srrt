@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){hideReportCancelConfirm();stopReportPolling();activeReportJob=null;localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -389,6 +389,50 @@
     try{toast(await gs('reopenEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
 
+  function reportActionState(eventId,compact){
+    const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
+    const busy=!!job||reportReadinessInFlight.size>0;
+    const matching=!!job&&String(job.eventId)===String(eventId);
+    if(matching){
+      let label='กำลังสร้างรายงาน · ดูสถานะ';
+      let icon='fa-spinner fa-spin';
+      if(job.status==='cancel_requested'){label='กำลังขอยกเลิก · ดูสถานะ';icon='fa-hourglass-half'}
+      else if(job.status==='finalizing'){label='กำลังบันทึก · ดูสถานะ';icon='fa-floppy-disk'}
+      else if(job.status==='queued'){label='รอเริ่มรายงาน · ดูสถานะ';icon='fa-clock'}
+      return {disabled:false,busy:true,active:true,
+        html:'<i class="fa-solid '+icon+'" aria-hidden="true"></i> '+label};
+    }
+    if(job)return {disabled:true,busy:true,active:false,
+      html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
+    if(reportReadinessInFlight.size>0){
+      const checking=reportReadinessInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจข้อมูล':'กำลังตรวจรายงานอื่น')};
+    }
+    return {disabled:false,busy:false,active:false,html:compact?'AI':'สร้างรายงาน AI'};
+  }
+  function reportActionButton(eventId,compact){
+    const state=reportActionState(eventId,compact);
+    return '<button class="btn green report-action-btn'+(state.active?' report-action-active':'')+'"'+
+      ' data-report-event-id="'+escapeHtml(eventId||'')+'"'+
+      ' data-report-compact="'+(compact?'1':'0')+'"'+
+      ' aria-busy="'+String(state.busy)+'"'+
+      (state.disabled?' disabled':'')+
+      ' onclick=\'makeReport('+JSON.stringify(eventId||'')+',this)\'>'+
+      state.html+'</button>';
+  }
+  function refreshReportActionButtons(){
+    if(typeof document.querySelectorAll!=='function')return;
+    document.querySelectorAll('button[data-report-event-id]').forEach(btn=>{
+      const id=btn.getAttribute('data-report-event-id')||'';
+      const compact=btn.getAttribute('data-report-compact')==='1';
+      const state=reportActionState(id,compact);
+      btn.disabled=state.disabled;
+      btn.innerHTML=state.html;
+      btn.setAttribute('aria-busy',String(state.busy));
+      btn.classList.toggle('report-action-active',state.active);
+    });
+  }
   function renderTables(){
     if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
     const manage=roleCanRecord();
@@ -396,14 +440,14 @@
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
-      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>AI</button> <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
+      return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}${reportActionButton(r.eventId||'',true)} <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`
     }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
     el('recordBody').innerHTML=allData.map((r,i)=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
-    el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`<button class="btn green" onclick='makeReport(${JSON.stringify(r.eventId||"")},this)'>สร้างรายงาน AI</button> <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`${reportActionButton(r.eventId||'',false)} <button class="btn light" onclick="openEventReportHistoryByIndex(${i})"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงาน</button> ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
   function buildRecordForm(){
@@ -544,6 +588,7 @@
     indicator.style.display='inline-flex';
     el('reportTaskStatus').textContent=label;
     const terminal=reportJobTerminal(job);
+    refreshReportActionButtons();
     // The confirmation must never outlive the job's cancellable state.
     if(reportCancelPendingJobId===job.id &&
        (terminal||job.status==='cancel_requested'||job.status==='finalizing')){
@@ -580,6 +625,7 @@
     const session=token;
     activeReportJob=null;
     localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    refreshReportActionButtons();
     void gs('dismissReportJob',session,dismissId).catch(()=>{});
     el('reportTaskIndicator').style.display='none';
     closeModal('reportResultModal');
@@ -692,6 +738,7 @@
         if(state.status==='queued') void runReportJobClient(state.id,session);
       }else{
         localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+        refreshReportActionButtons();
       }
     }catch(error){
       // A network failure is not proof the previous task has stopped.
@@ -729,7 +776,10 @@
       openModal('reportResultModal');
       if(job.status==='queued')void runReportJobClient(job.id,session);
     }catch(e){toast('เริ่มสร้างรายงานไม่สำเร็จ: '+String(e.message||e))}
-    finally{if(btn){btn.disabled=false;btn.innerHTML=old}}
+    finally{
+      if(btn){btn.disabled=false;btn.innerHTML=old}
+      refreshReportActionButtons();
+    }
   }
   async function makeReport(eventId,btn){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
@@ -740,6 +790,7 @@
     }
     reportReadinessInFlight.add(eventId);
     const old=btn.innerHTML;
+    refreshReportActionButtons();
     try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
       const readiness=await gs('getAIReportReadiness',token,eventId);
@@ -755,6 +806,7 @@
       // restore it, whether queued, cancelled, failed or terminal.
       btn.disabled=false;
       btn.innerHTML=old;
+      refreshReportActionButtons();
     }
   }
   async function continueReportFromWarning(){
