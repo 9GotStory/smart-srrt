@@ -141,3 +141,19 @@ test('source code contains no Google or network runtime invocation',()=>{
   for(const name of ['DriveApp.','SpreadsheetApp.','UrlFetchApp.','PropertiesService.','google.script.run','fetch('])
     assert.equal(s.includes(name),false);
 });
+
+test('invalid ISO calendar dates cannot be silently normalized',()=>{
+  const s=sample();
+  s.rows.audit[0][0]='2026-02-30T10:00:00+07:00';
+  assert.ok(codes(planSyntheticP4ToV7(s)).includes('AUDIT_TIMESTAMP'));
+  s.rows.audit[0][0]='2026-02-28T10:00:00+07:00';
+  assert.equal(codes(planSyntheticP4ToV7(s)).includes('AUDIT_TIMESTAMP'),false);
+});
+test('user status changes invalidate snapshot fingerprint and synthetic identity allocations',()=>{
+  const s=sample(),before=planSyntheticP4ToV7(s);
+  s.users[0].active=false;
+  const after=planSyntheticP4ToV7(s);
+  assert.notEqual(before.sourceDigest,after.sourceDigest);
+  assert.notEqual(before.auditIdentityLedger[0].syntheticAuditId,after.auditIdentityLedger[0].syntheticAuditId);
+  assert.ok(codes(after).includes('OWNER_INACTIVE_OR_MISSING'));
+});
