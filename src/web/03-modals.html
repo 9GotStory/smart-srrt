@@ -47,12 +47,27 @@
 
 
 <div class="modal" id="reportHistoryModal"><div class="modal-box">
-  <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติรายงานของเหตุการณ์</div>
-  <div id="reportHistorySummary" class="help" style="margin-bottom:10px" aria-live="polite">กำลังโหลดประวัติรายงาน...</div>
+  <div class="modal-title"><i class="fa-solid fa-file-lines"></i> รายงานของเหตุการณ์</div>
+  <div id="reportHistorySummary" class="help" style="margin-bottom:10px" aria-live="polite">กำลังโหลดรายงาน...</div>
+  <div id="reportHistoryWarning" class="help" role="status" aria-live="polite"></div>
   <div id="reportHistoryList" class="content-list"></div>
   <div class="help" style="margin-top:12px">แสดงเฉพาะรายงานที่ลงทะเบียนใน ReportRegistry ตั้งแต่ G-17 เป็นต้นไป เอกสารเก่าที่ไม่มีทะเบียนจะไม่ถูกคาดเดาความเชื่อมโยง รายการนี้ไม่ใช่ระบบอนุมัติหรือระบบเวอร์ชันเอกสาร</div>
-  <div class="actions"><button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button></div>
+  <div class="actions">
+    <button class="btn green" type="button" id="reportHistoryNewBtn" style="display:none" onclick="requestNewReportFromHistory()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานฉบับใหม่</button>
+    <button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button>
+  </div>
 </div></div>
+
+<div class="modal" id="reportNewConfirmModal" role="alertdialog" aria-modal="true" aria-labelledby="reportNewConfirmTitle" aria-describedby="reportNewConfirmSummary">
+  <div class="modal-box modal-sm">
+    <div class="modal-title" id="reportNewConfirmTitle"><i class="fa-solid fa-circle-exclamation"></i> ยืนยันสร้างรายงานฉบับใหม่</div>
+    <p id="reportNewConfirmSummary">รายงานเดิมจะถูกเก็บไว้ ไม่มีการเขียนทับ</p>
+    <div class="actions">
+      <button class="btn light" type="button" onclick="cancelNewReportFromHistory()">กลับไปดูรายงาน</button>
+      <button class="btn green" type="button" id="reportNewConfirmBtn" onclick="confirmNewReportFromHistory()">ยืนยันสร้างฉบับใหม่</button>
+    </div>
+  </div>
+</div>
 
 <button type="button" class="report-task-indicator" id="reportTaskIndicator" onclick="reopenReportTask()" aria-live="polite" aria-label="ดูสถานะงานสร้างรายงาน" style="display:none"><i class="fa-solid fa-file-medical"></i> <span id="reportTaskStatus">กำลังสร้างรายงาน AI</span> <i class="fa-solid fa-chevron-up"></i></button>
 
