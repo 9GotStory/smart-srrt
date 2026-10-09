@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -100,21 +100,25 @@
     fillSelect(el('filterVillage'),unique(source3.map(x=>x.village||('หมู่ '+x.moo))),'ทุกหมู่บ้าน','')
   }
 
+  let dashboardLoadRequest=0;
   async function loadDashboard(){
+    const request=++dashboardLoadRequest,session=token,hasUser=!!currentUser;
     ++reportSummaryRequest;
     reportSummaryState={status:'loading',summaries:{}};
     try{
       const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
-      if(currentUser){
-        dashboardSummary=null;
-        allData=await gs('getDashboardData',token,filter);
-      }else{
-        allData=[];
-        dashboardSummary=await gs('getPublicDashboardData',filter);
-      }
+      // Ignore old requests after filters, login/logout, or auth mode change.
+      const response=hasUser
+        ?await gs('getDashboardData',session,filter)
+        :await gs('getPublicDashboardData',filter);
+      if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+      if(hasUser){allData=response;dashboardSummary=null}
+      else{allData=[];dashboardSummary=response}
       updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters();
       if(currentUser&&roleCanRecord())void refreshReportSummaries();
-    }catch(e){toast(e.message||e)}
+    }catch(e){
+      if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser)toast(e.message||e)
+    }
   }
   function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
   function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
@@ -657,7 +661,7 @@
       ' data-report-compact="'+(compact?'1':'0')+'"'+
       ' aria-busy="'+String(state.busy)+'"'+
       (state.disabled?' disabled':'')+
-      ' onclick=\'handleReportAction('+JSON.stringify(eventId||'')+',this)\'>'+
+      ' onclick="handleReportAction(this.dataset.reportEventId,this)">'+
       state.html+'</button>';
   }
   function handleReportAction(eventId,btn){
