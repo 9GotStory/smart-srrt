@@ -204,14 +204,35 @@ function ensureAuditArchiveYearSheet_(archiveSs, year) {
   return sheet;
 }
 
+function auditArchiveRowMatches_(archived, original) {
+  if (!archived || !original ||
+      archived.length !== AUDIT_HEADERS.length || original.length !== AUDIT_HEADERS.length) return false;
+  for (var i = 0; i < AUDIT_HEADERS.length; i++) {
+    var a = archived[i];
+    var b = original[i];
+    var dateA = Object.prototype.toString.call(a) === '[object Date]';
+    var dateB = Object.prototype.toString.call(b) === '[object Date]';
+    if (dateA || dateB) {
+      // Do not silently equate a Date cell with a textual timestamp.
+      if (!dateA || !dateB || !isFinite(a.getTime()) || !isFinite(b.getTime()) ||
+          a.getTime() !== b.getTime()) return false;
+    } else if (a !== b) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function getAuditArchiveIds_(sheet) {
-  var out = {};
+  var out = Object.create(null);
   var count = Math.max(sheet.getLastRow() - 1, 0);
   if (!count) return out;
-  var ids = sheet.getRange(2, AUDIT_COL.AUDIT_ID, count, 1).getValues();
-  ids.forEach(function(r) {
-    var id = String(r[0] || '').trim();
-    if (id) out[id] = true;
+  var rows = sheet.getRange(2, 1, count, AUDIT_HEADERS.length).getValues();
+  rows.forEach(function(row, i) {
+    var id = String(row[AUDIT_COL.AUDIT_ID - 1] || '').trim();
+    if (!isUuid_(id)) throw new Error('Audit archive มี AuditID ไม่ถูกต้องที่แถว ' + (i + 2));
+    if (out[id]) throw new Error('Audit archive มี AuditID ซ้ำที่แถว ' + (i + 2));
+    out[id] = row;
   });
   return out;
 }
@@ -354,7 +375,13 @@ function archiveAuditLogsCore_(user) {
     Object.keys(byYear).forEach(function(yearKey) {
       var yearSheet = ensureAuditArchiveYearSheet_(archiveSs, yearKey);
       var existingIds = getAuditArchiveIds_(yearSheet);
-      var toAppend = byYear[yearKey].filter(function(c){ return !existingIds[c.auditId]; });
+      var toAppend = byYear[yearKey].filter(function(c) {
+        var existing = existingIds[c.auditId];
+        if (existing && !auditArchiveRowMatches_(existing, c.row)) {
+          throw new Error('Audit archive มี AuditID ตรงกันแต่ข้อมูลไม่ตรงกัน: ' + c.auditId);
+        }
+        return !existing;
+      });
       if (toAppend.length) {
         yearSheet.getRange(yearSheet.getLastRow() + 1, 1, toAppend.length, AUDIT_HEADERS.length)
           .setValues(toAppend.map(function(c){ return c.row; }));
@@ -367,7 +394,9 @@ function archiveAuditLogsCore_(user) {
       var yearSheet = ensureAuditArchiveYearSheet_(archiveSs, yearKey);
       var ids = getAuditArchiveIds_(yearSheet);
       byYear[yearKey].forEach(function(c) {
-        if (!ids[c.auditId]) throw new Error('Archive verification ล้มเหลวสำหรับ AuditID ' + c.auditId);
+        if (!ids[c.auditId] || !auditArchiveRowMatches_(ids[c.auditId], c.row)) {
+          throw new Error('Archive verification ข้อมูลไม่ตรงกับ AuditID ' + c.auditId);
+        }
         verified[c.auditId] = true;
       });
     });
