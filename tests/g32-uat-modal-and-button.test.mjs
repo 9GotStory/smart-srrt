@@ -10,23 +10,32 @@ assert.ok(start>=0&&end>start,'G-32 browser report module must be present in bui
 const reportSource=html.slice(start,end);
 
 function browserHarness(overrides={}){
-  const events={},elements=new Map(),storage=new Map(),calls=[],toasts=[];
+  const events={},elements=new Map(),storage=new Map(),calls=[],toasts=[],reportButtons=[];
   const doc={
     activeElement:null,
-    addEventListener(type,fn){events[type]=fn}
+    addEventListener(type,fn){events[type]=fn},
+    querySelectorAll(selector){return selector==='button[data-report-event-id]'?reportButtons:[]}
   };
   function el(id){
     if(!elements.has(id)){
       const classes=new Set();
       const node={
         id,style:{display:''},innerHTML:'',textContent:'',href:'',disabled:false,
-        value:'',classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x)},
+        value:'',classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),
+          contains:x=>classes.has(x),toggle:(x,enabled)=>enabled?classes.add(x):classes.delete(x)},
         focus(){doc.activeElement=node},
         removeAttribute(attr){delete node[attr]},
       };
       elements.set(id,node);
     }
     return elements.get(id);
+  }
+  function registerReportButton(eventId,compact=false,id='create-ai-report'){
+    const btn=el(id),attrs={'data-report-event-id':eventId,'data-report-compact':compact?'1':'0'};
+    btn.getAttribute=k=>attrs[k]||null;
+    btn.setAttribute=(k,v)=>{attrs[k]=String(v)};
+    reportButtons.push(btn);
+    return btn;
   }
   let nextTimer=0;
   const ctx={
@@ -57,19 +66,24 @@ function browserHarness(overrides={}){
   el('reportCancelConfirmBtn').innerHTML='ยืนยันยกเลิก';
   vm.createContext(ctx);
   vm.runInContext(reportSource,ctx,{filename:'report-task-script',timeout:1500});
-  return {ctx,el,calls,toasts,events};
+  return {ctx,el,calls,toasts,events,registerReportButton};
 }
 
-test('G-32 V5 regression: ready branch always restores original reporter button after job creation',async()=>{
+test('G-32 V7 reporter action stays visibly active after job creation and opens existing task',async()=>{
   const h=browserHarness();
-  const btn=h.el('create-ai-report');
-  const original='<i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงาน AI';
-  btn.innerHTML=original;
+  const btn=h.registerReportButton('mock-event');
+  btn.innerHTML='สร้างรายงาน AI';
   await h.ctx.makeReport('mock-event',btn);
-  assert.equal(btn.innerHTML,original,'not stuck at กำลังตรวจข้อมูล');
-  assert.equal(btn.disabled,false);
+  assert.match(btn.innerHTML,/รอเริ่มรายงาน · ดูสถานะ/,'must not appear idle while job is queued');
+  assert.equal(btn.disabled,false,'same-job button reopens task');
+  assert.equal(btn.getAttribute('aria-busy'),'true');
+  assert.equal(btn.classList.contains('report-action-active'),true);
   assert.equal(h.el('reportTaskIndicator').style.display,'inline-flex');
-  assert.ok(h.calls.some(c=>c[0]==='createReportJob'));
+  const before=h.calls.filter(c=>c[0]==='createReportJob').length;
+  h.ctx.closeReportTaskModal();
+  await h.ctx.makeReport('mock-event',btn);
+  assert.equal(h.calls.filter(c=>c[0]==='createReportJob').length,before,'no duplicate job creation');
+  assert.equal(h.el('reportResultModal').classList.contains('open'),true);
 });
 
 test('G-32 reporter button restores on readiness failure and warning path',async()=>{
@@ -88,12 +102,13 @@ test('G-32 reporter button restores on readiness failure and warning path',async
 
 test('G-32 reporter button remains restored after backend cancellation reaches terminal state',async()=>{
   const h=browserHarness();
-  const btn=h.el('create-ai-report');
-  btn.innerHTML='สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI';
+  const btn=h.registerReportButton('mock-event');
+  btn.innerHTML='สร้างรายงาน AI';
   await h.ctx.makeReport('mock-event',btn);
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'cancel_requested',stage:'gemini_1'});
+  assert.match(btn.innerHTML,/กำลังขอยกเลิก · ดูสถานะ/);
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'cancelled',stage:'cancelled'});
-  assert.equal(btn.innerHTML,'สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI');
+  assert.equal(btn.innerHTML,'สร้างรายงาน AI');
   assert.equal(btn.disabled,false);
   assert.match(h.el('reportResultStatus').textContent,/ยกเลิกการสร้างรายงานแล้ว/);
 });
@@ -107,6 +122,43 @@ test('G-32 reporter button restores when createReportJob fails after readiness p
   assert.equal(btn.innerHTML,old);
   assert.equal(btn.disabled,false);
   assert.ok(h.toasts.some(s=>s.includes('เริ่มสร้างรายงานไม่สำเร็จ')));
+});
+
+test('G-32 event/report tables rebuild buttons with the current job status',()=>{
+  const h=browserHarness();
+  const normal=h.ctx.reportActionButton('mock-event',false);
+  assert.match(normal,/>สร้างรายงาน AI<\/button>/);
+  const compact=h.ctx.reportActionButton('mock-event',true);
+  assert.match(compact,/>AI<\/button>/);
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'running',stage:'gemini_1'});
+  const active=h.ctx.reportActionButton('mock-event',false);
+  assert.match(active,/กำลังสร้างรายงาน · ดูสถานะ/);
+  assert.match(active,/report-action-active/);
+  assert.match(active,/aria-busy="true"/);
+  assert.doesNotMatch(active,/ disabled/);
+  const foreign=h.ctx.reportActionButton('different-event',true);
+  assert.match(foreign,/มีงานรายงานอื่นอยู่/);
+  assert.match(foreign,/ disabled/);
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'finalizing',stage:'finalizing'});
+  assert.match(h.ctx.reportActionButton('mock-event',false),/กำลังบันทึก · ดูสถานะ/);
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'failed',stage:'failed'});
+  assert.match(h.ctx.reportActionButton('mock-event',false),/>สร้างรายงาน AI<\/button>/);
+});
+
+test('G-32 status update restores both duplicate event actions when job ends',()=>{
+  const h=browserHarness();
+  const main=h.registerReportButton('mock-event',false,'report-page-action');
+  const mini=h.registerReportButton('mock-event',true,'event-page-action');
+  const other=h.registerReportButton('another-event',false,'other-action');
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'running',stage:'gemini_2'});
+  assert.match(main.innerHTML,/กำลังสร้างรายงาน/);
+  assert.match(mini.innerHTML,/ดูสถานะ/);
+  assert.equal(other.disabled,true);
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'completed',stage:'completed',documentUrl:'https://docs.google.com/document/d/example/edit'});
+  assert.equal(main.innerHTML,'สร้างรายงาน AI');
+  assert.equal(mini.innerHTML,'AI');
+  assert.equal(other.disabled,false);
+  assert.equal(main.classList.contains('report-action-active'),false);
 });
 
 test('G-32 styled confirmation opens without sending cancellation; Back/Escape restores focus',async()=>{
