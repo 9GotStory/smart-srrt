@@ -186,14 +186,15 @@ test('G-32 cancelling between requests prevents any future Gemini HTTP calls',()
   assert.equal(state.status,'cancelled');
 });
 
-test('G-32 state tracking distinguishes success from HTTP 503 and uses bounded request wait',()=>{
+test('G-32 state tracking stops after one bounded HTTP 503 retry and preserves request wait',()=>{
   const h=harness(()=>({getResponseCode:()=>503,getContentText:()=>JSON.stringify({error:{message:'high demand'}})}));
   const job=create(h);
   const state=h.ctx.runReportJob('u1',job.id);
   assert.equal(state.status,'failed');
   assert.match(state.message,/503/);
-  assert.equal(h.calls.length,1);
+  assert.equal(h.calls.length,2,'one additional 503 retry, never unbounded');
   assert.equal(h.calls[0].opts.timeoutSeconds,110);
+  assert.ok(h.calls[1].opts.timeoutSeconds <= 110);
   assert.equal(h.ctx.getReportJobStatus('u1',job.id).status,'failed');
 });
 
