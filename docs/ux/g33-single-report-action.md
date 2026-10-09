@@ -11,7 +11,7 @@ Both authenticated Event and AI Reporter tables expose **one report action per r
 
 | Grounded state | Primary action |
 | --- | --- |
-| Confirmed zero registered reports | `สร้างรายงาน AI` (compact `AI` in Event list) |
+| Confirmed zero registered reports | `สร้างรายงาน AI` in both authenticated tables |
 | One registered report | `ดูรายงาน` opens G-27 modal |
 | Several registered reports | `ดูรายงาน (N)` opens G-27 modal with all eligible reports |
 | Same Event's G-32 job running / queued / cancel requested / finalizing | Retain detailed in-progress button and reopen behavior |
@@ -29,14 +29,18 @@ The notice `ข้อมูลเหตุการณ์มีการปร�
 - At most 500 requested EventIDs per batch. Server reads ReportRegistry header and rows once for the requested set; does not send raw registry rows, document URLs, source narrative, Prompt or Gemini content in summaries. Returns `{summaries: { [EventID]: {count, latestSourceRevision, invalidCount} }}`.
 - Missing/wrong registry headers, invalid/duplicate matching ReportIDs, blank document IDs, unsupported SourceRevision and invalid Event identifiers cause a fail-closed error rather than fabricated zero reports. G-27 full history still performs its own URL safety validation.
 - No `MainData` columns, new Sheet, v7 Schema migration, modification/deletion of existing registry rows or document replacement. Public dashboard remains unrelated to `ReportRegistry`.
-- Browser performs one summary RPC for a visible authenticated Event table (no per-row N+1); reloads after server-confirmed job completion and dashboard refresh. Session/request nonce prevents stale async summary from replacing a later login/refresh.
+- Browser performs one bounded report-summary RPC per group of up to 500 EventIDs (no per-row N+1); only publishes complete results after every batch succeeds. The summary is refreshed after server-confirmed completion and dashboard refresh. Request/session guards prevent stale responses across filters, logins, and logouts.
+- A **first-generation** button click rechecks G-17 history for its EventID before starting G-26 readiness. If another user registered a report meanwhile, the action becomes `ดูรายงาน`, not unintended regeneration. Readiness warning continuation also rechecks registry to avoid a second unintentional report after a delayed confirmation.
+- Deliberate `สร้างรายงานฉบับใหม่` from G-27 history carries explicit consent through the readiness-warning continuation, so a confirmed regeneration remains possible while prior reports are retained. All generation still goes through G-32 server job guards.
+- EventID is never interpolated into executable `onclick` source: the escaped `data-report-event-id` attribute is read through `this.dataset.reportEventId`.
 - An `unknown` execution state is **not** interpreted as a failure; the UI refuses implicit regeneration and continues to show verification guidance. The persistent job system and permissions stay the final server authority.
 
 ## Acceptance tests / verification
 
 - G-27 test updated to assert two consolidated table actions without standalone history buttons.
 - Existing G-32 test harness retains in-flight, cancelled, failed, completion and same/other-event behavior; successful completion requires registry summary reconciliation.
-- New `tests/g33-single-report-action.test.mjs` covers empty/one/many summaries, timestamp/source revision selection, missing schema, malformed/duplicate/invalid registry rows, permission and 500-ID guard, one batched RPC, fail-closed browser state and the G-27 modal/new-report confirmation structure.
+- New `tests/g33-single-report-action.test.mjs` covers empty/one/many summaries, SourceRevision ordering, malformed/duplicate registry rows, permission and 500-ID guard, 501+ Event batching and partial-failure, G-32 status uncertainty, stale dashboard/auth callbacks, safe EventID markup, fresh first-generation preflight, delayed warning consent, and G-27 explicit append-only report creation.
+- GitHub Actions at implementation commit `24c20b201ac1f6114b4b1ddb3a58bd7447b281d8` passed **321/321 tests** on Node 24 with One-Click parity, contract and offline P6 preflight. **Revalidate CI at the final PR HEAD**, including later documentation-only commits.
 - `npm run build:check` checks exact modular-to-One-Click server and HTML parity.
 - `npm run check:contracts`, `npm run release:preflight` and `npm test` must pass at the **final PR HEAD**.
 - **No live Apps Script/Google Sheets/Gemini/test-workbook operation or deployment** was done for this implementation. Actual browser accessibility/mobile UAT, operator checks and final independent review are still required before release.
