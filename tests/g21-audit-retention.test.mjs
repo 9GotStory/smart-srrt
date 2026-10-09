@@ -301,3 +301,57 @@ test('Admin UI exposes retention status and explicit archive action only',()=>{
   assert.match(html,/archiveAuditLogs/);
   assert.doesNotMatch(html,/setInterval\([^\n]*archiveAudit|setTimeout\([^\n]*archiveAudit/);
 });
+
+test('archive refuses equal AuditID with different payload and never deletes source',()=>{
+  const ctx=makeContext();
+  const id='11111111-1111-4111-8111-111111111111';
+  const old=new Date(Date.now()-500*24*60*60*1000);
+  const original=auditRow(old,id);
+  const altered=[...original];altered[7]='tampered-content';
+  const active=new FakeSheet([auditHeader10(),original],10,'AuditLogs');
+  const stored=new FakeSheet([auditHeader10(),altered],10,'YArchive');
+  let auditWrites=0;
+  ctx.getDb_=()=>({});
+  ctx.ensureAuditSchema_=()=>({sheet:active,rows:1,backfilledIds:0});
+  ctx.getAuditRetentionDays_=()=>365;
+  ctx.ensureAuditArchiveSpreadsheet_=()=>new FakeSpreadsheet([stored]);
+  ctx.ensureAuditArchiveYearSheet_=()=>stored;
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  ctx.writeAudit_=()=>auditWrites++;
+  assert.throws(()=>ctx.archiveAuditLogsCore_({email:'manager@example.test',role:'Manager'}),/ข้อมูลไม่ตรงกัน/);
+  assert.equal(active.rows.length,2);
+  assert.deepEqual(active.rows[1],original);
+  assert.equal(stored.rows.length,2);
+  assert.equal(auditWrites,0);
+});
+
+test('archive refuses duplicated or malformed destination AuditID before source deletion',()=>{
+  const ctx=makeContext();
+  const id='11111111-1111-4111-8111-111111111111';
+  const old=new Date(Date.now()-500*24*60*60*1000);
+  const row=auditRow(old,id);
+  const active=new FakeSheet([auditHeader10(),row],10);
+  const stored=new FakeSheet([auditHeader10(),row,[...row]],10,'YArchive');
+  ctx.getDb_=()=>({});
+  ctx.ensureAuditSchema_=()=>({sheet:active,rows:1,backfilledIds:0});
+  ctx.getAuditRetentionDays_=()=>365;
+  ctx.ensureAuditArchiveSpreadsheet_=()=>new FakeSpreadsheet([stored]);
+  ctx.ensureAuditArchiveYearSheet_=()=>stored;
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  assert.throws(()=>ctx.archiveAuditLogsCore_({email:'manager@example.test',role:'Manager'}),/AuditID ซ้ำ/);
+  assert.equal(active.rows.length,2);
+  stored.rows.splice(2,1);
+  stored.rows[1][9]='invalid-id';
+  assert.throws(()=>ctx.archiveAuditLogsCore_({email:'manager@example.test',role:'Manager'}),/AuditID ไม่ถูกต้อง/);
+  assert.equal(active.rows.length,2);
+});
+
+test('archive row verification matches complete typed content including Date semantics',()=>{
+  const ctx=makeContext();
+  const ts=new Date('2025-01-01T00:00:00Z');
+  const a=auditRow(ts,'11111111-1111-4111-8111-111111111111');
+  assert.equal(ctx.auditArchiveRowMatches_(a,[...a]),true);
+  assert.equal(ctx.auditArchiveRowMatches_(a,[...a.slice(0,7),'different',...a.slice(8)]),false);
+  assert.equal(ctx.auditArchiveRowMatches_(a,[ts.toISOString(),...a.slice(1)]),false);
+  assert.equal(ctx.auditArchiveRowMatches_(a,[new Date(ts.getTime()),...a.slice(1)]),true);
+});
