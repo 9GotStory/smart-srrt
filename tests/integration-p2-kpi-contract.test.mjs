@@ -65,3 +65,14 @@ test('P2 preserved: public aggregate does not leak raw EventID, reporter, or nar
   assert.doesNotMatch(serialized,/private@example\.test/);
   assert.equal(result.kpi.events,1);
 });
+
+test('P2 preserved: missing or whitespace investigation date is not investigated',()=>{
+  const missing=mock('เข้าเกณฑ์','');
+  delete missing.col26;
+  const blank=mock('เข้าเกณฑ์','   ');
+  const k=run([missing,blank]).kpi;
+  assert.equal(k.criteria,2);
+  assert.equal(k.investigated,0);
+  assert.equal(k.pendingCriteria,2);
+  assert.equal(k.investigationRate,0);
+});
