@@ -20,7 +20,21 @@ const kinds=Object.keys(schemas);
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const isFilled=x=>x!==null&&String(x).trim()!=='';
-const isTimestamp=x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(x)&&Number.isFinite(Date.parse(x));
+function isTimestamp(x){
+  if(typeof x!=='string')return false;
+  const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(x);
+  if(!m||!Number.isFinite(Date.parse(x)))return false;
+  const [y,month,day,hour,min,sec]=m.slice(1,7).map(Number);
+  if(month<1||month>12||hour>23||min>59||sec>59)return false;
+  const leap=(y%4===0&&(y%100!==0||y%400===0));
+  const max=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31][month-1];
+  if(day<1||day>max)return false;
+  if(m[7]!=='Z'){
+    const [offHour,offMinute]=m[7].slice(1).split(':').map(Number);
+    if(offHour>14||offMinute>59||(offHour===14&&offMinute!==0))return false;
+  }
+  return true;
+}
 const fail=code=>{throw new Error('SYNTHETIC_P4_V7_'+code);};
 const safeCell=x=>x===null||typeof x==='string'||typeof x==='boolean'||(typeof x==='number'&&Number.isFinite(x));
 function syntheticUuid(scope,source,index){
@@ -45,7 +59,7 @@ export function planSyntheticP4ToV7(data){
     if(!u||typeof u.userId!=='string'||!isFilled(u.userId)||typeof u.active!=='boolean'||users.has(u.userId))fail('USERS');
     users.set(u.userId,u.active);
   }
-  const fingerprint=hash(kinds.map(k=>[k,data.headers[k],data.rows[k]]));
+  const fingerprint=hash({sheets:kinds.map(k=>[k,data.headers[k],data.rows[k]]),users:data.users});
   const idScope=data.snapshotId+'/'+fingerprint;
   const findings=[],events=new Set(),attachments=new Set(),archiveKeys=new Set(),auditContent=new Set();
   const issue=(code,sheet,index)=>findings.push({code,severity:'block',sheet,rowNumber:index+2});
