@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import {
   planSyntheticP4ToV7,SYNTHETIC_KIND,P4_MAIN,P4_AUDIT,P4_ARCHIVE
 } from '../tools/p4-v7-offline-transform.mjs';
@@ -224,4 +225,54 @@ test('synthetic replay code imports no I/O, Google clients or network writers',(
     'fetch(','writeFile(','createFile(','setValues(','appendRow('])
     assert.equal(src.includes(phrase),false);
   assert.doesNotMatch(src,/from\s+['"](?:node:(?:fs|http|https|net|child_process)|googleapis)/);
+});
+
+const candidateDigest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+test('source count mismatch refuses dropped synthetic event even after new candidate digest',()=>{
+  const {plan}=setup();
+  const tampered=copy(plan);
+  tampered.candidate.main.rows.pop();
+  // Simulate a misleading new candidate digest and a matching target count.
+  tampered.candidateDigest=candidateDigest(tampered.candidate);
+  tampered.counts.candidate.main=1;
+  assert.throws(()=>createSyntheticDisposableTarget(tampered),/COUNT_MISMATCH/);
+});
+test('source count mismatch refuses dropped audit and attachment candidate rows',()=>{
+  const {plan}=setup();
+  for(const sheet of ['audit','attachments']){
+    const tampered=copy(plan);
+    tampered.candidate[sheet].rows.pop();
+    tampered.candidateDigest=candidateDigest(tampered.candidate);
+    tampered.counts.candidate[sheet]=1;
+    assert.throws(()=>createSyntheticDisposableTarget(tampered),/COUNT_MISMATCH/);
+  }
+});
+test('missing or substituted source evidence cannot become a valid synthetic preview',()=>{
+  const {plan}=setup();
+  const missing=copy(plan);
+  missing.legacyEvidence.workflow.pop();
+  assert.throws(()=>createSyntheticDisposableTarget(missing),/SOURCE_EVIDENCE/);
+  const wrong=copy(plan);
+  wrong.legacyEvidence.attachments[0].fileId='replaced synthetic file';
+  assert.throws(()=>createSyntheticDisposableTarget(wrong),/SOURCE_EVIDENCE/);
+  const moved=copy(plan);
+  moved.legacyEvidence.workflow[0].rowNumber=999;
+  assert.throws(()=>createSyntheticDisposableTarget(moved),/SOURCE_EVIDENCE/);
+});
+test('excluded historical sheets cannot spoof valid preview with forged headers',()=>{
+  const {plan}=setup();
+  for(const sheet of ['auditArchive','visits']){
+    const tampered=copy(plan);
+    tampered.candidate[sheet].headers[1]='UnknownHeader';
+    tampered.candidateDigest=candidateDigest(tampered.candidate);
+    assert.throws(()=>createSyntheticDisposableTarget(tampered),/UNRESOLVED_HISTORY|SCHEMA_MISMATCH/);
+  }
+});
+test('source counts for excluded archived audit and visit rows must be zero',()=>{
+  const {plan}=setup();
+  for(const sheet of ['auditArchive','visits']){
+    const tampered=copy(plan);
+    tampered.counts.source[sheet]=1;
+    assert.throws(()=>createSyntheticDisposableTarget(tampered),/COUNT_MISMATCH/);
+  }
 });
