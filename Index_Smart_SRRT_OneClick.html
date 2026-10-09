@@ -460,7 +460,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -954,6 +954,7 @@
     openModal('reportReadinessModal')
   }
   const reportReadinessInFlight = new Set();
+  const reportActionPreflightInFlight = new Set();
   const reportGenerationInFlight = new Set();
   const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
@@ -1017,6 +1018,11 @@
     }
     if(job)return {disabled:true,busy:true,active:false,mode:'blocked',
       html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
+    if(reportActionPreflightInFlight.size>0){
+      const checking=reportActionPreflightInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,mode:'blocked',
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจทะเบียนรายงาน':'กำลังตรวจรายงานอื่น')};
+    }
     if(reportReadinessInFlight.size>0){
       const checking=reportReadinessInFlight.has(eventId);
       return {disabled:true,busy:true,active:checking,mode:'blocked',
@@ -1036,7 +1042,7 @@
       return {disabled:false,busy:false,active:false,mode:'history',
         html:'<i class="fa-solid fa-file-lines" aria-hidden="true"></i> '+(summary.count===1?'ดูรายงาน':'ดูรายงาน ('+summary.count+')')};
     }
-    return {disabled:false,busy:false,active:false,mode:'generate',html:compact?'AI':'สร้างรายงาน AI'};
+    return {disabled:false,busy:false,active:false,mode:'generate',html:'สร้างรายงาน AI'};
   }
   function reportActionButton(eventId,compact){
     const state=reportActionState(eventId,compact);
@@ -1048,6 +1054,44 @@
       ' onclick="handleReportAction(this.dataset.reportEventId,this)">'+
       state.html+'</button>';
   }
+  async function preflightFirstReportGeneration(eventId,btn){
+    if(reportActionPreflightInFlight.size||!currentUser||!roleCanRecord()||!token)return;
+    const session=token,user=currentUser,version=reportSummaryRequest;
+    reportActionPreflightInFlight.add(eventId);
+    refreshReportActionButtons();
+    let canGenerate=false;
+    try{
+      // Summary state may be stale if another user generated this Event's first
+      // registered report since the dashboard loaded. Re-read before a first draft.
+      const result=await gs('getReportSummariesForEvents',session,[eventId]);
+      if(session!==token||user!==currentUser||version!==reportSummaryRequest)return;
+      const summary=result&&result.summaries&&result.summaries[eventId];
+      if(!summary||!Number.isSafeInteger(summary.count)||summary.count<0||
+         !Number.isSafeInteger(summary.invalidCount)||summary.invalidCount!==0)
+        throw new Error('ยังยืนยันทะเบียนรายงานไม่ได้');
+      if(reportSummaryState.status!=='ready'||!reportSummaryState.summaries[eventId])
+        throw new Error('ข้อมูลหน้าเว็บเปลี่ยนระหว่างตรวจทะเบียน กรุณารีเฟรช');
+      // Do not overwrite newer summaries or report execution status.
+      reportSummaryState.summaries[eventId]=summary;
+      if(summary.count>0){
+        toast('มีรายงานที่ลงทะเบียนแล้ว กรุณากดดูรายงาน หากต้องการสร้างฉบับใหม่ให้เลือกในหน้ารายงาน');
+      }else if(!reportUnknownNeedsVerification&&
+        !(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))){
+        canGenerate=true;
+      }
+    }catch(error){
+      if(session===token&&user===currentUser&&version===reportSummaryRequest){
+        reportSummaryState={status:'error',summaries:{}};
+        toast('ยังยืนยันทะเบียนรายงานไม่ได้ กรุณาตรวจสอบสถานะก่อนสร้าง: '+String(error.message||error));
+      }
+    }finally{
+      reportActionPreflightInFlight.delete(eventId);
+      refreshReportActionButtons();
+    }
+    if(canGenerate&&session===token&&user===currentUser&&version===reportSummaryRequest){
+      await makeReport(eventId,btn);
+    }
+  }
   function handleReportAction(eventId,btn){
     if(!currentUser||!roleCanRecord()){toast('ไม่มีสิทธิ์ใช้งานรายงาน');return}
     const state=reportActionState(eventId,false);
@@ -1057,7 +1101,7 @@
       if(index<0){toast('ไม่พบเหตุการณ์ กรุณารีเฟรช');return}
       void openEventReportHistoryByIndex(index);return;
     }
-    if(state.mode==='generate'){void makeReport(eventId,btn);return}
+    if(state.mode==='generate'){void preflightFirstReportGeneration(eventId,btn);return}
     if(state.mode==='verify'){
       if(activeReportJob&&activeReportJob.status==='unknown')reopenReportTask();
       toast('ยังไม่สามารถยืนยันสถานะรายงานได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');
