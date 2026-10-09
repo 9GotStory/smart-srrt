@@ -16,7 +16,9 @@ const ATTACHMENT_HEADERS=[
 const EXPECTED={
   main:V7_MAIN,
   attachments:ATTACHMENT_HEADERS,
-  audit:[...P4_AUDIT,'AuditID']
+  audit:[...P4_AUDIT,'AuditID'],
+  auditArchive:[...P4_AUDIT,'AuditID'],
+  visits:['Timestamp','EntryPoint','LegacyRequestParams']
 };
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX=/^[0-9a-f]{64}$/i;
@@ -48,17 +50,42 @@ function planCheck(plan) {
      Object.keys(plan.candidate).sort().join('|')!==
        ['main','attachments','audit','auditArchive','visits'].sort().join('|'))fail('CANDIDATE_SHAPE');
   if(sha(plan.candidate)!==plan.candidateDigest)fail('CANDIDATE_DIGEST');
-  if(!plan.legacyEvidence||!Array.isArray(plan.legacyEvidence.auditArchive)||
+  if(!plan.legacyEvidence||!Array.isArray(plan.legacyEvidence.workflow)||
+     !Array.isArray(plan.legacyEvidence.attachments)||
+     !Array.isArray(plan.legacyEvidence.auditArchive)||
      !Array.isArray(plan.legacyEvidence.visits)||
      plan.legacyEvidence.auditArchive.length||plan.legacyEvidence.visits.length)fail('UNRESOLVED_HISTORY');
   for(const name of NAMES)table(plan.candidate[name],name);
-  if(!plan.candidate.auditArchive||!Array.isArray(plan.candidate.auditArchive.rows)||
-     plan.candidate.auditArchive.rows.length||
-     plan.candidate.auditArchive.externalWriteAuthorized!==false||
-     !plan.candidate.visits||!Array.isArray(plan.candidate.visits.rows)||
-     plan.candidate.visits.rows.length)fail('UNRESOLVED_HISTORY');
-  if(!plan.counts||!plan.counts.candidate||
-     NAMES.some(n=>plan.counts.candidate[n]!==plan.candidate[n].rows.length))fail('COUNT_MISMATCH');
+  // Explicitly validate excluded sheets; wrong headers are not safe just because
+  // there is no authorized historical Archive/Visit row to write.
+  const archive=plan.candidate.auditArchive;
+  if(!archive||!Array.isArray(archive.headers)||
+     archive.headers.length!==EXPECTED.auditArchive.length||
+     !archive.headers.every((h,i)=>h===EXPECTED.auditArchive[i])||
+     !Array.isArray(archive.rows)||archive.rows.length||
+     archive.externalWriteAuthorized!==false||
+     !plan.candidate.visits)fail('UNRESOLVED_HISTORY');
+  table(plan.candidate.visits,'visits');
+  if(plan.candidate.visits.rows.length)fail('UNRESOLVED_HISTORY');
+  // A missing row cannot become a "successful" synthetic copy simply by
+  // rewriting the candidate digest and candidate-count metadata.
+  if(!plan.counts||!plan.counts.source||!plan.counts.candidate||
+     !['main','attachments','audit','auditArchive','visits'].every(n=>
+       Object.hasOwn(plan.counts.source,n)&&Object.hasOwn(plan.counts.candidate,n))||
+     NAMES.some(n=>plan.counts.candidate[n]!==plan.candidate[n].rows.length||
+       plan.counts.source[n]!==plan.candidate[n].rows.length)||
+     plan.counts.source.auditArchive!==0||plan.counts.source.visits!==0||
+     plan.counts.candidate.auditArchive!==0||plan.counts.candidate.visits!==0)fail('COUNT_MISMATCH');
+  if(plan.legacyEvidence.workflow.length!==plan.candidate.main.rows.length||
+     plan.legacyEvidence.attachments.length!==plan.candidate.attachments.rows.length)
+       fail('SOURCE_EVIDENCE');
+  if(plan.legacyEvidence.workflow.some((e,i)=>
+       !e||e.rowNumber!==i+2||e.eventId!==plan.candidate.main.rows[i][30])||
+     plan.legacyEvidence.attachments.some((e,i)=>!e||
+       e.rowNumber!==i+2||e.status!=='active'||
+       e.attachmentId!==plan.candidate.attachments.rows[i][0]||
+       e.eventId!==plan.candidate.attachments.rows[i][1]||
+       e.fileId!==plan.candidate.attachments.rows[i][2]))fail('SOURCE_EVIDENCE');
   const eventIds=new Set(),attachmentIds=new Set(),auditIds=new Set();
   for(const r of plan.candidate.main.rows) {
     if(typeof r[30]!=='string'||!UUID.test(r[30])||eventIds.has(r[30])||
