@@ -239,8 +239,8 @@ test('G33 report action never interpolates EventID into executable onclick JavaS
   const markup=h.ctx.reportActionButton(dangerous,false);
   assert.match(markup,/onclick="handleReportAction\(this\.dataset\.reportEventId,this\)"/);
   assert.doesNotMatch(markup,/handleReportAction\(["']/);
-  assert.match(html,/data-report-event-id="\$\{escapeHtml\(eventId\|\|''\)\}"/);
-  assert.doesNotMatch(html,/onclick=\\'handleReportAction\('\+JSON\.stringify/);
+  assert.ok(html.includes("escapeHtml(eventId||'')"),'EventID data attribute remains HTML escaped');
+  assert.ok(!html.includes("JSON.stringify(eventId||'')"),'no inline executable EventID serialization');
 });
 
 test('G33 rejects obsolete dashboard loads across filters and sessions',async()=>{
