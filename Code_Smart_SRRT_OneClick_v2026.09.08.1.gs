@@ -2122,9 +2122,9 @@ function buildDashboardAggregate_(rows) {
 
     if (meetsCriteria) {
       criteria++;
-      if (!hasInvestigationDate) pendingCriteria++;
+      if (hasInvestigationDate) investigated++;
+      else pendingCriteria++;
     }
-    if (hasInvestigationDate) investigated++;
   });
 
   function sortedEntries_(map, alpha) {
@@ -2137,9 +2137,9 @@ function buildDashboardAggregate_(rows) {
   var diseaseEntries = sortedEntries_(byDisease, false);
   var villageEntries = sortedEntries_(byVillage, false);
   var total = rows.length;
-  var rate = criteria
-    ? Math.round(investigated / criteria * 100)
-    : (total ? Math.round(investigated / total * 100) : 0);
+  // Investigation numerator and denominator MUST share the exact-criteria scope.
+  // Never count a dated investigation of a nonqualifying event in this rate.
+  var rate = criteria ? Math.round(investigated / criteria * 100) : 0;
 
   return {
     kpi: {
