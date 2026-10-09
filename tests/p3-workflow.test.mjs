@@ -195,3 +195,70 @@ test('browser exposes owner and lifecycle controls without adding a task subsyst
   assert.doesNotMatch(source,/function\s+(?:create|save|update|delete)Task\s*\(/i);
   assert.doesNotMatch(source,/['"]TaskID['"]|['"]SLA['"]|['"]Escalation['"]/);
 });
+
+test('P3 owner assignment obeys assign permission, active/editable account, Revision and audit',()=>{
+  const ctx=makeContext(),r=row(),id=r[30],s=new FakeSheet([[...ctx.MAIN_SCHEMA_HEADERS,ctx.EVENT_OWNER_HEADER],r],39);
+  const users=new FakeSheet([
+    ['UserID','Name','Email','PasswordHash','Role','Status'],
+    ['u-active','Active','a@example.test','','Admin','active'],
+    ['u-block','Blocked','b@example.test','','Admin','blocked'],
+    ['u-staff','Staff','s@example.test','','Staff','active']
+  ],14);
+  const ss={getSheetByName:name=>name===ctx.CONFIG.SHEETS.MAIN?s:null};
+  const audit=[],perms=[];
+  ctx.getDb_=()=>ss;
+  ctx.getSheetByIdOrName_=()=>s;
+  ctx.getSheet_=name=>{assert.equal(name,ctx.CONFIG.SHEETS.USERS);return users;};
+  ctx.requireAuth_=(_token,perm)=>{perms.push(perm);return {email:'manager@example.test',role:'Manager'};};
+  ctx.hasPermission_=(role,permission)=>role==='Admin'&&permission==='edit';
+  ctx.writeAudit_=(...args)=>audit.push(args);
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  assert.throws(()=>ctx.assignEventOwner('token',id,'u-block',1),/active/);
+  assert.throws(()=>ctx.assignEventOwner('token',id,'u-staff',1),/ไม่มีสิทธิ์/);
+  assert.throws(()=>ctx.assignEventOwner('token',id,'u-active',2),/ถูกแก้ไขจากผู้ใช้อื่น/);
+  assert.equal(s.rows[1][38],'');
+  assert.equal(s.rows[1][31],1);
+  assert.match(ctx.assignEventOwner('token',id,'u-active',1),/กำหนดผู้รับผิดชอบ/);
+  assert.equal(s.rows[1][38],'u-active');
+  assert.equal(s.rows[1][31],2);
+  assert.equal(audit.length,1);
+  assert.equal(audit[0][1],'ASSIGN_EVENT_OWNER');
+  assert.equal(audit[0][3],id);
+  assert.equal(JSON.parse(audit[0][5]).ownerUserId,'u-active');
+  assert.match(ctx.assignEventOwner('token',id,'u-active',2),/ไม่เปลี่ยนแปลง/);
+  assert.equal(s.rows[1][31],2);
+  assert.equal(audit.length,1);
+  assert.deepEqual(perms,['assign','assign','assign','assign','assign']);
+});
+test('P3 owner assignment cannot mutate a closed Event or bypass denied assign authorization',()=>{
+  const ctx=makeContext(),r=row(),id=r[30];r[32]='closed';
+  const s=new FakeSheet([[...ctx.MAIN_SCHEMA_HEADERS,ctx.EVENT_OWNER_HEADER],r],39);
+  ctx.getDb_=()=>({getSheetByName:()=>s});
+  ctx.getSheetByIdOrName_=()=>s;
+  ctx.findUserById_=()=>({name:'Test',role:'Admin',status:'active'});
+  ctx.hasPermission_=()=>true;
+  ctx.requireAuth_=()=>{throw Error('assign forbidden');};
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  assert.throws(()=>ctx.assignEventOwner('token',id,'u-active',1),/assign forbidden/);
+  ctx.requireAuth_=()=>({email:'manager@example.test',role:'Manager'});
+  assert.throws(()=>ctx.assignEventOwner('token',id,'u-active',1),/ถูกปิดแล้ว/);
+  assert.equal(s.rows[1][31],1);
+  assert.equal(s.rows[1][38],'');
+});
+test('P3 close/reopen require exact management permission and reject stale writes',()=>{
+  const ctx=makeContext(),r=row(),id=r[30],sheet=new FakeSheet([Array(39).fill(''),r],39),audit=[];
+  ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.writeAudit_=(...args)=>audit.push(args);
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  ctx.requireAuth_=(_token,perm)=>{assert.equal(perm,'close_event');throw Error('close_event forbidden');};
+  assert.throws(()=>ctx.closeEvent('token',id,'reason',1),/close_event forbidden/);
+  assert.throws(()=>ctx.reopenEvent('token',id,'reason',1),/close_event forbidden/);
+  ctx.requireAuth_=(_token,perm)=>{assert.equal(perm,'close_event');return {email:'manager@example.test',role:'Manager'};};
+  assert.throws(()=>ctx.closeEvent('token',id,'reason',2),/ถูกแก้ไขจากผู้ใช้อื่น/);
+  assert.equal(sheet.rows[1][31],1);
+  assert.match(ctx.closeEvent('token',id,'reason',1),/ปิดเหตุการณ์/);
+  assert.throws(()=>ctx.reopenEvent('token',id,'reopen reason',1),/ถูกแก้ไขจากผู้ใช้อื่น/);
+  assert.equal(sheet.rows[1][31],2);
+  assert.equal(sheet.rows[1][32],'closed');
+  assert.equal(audit.length,1);
+});
