@@ -13,6 +13,12 @@ export const V7_MAIN=[...business,...p1,'OwnerUserID'];
 export const P4_AUDIT=['Timestamp','UserEmail','Role','Action','TargetSheet','TargetId','Before','After','IpHint'];
 export const P4_ARCHIVE=['ArchiveKey',...P4_AUDIT,'ArchivedAt','ArchivedBy'];
 const v7Attachment=['AttachmentID','EventID','FileID','FileName','MimeType','SizeBytes','Description','Status','UploadedAt','UploadedBy','RemovedAt','RemovedBy','RemoveReason'];
+const v7Mimes=new Set([
+  'application/pdf','image/jpeg','image/png','image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+]);
+const maxAttachmentBytes=5*1024*1024;
 const v7Audit=[...P4_AUDIT,'AuditID'];
 const v7Visit=['Timestamp','EntryPoint','LegacyRequestParams'];
 const schemas={main:P4_MAIN,attachments:P4_EVENT_ATTACHMENT_HEADERS,audit:P4_AUDIT,auditArchive:P4_ARCHIVE,visits:P4_VISIT_HEADERS};
@@ -88,12 +94,17 @@ export function planSyntheticP4ToV7(data){
     else attachments.add(r[0]);
     if(!events.has(r[1]))issue('ORPHAN_ATTACHMENT','attachments',i);
     if(typeof r[2]!=='string'||!isFilled(r[2]))issue('FILE_ID_MISSING','attachments',i);
-    if(!Number.isSafeInteger(r[5])||r[5]<0)issue('FILE_SIZE_INVALID','attachments',i);
+    if(typeof r[3]!=='string'||!isFilled(r[3]))issue('FILE_NAME_MISSING','attachments',i);
+    if(typeof r[4]!=='string'||!v7Mimes.has(r[4].toLowerCase()))issue('LEGACY_MIME_REVIEW','attachments',i);
+    if(!Number.isSafeInteger(r[5])||r[5]<0||r[5]>maxAttachmentBytes)issue('FILE_SIZE_INVALID','attachments',i);
+    if(typeof r[6]!=='string'||!isFilled(r[6]))issue('LEGACY_DRIVE_URL_MISSING','attachments',i);
     if(typeof r[7]!=='string'||r[7].length>500)issue('DESCRIPTION_UNSUPPORTED','attachments',i);
+    if(!isTimestamp(r[9])||!isFilled(r[10]))issue('UPLOAD_PROVENANCE_INVALID','attachments',i);
     if(r[8]==='archived')issue('ARCHIVED_ATTACHMENT_POLICY_OPEN','attachments',i);
     else if(r[8]!=='active')issue('ATTACHMENT_STATUS_UNKNOWN','attachments',i);
     legacy.attachments.push({rowNumber:i+2,attachmentId:r[0],eventId:r[1],fileId:r[2],driveUrl:r[6],status:r[8],createdAt:r[9],createdBy:r[10]});
-    if(r[8]==='active')att.push([r[0],r[1],r[2],r[3],r[4],r[5],r[7],'active',r[9],r[10],'','','']);
+    if(r[8]==='active'&&!findings.some(f=>f.sheet==='attachments'&&f.rowNumber===i+2))
+      att.push([r[0],r[1],r[2],r[3],r[4],r[5],r[7],'active',r[9],r[10],'','','']);
   });
   data.rows.audit.forEach((r,i)=>{
     if(!isTimestamp(r[0]))issue('AUDIT_TIMESTAMP','audit',i);
@@ -102,7 +113,7 @@ export function planSyntheticP4ToV7(data){
     auditContent.add(hash(r));
   });
   data.rows.auditArchive.forEach((r,i)=>{
-    if(!isFilled(r[0])||archiveKeys.has(r[0]))issue('ARCHIVE_KEY_DUPLICATE_OR_BLANK','auditArchive',i);
+    if(typeof r[0]!=='string'||!/^[0-9a-f]{64}$/i.test(r[0])||archiveKeys.has(r[0]))issue('ARCHIVE_KEY_FORMAT_OR_DUPLICATE','auditArchive',i);
     else archiveKeys.add(r[0]);
     const original=r.slice(1,10);
     if(!isTimestamp(original[0]))issue('ARCHIVE_TIMESTAMP','auditArchive',i);
