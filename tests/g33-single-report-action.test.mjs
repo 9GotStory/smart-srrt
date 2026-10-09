@@ -121,6 +121,10 @@ function clientHarness() {
     console,document,token:'authorized',currentUser:{role:'Admin'},
     allData:[{eventId:EVENT,revision:5}],el,roleCanRecord:()=>true,
     toast:x=>toasts.push(x),openModal:id=>calls.push(['openModal',id]),
+    renderReportReadinessModal:(readiness,eventId)=>{
+      el('pendingReportEventId').value=eventId;
+      calls.push(['readinessModal',readiness.level,eventId]);
+    },
     closeModal:id=>calls.push(['closeModal',id]),
     escapeHtml:x=>String(x),
     localStorage:{setItem(){},removeItem(){}},
@@ -337,4 +341,58 @@ test('G33 first-generation fail closed on registry error or stale refresh callba
   release({summaries:{[EVENT]:{count:0,invalidCount:0,latestSourceRevision:0}}});
   await inFlight;
   assert.equal(generated,0,'old request cannot trigger generation under refreshed dashboard');
+});
+
+test('G33 warning continuation rechecks zero history and refuses an accidental second report',async()=>{
+  const h=clientHarness();
+  const btn={innerHTML:'สร้างรายงาน AI',disabled:false};
+  let created=0;
+  h.ctx.executeReport=async()=>{created++};
+  h.setStub(fn=>{
+    if(fn==='getAIReportReadiness')return {level:'review'};
+    if(fn==='getReportSummariesForEvents')return {summaries:{[EVENT]:{count:1,invalidCount:0,latestSourceRevision:2}}};
+    throw Error('unrecognized RPC '+fn);
+  });
+  await h.ctx.makeReport(EVENT,btn);
+  assert.ok(h.calls.some(c=>c[0]==='readinessModal'));
+  await h.ctx.continueReportFromWarning();
+  assert.equal(created,0,'a first-generation warning must not bypass a newly registered report');
+  assert.ok(h.toasts.some(msg=>String(msg).includes('มีรายงานที่ลงทะเบียนแล้ว')));
+});
+
+test('G33 intentional regeneration from history preserves explicit consent across warnings',async()=>{
+  const h=clientHarness();
+  const btn={innerHTML:'ดูรายงาน',disabled:false};
+  let created=0;
+  h.ctx.executeReport=async()=>{created++};
+  h.setStub(fn=>{
+    if(fn==='getAIReportReadiness')return {level:'review'};
+    if(fn==='getReportSummariesForEvents')throw Error('explicit regeneration must not be reclassified as first creation');
+    throw Error('unrecognized RPC '+fn);
+  });
+  await h.ctx.makeReport(EVENT,btn,true);
+  await h.ctx.continueReportFromWarning();
+  assert.equal(created,1,'a deliberately confirmed new report may continue through readiness warnings');
+  assert.equal(h.calls.filter(c=>c[0]==='getReportSummariesForEvents').length,0);
+});
+
+test('G33 warning continuation prevents duplicate submits and ignores a stale session',async()=>{
+  const h=clientHarness();
+  const btn={innerHTML:'สร้างรายงาน AI',disabled:false};
+  let resolveRegistry;
+  let created=0;
+  h.ctx.executeReport=async()=>{created++};
+  h.setStub(fn=>{
+    if(fn==='getAIReportReadiness')return {level:'review'};
+    if(fn==='getReportSummariesForEvents')return new Promise(resolve=>{resolveRegistry=resolve});
+    throw Error('unrecognized RPC '+fn);
+  });
+  await h.ctx.makeReport(EVENT,btn);
+  const one=h.ctx.continueReportFromWarning();
+  await h.ctx.continueReportFromWarning();
+  assert.equal(h.calls.filter(c=>c[0]==='getReportSummariesForEvents').length,1);
+  h.ctx.token='different-user';
+  resolveRegistry({summaries:{[EVENT]:{count:0,invalidCount:0,latestSourceRevision:0}}});
+  await one;
+  assert.equal(created,0);
 });
