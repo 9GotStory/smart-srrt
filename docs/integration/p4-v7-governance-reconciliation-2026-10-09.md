@@ -60,7 +60,7 @@ Existing G11, G21, G24 and G29 suites remain intact, including long-running audi
 
 ## Gate status and outstanding evidence
 
-**Automated candidate:** `0c33d9656923882c3d0868428036cc0a45f1428e`. GitHub Actions [run 37888667274](https://github.com/9GotStory/smart-srrt/actions/runs/37888667274) verified **267 tests / 267 PASS / 0 FAIL**, all deterministic One-Click, syntax/RPC and offline P6 checks PASS. Later changes renamed five test descriptions and added an additional G21 post-copy-tamper test; use the final HEAD run for the final count.
+**Latest code candidate:** `ed42c2add2d74c5bec8d838882b2d61d53b98668`. GitHub Actions [run 37888756365](https://github.com/9GotStory/smart-srrt/actions/runs/37888756365) verified **268 tests / 268 PASS / 0 FAIL**, zero skipped; deterministic One-Click, syntax/RPC and offline P6 checks PASS. The eight original P4 test cases remain executed under accurate v7 descriptions, and all four new G21 audit archive integrity tests PASS. Later documentation-only commits do not change that code candidate but require their own CI verification before claiming full HEAD status.
 
 **Still BLOCKED (not addressed by green tests):**
 - No endorsed P4 44-column source snapshot manifest, historical date normalization or dual-read mapping.
