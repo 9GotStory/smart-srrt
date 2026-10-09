@@ -98,3 +98,13 @@ This is a structured inventory, **not** an approval mechanism and **not** a secu
 **Stop condition:** Any absent, inconsistent, self-reported-only or disputed item keeps Migration Readiness **HOLD**. Do not call `installSmartSRRT()`, migrations, `archiveAuditLogs`, Drive/Sheets export/write/cleanup, Gemini API, deploy staging/prod or merge PR #64 into main under this checklist. The accepted V8 source and staging remain unchanged.
 
 See [Migration Design](p4-to-v7-migration-design-2026-10-09.md), [P4 v7 behavioral reconciliation](p4-v7-governance-reconciliation-2026-10-09.md) and [full Integration Preflight](g32-v8-main-preflight-2026-10-09.md).
+
+## 5. Gate 1.3 — Synthetic partial-copy rehearsal evidence (not sign-off)
+
+The **synthetic in-memory** proof is recorded in [P4→v7 Synthetic Partial-Copy Recovery Rehearsal](p4-v7-synthetic-replay-2026-10-09.md).
+
+`tools/p4-v7-synthetic-replay.mjs` and `tests/integration-p4-v7-synthetic-replay.test.mjs` model interruption at every row prefix, exact replay and hash/count equivalence, rejection of ID-with-different-content, out-of-order/mixed-snapshot targets and archive/VisitLogs data without policy approval. The code cannot connect to a real workbook or issue a migration permit; it always returns `status:HOLD`.
+
+**Evidence:** [GitHub Actions run 37893200166](https://github.com/9GotStory/smart-srrt/actions/runs/37893200166), code/test commit `06d99ee130777c7510f547085e2038671167043d`: **298/298 PASS**, including 20 new synthetic recovery cases and full existing tests. This evidence is **insufficient to mark `partial_copy_recovery` reviewed**: no persistent target, non-atomic Sheets writes, original backup restoration, operator ACL, true typed-cell conversion or approved P4 dataset were tested. The independent reviewer must judge the synthetic mock scope explicitly.
+
+**All 15 Migration Readiness gates and real-data/export/deploy/merge permissions remain HOLD.** A self-reported `reviewed` metadata claim is never an authorization or independent verification. Document-only commits after the code SHA must have their own CI run for exact-HEAD status.
