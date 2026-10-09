@@ -86,6 +86,29 @@ test('G-32 reporter button restores on readiness failure and warning path',async
   }
 });
 
+test('G-32 reporter button remains restored after backend cancellation reaches terminal state',async()=>{
+  const h=browserHarness();
+  const btn=h.el('create-ai-report');
+  btn.innerHTML='สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI';
+  await h.ctx.makeReport('mock-event',btn);
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'cancel_requested',stage:'gemini_1'});
+  h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'cancelled',stage:'cancelled'});
+  assert.equal(btn.innerHTML,'สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI');
+  assert.equal(btn.disabled,false);
+  assert.match(h.el('reportResultStatus').textContent,/ยกเลิกการสร้างรายงานแล้ว/);
+});
+
+test('G-32 reporter button restores when createReportJob fails after readiness passed',async()=>{
+  const h=browserHarness({createReportJob:()=>Promise.reject(Error('job creation failed'))});
+  const btn=h.el('create-ai-report');
+  const old='<i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงาน AI';
+  btn.innerHTML=old;
+  await h.ctx.makeReport('mock-event',btn);
+  assert.equal(btn.innerHTML,old);
+  assert.equal(btn.disabled,false);
+  assert.ok(h.toasts.some(s=>s.includes('เริ่มสร้างรายงานไม่สำเร็จ')));
+});
+
 test('G-32 styled confirmation opens without sending cancellation; Back/Escape restores focus',async()=>{
   const h=browserHarness();
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'running',stage:'gemini_1'});
