@@ -34,13 +34,14 @@ The notice `ข้อมูลเหตุการณ์มีการปร�
 - Deliberate `สร้างรายงานฉบับใหม่` from G-27 history carries explicit consent through the readiness-warning continuation, so a confirmed regeneration remains possible while prior reports are retained. All generation still goes through G-32 server job guards.
 - EventID is never interpolated into executable `onclick` source: the escaped `data-report-event-id` attribute is read through `this.dataset.reportEventId`.
 - An `unknown` execution state is **not** interpreted as a failure; the UI refuses implicit regeneration and continues to show verification guidance. The persistent job system and permissions stay the final server authority.
+- Starting G-32 `createReportJob` is guarded by a **single in-flight client request lock**. While its RPC is pending the report control remains busy. If that RPC throws or times out, the page treats server acceptance as **unknown**, blocks all new create attempts, and requires an authenticated `getCurrentReportJob` recovery check before permitting another attempt. A stale previous-session callback must not alter a new session. This is additional browser protection, not a replacement for the existing G-32 server idempotency guard.
 
 ## Acceptance tests / verification
 
 - G-27 test updated to assert two consolidated table actions without standalone history buttons.
 - Existing G-32 test harness retains in-flight, cancelled, failed, completion and same/other-event behavior; successful completion requires registry summary reconciliation.
 - New `tests/g33-single-report-action.test.mjs` covers empty/one/many summaries, SourceRevision ordering, malformed/duplicate registry rows, permission and 500-ID guard, 501+ Event batching and partial-failure, G-32 status uncertainty, stale dashboard/auth callbacks, safe EventID markup, fresh first-generation preflight, delayed warning consent, and G-27 explicit append-only report creation.
-- GitHub Actions at implementation commit `24c20b201ac1f6114b4b1ddb3a58bd7447b281d8` passed **321/321 tests** on Node 24 with One-Click parity, contract and offline P6 preflight. **Revalidate CI at the final PR HEAD**, including later documentation-only commits.
+- GitHub Actions at code/test commit `7ac5a9f8433fe084812d2d03f49b9e99be180d79` passed **324/324 tests** on Node 24 with One-Click parity, contract and offline P6 preflight. The additional 3 regression cases cover simultaneous create calls, an uncertain network result and stale session callbacks. **Revalidate CI at the final PR HEAD**, including documentation-only commits.
 - `npm run build:check` checks exact modular-to-One-Click server and HTML parity.
 - `npm run check:contracts`, `npm run release:preflight` and `npm test` must pass at the **final PR HEAD**.
 - **No live Apps Script/Google Sheets/Gemini/test-workbook operation or deployment** was done for this implementation. Actual browser accessibility/mobile UAT, operator checks and final independent review are still required before release.
