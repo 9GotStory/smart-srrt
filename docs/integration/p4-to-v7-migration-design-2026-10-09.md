@@ -101,7 +101,7 @@ The first 30 business columns and P1 identity/meta columns 31-38 keep their cano
 **Verified structures:**
 - P4 active AuditLogs uses 9 columns: Timestamp, UserEmail, Role, Action, TargetSheet, TargetId, Before, After, IpHint.
 - P4 AuditArchive is same-workbook and has 12 columns: ArchiveKey, the above 9 audit fields, ArchivedAt, ArchivedBy.
-- V8 active AuditLogs uses the 9 base fields + AuditID (10); G-21 external private spreadsheet uses yearly YYYYY? **Actual** sheet names are Y2025/Y2026/etc, with the same 10-column audit schema.
+- V8 active AuditLogs uses the 9 base fields + AuditID (10); the G-21 external private spreadsheet uses calendar-year sheets named Y2025, Y2026, etc., with the same 10-column audit schema.
 
 **Mapping proposal:**
 1. Preserve the original 9 audit fields exactly from both active and archived P4 sources.
