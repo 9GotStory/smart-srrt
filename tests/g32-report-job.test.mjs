@@ -262,7 +262,11 @@ test('G-32 UI has task minimize, reopen, cancel and recovered terminal state, no
   }
   assert.match(browser,/job\.status==='cancel_requested'/);
   assert.match(browser,/REPORT_TERMINAL_STATES=new Set/);
-  assert.match(browser,/if\(!confirm\('/);
+  assert.match(browser,/id="reportCancelConfirmModal"/);
+  assert.match(browser,/role="alertdialog" aria-modal="true"/);
+  assert.match(browser,/id="reportCancelConfirmBtn"/);
+  assert.match(browser,/async function confirmReportCancelRequest\(\)/);
+  assert.doesNotMatch(browser,/if\(!confirm\('ต้องการขอยกเลิกการสร้างรายงาน/);
   assert.doesNotMatch(browser,/onclick="closeModal\('reportResultModal'\)"/);
   assert.doesNotMatch(browser,/google\.script\.host\.close/);
 });
