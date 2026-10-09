@@ -349,3 +349,13 @@ A real compatibility gap in V8 consistency notices was corrected **only on Integ
 **Crucial distinction:** P1–P4 automated v7 behavior checks **PASS**, but **P4 legacy source migration remains BLOCKED** by historical closure provenance, old attachment archive semantics, VisitLogs RequestParams privacy, same-workbook AuditArchive/ArchiveKey transfer, typed Date normalization, restricted evidence store/retention, partial-copy recovery and external-archive tenancy decisions. See [P4-to-v7 Migration Design](p4-to-v7-migration-design-2026-10-09.md).
 
 **Independent reviewer sign-off on final candidate, live staging UAT and explicit owner human release/migration gate are still missing.** PR #64 must stay Draft/HOLD. No main merge, production/staging deploy, Google Sheets/Drive real migration, Apps Script installer, Gemini API usage or archival of actual records permitted by this test-only result. Follow-up documentation commits need a separate CI check if reporting their exact HEAD.
+
+## Rehearsal 7: P4 migration readiness metadata gate — 2026-10-09
+
+**Detailed criteria and evidence policy:** [P4→v7 Migration Readiness Gate](p4-v7-migration-readiness-2026-10-09.md). Created **metadata-only** `tools/p4-v7-migration-readiness.mjs` and `tests/integration-p4-v7-migration-readiness.test.mjs`.
+
+The checker enumerates **15** independent preservation/security/recovery/review/operator gates but **cannot approve** migration. It rejects unknown keys, arbitrary workbook/query inputs, malformed evidence hashes and misleading self-reported approvals. Even 15 `reviewed` claims always yield `status:HOLD`, `migrationAuthorized:false`, `realDataExportAuthorized:false`, `googleWorkspaceMutationAuthorized:false`, `stagingDeploymentAuthorized:false` and `mergeAuthorized:false`. A supplied digest is not proof that a reviewer evaluated or signed the original artifact. No source workbook data, real identifiers or private evidence was handled.
+
+**CI of code/test candidate:** [run 37889166420](https://github.com/9GotStory/smart-srrt/actions/runs/37889166420) on `533521929a894b0457cdfb91916d41643a72280d`: **278/278 PASS**, zero failures, deterministic One-Click byte parity, syntax/RPC and offline P6 preflight PASS. Document-only follow-up commits require a final HEAD CI recheck.
+
+**Gate distinction:** P1–P4 *automated v7 behavior* is green; **real P4 historical migration, source export, staging, merger, operator decision and Independent Review remain HOLD**. No reviewer approval or operator authorization exists in this test result. PR #64 stays Draft. Do not run installer, archival, Gemini, deployment, real Drive/Sheets operations or merge.
