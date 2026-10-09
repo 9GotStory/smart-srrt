@@ -134,7 +134,7 @@ test('G-32 event/report tables rebuild buttons with the current job status',()=>
   const normal=h.ctx.reportActionButton('mock-event',false);
   assert.match(normal,/>สร้างรายงาน AI<\/button>/);
   const compact=h.ctx.reportActionButton('mock-event',true);
-  assert.match(compact,/>AI<\/button>/);
+  assert.match(compact,/>สร้างรายงาน AI<\/button>/);
   h.ctx.paintReportTask({id:'job-1',eventId:'mock-event',status:'running',stage:'gemini_1'});
   const active=h.ctx.reportActionButton('mock-event',false);
   assert.match(active,/กำลังสร้างรายงาน · ดูสถานะ/);
@@ -164,7 +164,7 @@ test('G-32 status update restores consolidated report actions when job ends',asy
   assert.match(main.innerHTML,/ตรวจสอบสถานะรายงาน/);
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(main.innerHTML,'สร้างรายงาน AI');
-  assert.equal(mini.innerHTML,'AI');
+  assert.equal(mini.innerHTML,'สร้างรายงาน AI');
   assert.equal(other.disabled,false);
   assert.equal(main.classList.contains('report-action-active'),false);
 });
