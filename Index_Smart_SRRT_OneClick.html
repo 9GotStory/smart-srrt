@@ -491,8 +491,11 @@
       el('kpiTotal').textContent=k.events||0;el('kpiCriteria').textContent=k.criteria||0;el('kpiInvestigated').textContent=k.investigated||0;el('kpiRate').textContent=(k.investigationRate||0)+'%';
       el('smartInsight').innerHTML=makePublicInsight(s);drawCharts();return
     }
-    const total=allData.length,criteria=allData.filter(r=>isInvestigationCriteriaMet(r.col17)).length,investigated=allData.filter(r=>r.col26).length;
-    const rate=criteria?Math.round(investigated/criteria*100):(total?Math.round(investigated/total*100):0);
+    const total=allData.length;
+    const qualifying=allData.filter(r=>isInvestigationCriteriaMet(r.col17));
+    const criteria=qualifying.length;
+    const investigated=qualifying.filter(r=>String(r.col26||'').trim()!=='').length;
+    const rate=criteria?Math.round(investigated/criteria*100):0;
     el('kpiTotal').textContent=total;el('kpiCriteria').textContent=criteria;el('kpiInvestigated').textContent=investigated;el('kpiRate').textContent=rate+'%';
     el('smartInsight').innerHTML=makeInsight(total);drawCharts()
   }
@@ -504,7 +507,7 @@
   }
   function makeInsight(total){
     if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
-    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>isInvestigationCriteriaMet(r.col17)&&!r.col26).length;
+    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>isInvestigationCriteriaMet(r.col17)&&String(r.col26||'').trim()==='').length;
     return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(topDisease)}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(topVillage)}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
   }
   function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
