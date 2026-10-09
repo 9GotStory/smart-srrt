@@ -215,7 +215,10 @@ test('browser surfaces readiness badges without disabling AI report controls',()
 
   const render=html.match(/function renderTables\(\)[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
   assert.match(render,/reportReadinessBadge\(r\)/);
-  assert.match(render,/onclick='makeReport/);
+  assert.match(render,/reportActionButton\(r\.eventId\|\|'',(?:true|false)\)/);
+  const action=html.match(/function reportActionButton\(eventId,compact\)[\s\S]*?(?=\n  function refreshReportActionButtons)/)?.[0]??'';
+  assert.match(action,/onclick=/);
+  assert.match(action,/makeReport\(/);
   assert.doesNotMatch(render,/aiReportReadiness[^\n]{0,160}disabled/);
 });
 
