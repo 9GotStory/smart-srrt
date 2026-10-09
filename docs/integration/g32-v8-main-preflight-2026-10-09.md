@@ -311,3 +311,17 @@ The prototype's exact P4 header checks, 44-to-39 MainData proposal, 11-to-13 act
 [GitHub Actions run 37886446376](https://github.com/9GotStory/smart-srrt/actions/runs/37886446376) — **250 tests: 228 PASS / 22 FAIL**. All **16 new synthetic offline tests PASS**; G-30 deterministic One-Click byte parity, syntax/RPC contracts and offline P6 preflight PASS. The **same 22 pre-existing P1-P4 regressions** remain unresolved. The run is overall FAIL. Doc-only commits after this SHA require their own workflow verification.
 
 **Decision: INTEGRATION HOLD.** Draft PR #64 remains Draft; no merge into main, no deploy, no migration or change to v7 staging, no Gemini calls, and no PR #60 modification. Next gate is independent review and behavioral P1-P4 reconciliation, not applying this proposal to a workbook.
+
+## Rehearsal 4: P1/P2 behavioral reconciliation — 2026-10-09
+
+**Detailed evidence:** [P1/P2 compatibility reconciliation and P3/P4 blockers](p1-p2-compatibility-reconciliation-2026-10-09.md).
+
+**New integration-only defect correction:** in the logged-in web Dashboard, `investigated` previously counted dated but nonqualifying cases and `investigationRate` used a nonqualifying total-event fallback for zero qualifying cases. The frontend insight also misclassified whitespace-only investigation dates as present. Updated both `src/web/04-browser-app.html` and the deterministically compiled `Index_Smart_SRRT_OneClick.html` to match the already corrected public server KPI formula. Seven new browser/RPC behavioral tests PASS.
+
+**P1:** completed old `updateRecord` fixture with legitimate empty MasterData mock, keeping validation active; added a negative/positive MasterData validation test (both invalid blocked and active value accepted with Revision/audit). All P1 assertions PASS.
+
+**P2:** retained six original P2 tests with revised V8 API/result-shape assertions backed by independent browser/server behavioral regression tests. Strengthened G-23 static assertion rather than making it permissive. All P2 assertions PASS; including public aggregate-only redaction and authenticated-only raw data/export.
+
+**CI evidence:** [GitHub Actions run 37887370869](https://github.com/9GotStory/smart-srrt/actions/runs/37887370869) on `ec6f78386e3ed3565d094a330dec344dc60735e9` — **261 tests / 246 PASS / 15 FAIL**; One-Click parity, syntax/RPC and offline release preflight PASS. The remaining **15 = P3 8 + P4 7**, not ignored. Overall Integration CI FAIL; P3/P4 semantics and migration are unapproved. Documentation-only follow-up commits need their own CI run.
+
+**Review/merge boundary:** all fixes in Draft PR #64 only; accepted G-32 V8 UAT and main untouched; no Google Workspace interaction, migration, deployment, or Gemini calls. Independent reviewer has not given PASS. Preserve HOLD; no readiness transition or merge.
