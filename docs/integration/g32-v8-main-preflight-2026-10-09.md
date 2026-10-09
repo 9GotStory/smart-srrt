@@ -369,3 +369,11 @@ Created only `tools/p4-v7-synthetic-replay.mjs` and `tests/integration-p4-v7-syn
 **CI:** [GitHub Actions run 37893200166](https://github.com/9GotStory/smart-srrt/actions/runs/37893200166) on implementation commit `06d99ee130777c7510f547085e2038671167043d`: **298 tests / 298 PASS**, no skipped/failures, including 20 new in-memory recovery tests; deterministic One-Click parity, syntax/RPC and offline P6 preflight PASS. Subsequent documentation-only commits require checking CI on the final HEAD.
 
 **Explicitly NOT proven:** backup/restore of real Sheets, typed original Date values, cross-file writes, Drive asset continuity, operator ACL and retention, non-atomic remote writes, approval of archived attachments/AuditArchive/RequestParams, or independent review. `partial_copy_recovery` readiness gate is still HOLD. `main` and approved G32 V8 remain unchanged; PR #64 stays Draft without merge, deploy or actual migration.
+
+## Rehearsal 9: Gate 1.3 adversarial source-count/evidence checks — 2026-10-09
+
+**Pre-review finding and correction:** initial synthetic replay validated target prefixes against the proposed candidate but did not cross-check all declared P4 source counts and historical workflow/attachment references. A synthetic proposal with a dropped candidate row and recomputed candidate digest could still form a local replay. Added fail-closed source↔candidate row count checks, row-by-row synthetic legacy workflow/attachment identity checks, and schema checks on excluded empty Archive/Visit tables. These checks **do not independently authenticate the source snapshot**: all input and digests are still caller-provided synthetic data.
+
+**CI:** [run 37893694807](https://github.com/9GotStory/smart-srrt/actions/runs/37893694807) at `45e55c95c9c8e7ce944c7e6dbface1c1571a0e23`: **303/303 tests PASS**, including 5 additional adversarial cases; One-Click parity, syntax/RPC and offline P6 preflight PASS. See [Gate 1.3 Synthetic Replay Report §7](p4-v7-synthetic-replay-2026-10-09.md).
+
+**Readiness/Review remains HOLD**: no independent reviewer approval, trusted source manifest, native Google Sheets restore or policy decisions. PR #64 remains Draft, no merge/deploy/real-data operations permitted.
