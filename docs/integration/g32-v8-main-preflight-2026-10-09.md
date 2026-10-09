@@ -80,6 +80,44 @@ Observed file-level source pins:
   integration PR** will be needed for PR-triggered full CI checks once code
   integration is ready for review.
 
+## Static function-inventory evidence (additional read-only comparison)
+
+Both the `main` and accepted V8 complete One-Click files were fetched at
+the pinned revisions and top-level named `function <name>(...)` signatures
+compared. The inventory is a **warning signal**, not a proof that any missing
+name is an unmet user requirement or that functions with the same name are
+semantically equivalent.
+
+| One-Click file | Named functions only in main | Named functions only in V8 |
+|---|---:|---:|
+| `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` | **25** | **76** |
+| `Index_Smart_SRRT_OneClick.html` | **16** | **53** |
+
+Important **main-only** examples (exact names from the current P1–P4 artifact):
+- Backend: `migrateP4Governance`, `migrateVisitLogHeader_`,
+  `listMasterItems`, `saveMasterItem`, `disableMasterItem`,
+  `archiveEventAttachment`, `auditArchiveKey_`,
+  `getEventConsistencyWarnings_`, `deriveWorkflowStatus_`.
+- Browser: `loadAttachmentsUi`, `uploadAttachmentUi`,
+  `archiveAttachmentUi`, `loadMasterAdmin`,
+  `saveMasterAdmin`, `archiveAuditUi`, `closeEventUi`,
+  `reopenEventUi`.
+
+Examples of **V8-only** counterparts include
+`migrateG11EventAttachments`, `migrateG21AuditRetention`,
+`migrateG29VisitLogs`, `getMasterDataAdmin`, `saveMasterDataItem`,
+`removeEventAttachment`, `loadAttachmentList`,
+`renderReportReadinessModal`, `createReportJob`, and the
+`reportTask` controls.
+
+**Consequences:** A naive copy-over of the V8 release artifacts would
+definitely remove main-only function *names*, even though some behaviors may
+have equivalent implementations under renamed G-chain APIs. Do not perform
+this kind of replacement; compare each overlapping behavior and caller
+contract first, including P4 exposed RPC names. If a name is still called in
+current `main` UI/API, preserve it or explicitly migrate all its callers
+and corresponding tests in the isolated integration candidate.
+
 ## Ordered execution plan, each gate independently verifiable
 
 1. **Freeze bases** — re-fetch the current remote `main` and all PR head SHAs;
