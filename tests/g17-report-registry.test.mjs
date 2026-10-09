@@ -137,7 +137,7 @@ test('appendReportRegistry writes the complete immutable evidence row',()=>{
   ]);
 });
 
-test('G-31 Gemini 503 fails without cross-model fallback or phantom metadata',()=>{
+test('G-32 V8 bounded 503 retry fails without cross-model fallback or phantom metadata',()=>{
   const ctx=makeContext();
   const meta={models:[],apiVersions:[]};
   let calls=0;
@@ -148,7 +148,7 @@ test('G-31 Gemini 503 fails without cross-model fallback or phantom metadata',()
   }};
   assert.throws(()=>ctx.callGeminiForReport_('mock-key',
     {modelName:'models/gemini-3.8-flash',apiVersion:'v1'},'prompt','test',meta),/503/);
-  assert.equal(calls,1);
+  assert.equal(calls,2,'one retry on the pinned model, no further model fallback');
   assert.deepEqual(meta.models,[]);
   assert.deepEqual(meta.apiVersions,[]);
 });
