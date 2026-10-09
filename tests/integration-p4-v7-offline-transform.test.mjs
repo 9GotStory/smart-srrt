@@ -96,20 +96,20 @@ test('duplicate audit text gets two distinct stable synthetic UUIDs',()=>{
 });
 test('P4 archived audit holds external policy and preserves provenance',()=>{
   const s=sample(),r=audit();r[5]=other;
-  s.rows.auditArchive.push(['synthetic-key',...r,date,actor]);
+  s.rows.auditArchive.push(['a'.repeat(64),...r,date,actor]);
   const p=planSyntheticP4ToV7(s);
   assert.ok(codes(p).includes('ARCHIVE_EXTERNAL_YEAR_POLICY_OPEN'));
   assert.equal(p.candidate.auditArchive.externalWriteAuthorized,false);
-  assert.equal(p.legacyEvidence.auditArchive[0].archiveKey,'synthetic-key');
+  assert.equal(p.legacyEvidence.auditArchive[0].archiveKey,'a'.repeat(64));
 });
 test('duplicate archive key, active/archive ambiguity and invalid date block',()=>{
   const s=sample();
-  s.rows.auditArchive.push(['same',...audit(),date,actor],['same',...audit(),date,actor]);
+  s.rows.auditArchive.push(['a'.repeat(64),...audit(),date,actor],['a'.repeat(64),...audit(),date,actor]);
   const cs=codes(planSyntheticP4ToV7(s));
-  assert.ok(cs.includes('ARCHIVE_KEY_DUPLICATE_OR_BLANK'));
+  assert.ok(cs.includes('ARCHIVE_KEY_FORMAT_OR_DUPLICATE'));
   assert.ok(cs.includes('AUDIT_ACTIVE_ARCHIVE_AMBIGUITY'));
   const t=sample();t.rows.audit[0][0]='invalid';
-  t.rows.auditArchive.push(['key',...audit(),'bad',actor]);
+  t.rows.auditArchive.push(['b'.repeat(64),...audit(),'bad',actor]);
   const dc=codes(planSyntheticP4ToV7(t));
   assert.ok(dc.includes('AUDIT_TIMESTAMP'));
   assert.ok(dc.includes('ARCHIVE_PROVENANCE'));
@@ -156,4 +156,30 @@ test('user status changes invalidate snapshot fingerprint and synthetic identity
   assert.notEqual(before.sourceDigest,after.sourceDigest);
   assert.notEqual(before.auditIdentityLedger[0].syntheticAuditId,after.auditIdentityLedger[0].syntheticAuditId);
   assert.ok(codes(after).includes('OWNER_INACTIVE_OR_MISSING'));
+});
+
+test('unrecognized historical MIME, oversized files and invalid upload provenance stay out of candidate',()=>{
+  const s=sample(),r=s.rows.attachments[0];
+  r[4]='text/csv';r[5]=5*1024*1024+1;r[9]='not-date';r[10]='';
+  const p=planSyntheticP4ToV7(s),flags=codes(p);
+  assert.ok(flags.includes('LEGACY_MIME_REVIEW'));
+  assert.ok(flags.includes('FILE_SIZE_INVALID'));
+  assert.ok(flags.includes('UPLOAD_PROVENANCE_INVALID'));
+  assert.equal(p.candidate.attachments.rows.length,0);
+  assert.equal(p.legacyEvidence.attachments[0].fileId,'synthetic-file-id');
+});
+test('invalid archive key shape must not be accepted as P4 SHA-256 provenance',()=>{
+  const s=sample(),r=audit();r[5]=other;
+  s.rows.auditArchive.push(['invalid',...r,date,actor]);
+  const p=planSyntheticP4ToV7(s);
+  assert.ok(codes(p).includes('ARCHIVE_KEY_FORMAT_OR_DUPLICATE'));
+  assert.equal(p.migrationAuthorized,false);
+});
+test('an active attachment with missing name or DriveURL is not promoted to V7 preview',()=>{
+  const s=sample(),r=s.rows.attachments[0];
+  r[3]='';r[6]='';
+  const p=planSyntheticP4ToV7(s);
+  assert.ok(codes(p).includes('FILE_NAME_MISSING'));
+  assert.ok(codes(p).includes('LEGACY_DRIVE_URL_MISSING'));
+  assert.equal(p.candidate.attachments.rows.length,0);
 });
