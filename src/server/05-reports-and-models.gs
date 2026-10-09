@@ -487,19 +487,21 @@ function analyzeWithGemini_(rowData, locationInfo, settings, reportMeta, reportJ
 
   var startedAt = Date.now();
   reportJobCheckpoint_(reportJobId,'gemini_1');
-  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta);
+  var part1 = callGeminiForReport_(apiKey, modelInfo, promptPart1, 'หัวข้อ 1-3', reportMeta,
+    reportJobId, 'gemini_1', startedAt);
   reportJobCheckpoint_(reportJobId,'gemini_2');
   if (String(part1 || '').indexOf('🚨') === 0) {
     throw new Error(String(part1).replace(/^🚨\s*/, ''));
   }
 
-  // Synchronous UrlFetchApp.fetch cannot be interrupted; avoid STARTING part 2
-  // if the first call has already consumed the safe request budget.
+  // Synchronous UrlFetchApp.fetch cannot be interrupted. Retrying part 1 must
+  // never consume so much time that we then start part 2 too late.
   if (Date.now() - startedAt > 120000) {
     throw new Error('Gemini 3.8 Flash ตอบช้าเกินไป ระบบยุติก่อนเริ่มส่วนที่สองเพื่อเลี่ยง Apps Script Timeout กรุณาลองใหม่ภายหลัง');
   }
 
-  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta);
+  var part2 = callGeminiForReport_(apiKey, modelInfo, promptPart2, 'หัวข้อ 4-6', reportMeta,
+    reportJobId, 'gemini_2', startedAt);
   reportJobCheckpoint_(reportJobId,'post_gemini');
   if (String(part2 || '').indexOf('🚨') === 0) {
     throw new Error(String(part2).replace(/^🚨\s*/, ''));
