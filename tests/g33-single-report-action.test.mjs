@@ -167,3 +167,68 @@ test('G33 loads a single authenticated batch summary and does not create reports
   assert.equal(h.calls.some(x=>x[0]==='createReportJob'),false);
   assert.ok(h.toasts.some(x=>String(x).includes('ตรวจสอบประวัติ')));
 });
+
+test('G33 failed G32 recovery refuses to infer no job even when registry count is zero',async()=>{
+  const h=clientHarness();
+  h.setStub(fn=>{
+    if(fn==='getReportSummariesForEvents')return {summaries:{[EVENT]:{count:0,latestSourceRevision:0,invalidCount:0}}};
+    if(fn==='getCurrentReportJob')throw Error('network dropped during recovery');
+    throw Error('unexpected RPC '+fn);
+  });
+  await h.ctx.refreshReportSummaries();
+  assert.match(h.ctx.reportActionButton(EVENT,false),/สร้างรายงาน AI/);
+  await h.ctx.recoverReportJob();
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/);
+  await h.ctx.makeReport(EVENT,{innerHTML:'สร้างรายงาน AI',disabled:false});
+  assert.equal(h.calls.some(c=>c[0]==='getAIReportReadiness'||c[0]==='createReportJob'),false,
+    'failed job recovery MUST block implicit regeneration');
+  assert.ok(h.toasts.some(s=>String(s).includes('งานรายงานเดิม')));
+
+  h.setStub(fn=>{
+    if(fn==='getCurrentReportJob')return null; // explicitly verified no current job
+    if(fn==='getReportSummariesForEvents')return {summaries:{[EVENT]:{count:0,latestSourceRevision:0,invalidCount:0}}};
+    throw Error('unexpected RPC '+fn);
+  });
+  await h.ctx.recoverReportJob();
+  assert.match(h.ctx.reportActionButton(EVENT,false),/สร้างรายงาน AI/,
+    'authenticated successful no-job verification can restore the available action');
+});
+
+test('G33 over 500 Events uses two bounded report-summary batches, not N+1 RPC calls',async()=>{
+  const h=clientHarness();
+  const ids=[EVENT,...Array.from({length:500},(_,i)=>
+    '00000000-0000-4000-8000-'+String(i).padStart(12,'0'))];
+  h.ctx.allData=ids.map(eventId=>({eventId,revision:1}));
+  h.setStub((fn,session,batch)=>{
+    assert.equal(fn,'getReportSummariesForEvents');
+    assert.equal(session,'authorized');
+    assert.ok(batch.length>0&&batch.length<=500);
+    return {summaries:Object.fromEntries(batch.map(eventId=>
+      [eventId,{count:0,latestSourceRevision:0,invalidCount:0}]))};
+  });
+  await h.ctx.refreshReportSummaries();
+  const requests=h.calls.filter(c=>c[0]==='getReportSummariesForEvents');
+  assert.deepEqual(requests.map(c=>c[2].length),[500,1]);
+  assert.match(h.ctx.reportActionButton(ids[500],false),/สร้างรายงาน AI/);
+  assert.equal(h.toasts.length,0);
+});
+
+test('G33 failed later summary batch never publishes incomplete counts',async()=>{
+  const h=clientHarness();
+  const ids=[EVENT,...Array.from({length:500},(_,i)=>
+    '00000000-0000-4000-8000-'+String(i).padStart(12,'0'))];
+  h.ctx.allData=ids.map(eventId=>({eventId,revision:1}));
+  let batchNo=0;
+  h.setStub((fn,session,batch)=>{
+    if(fn!=='getReportSummariesForEvents')throw Error('unexpected RPC');
+    batchNo++;
+    if(batchNo===2)throw Error('second batch failed');
+    return {summaries:Object.fromEntries(batch.map(eventId=>
+      [eventId,{count:0,latestSourceRevision:0,invalidCount:0}]))};
+  });
+  await h.ctx.refreshReportSummaries();
+  assert.equal(batchNo,2);
+  assert.match(h.ctx.reportActionButton(EVENT,false),/ตรวจสอบสถานะรายงาน/,
+    'first successful batch cannot masquerade as complete verified history');
+  assert.equal(h.calls.some(c=>c[0]==='createReportJob'),false);
+});
