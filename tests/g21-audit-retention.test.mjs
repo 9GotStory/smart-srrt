@@ -355,3 +355,37 @@ test('archive row verification matches complete typed content including Date sem
   assert.equal(ctx.auditArchiveRowMatches_(a,[ts.toISOString(),...a.slice(1)]),false);
   assert.equal(ctx.auditArchiveRowMatches_(a,[new Date(ts.getTime()),...a.slice(1)]),true);
 });
+
+test('archive refuses altered row returned during post-copy verification before source deletion',()=>{
+  const ctx=makeContext();
+  const id='11111111-1111-4111-8111-111111111111';
+  const old=new Date(Date.now()-500*24*60*60*1000);
+  const original=auditRow(old,id);
+  const sourceSheet=new FakeSheet([auditHeader10(),original],10,'AuditLogs');
+  const targetSheet=new FakeSheet([auditHeader10()],10,'YArchive');
+  let calls=0,audits=0;
+  ctx.getDb_=()=>({});
+  ctx.ensureAuditSchema_=()=>({sheet:sourceSheet,rows:1,backfilledIds:0});
+  ctx.getAuditRetentionDays_=()=>365;
+  ctx.ensureAuditArchiveSpreadsheet_=()=>new FakeSpreadsheet([targetSheet]);
+  ctx.ensureAuditArchiveYearSheet_=()=>targetSheet;
+  const realIndex=ctx.getAuditArchiveIds_;
+  ctx.getAuditArchiveIds_=(sheet)=>{
+    const result=realIndex(sheet);
+    calls++;
+    if(calls===2){
+      // Model a corrupt or unexpectedly modified archive read AFTER append.
+      result[id]=[...result[id]];
+      result[id][7]='unexpected post-copy payload';
+    }
+    return result;
+  };
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  ctx.writeAudit_=()=>audits++;
+  assert.throws(()=>ctx.archiveAuditLogsCore_({email:'manager@example.test',role:'Manager'}),/verification ข้อมูลไม่ตรง/);
+  assert.equal(calls,2);
+  assert.equal(sourceSheet.rows.length,2);
+  assert.deepEqual(sourceSheet.rows[1],original);
+  assert.equal(audits,0);
+  assert.equal(targetSheet.rows.length,2);
+});
