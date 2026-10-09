@@ -54,7 +54,7 @@ function buildDashboardAggregate_(rows) {
     var risk = String(r.col19 || 'ไม่ระบุ');
     var disease = String(r.col6 || 'ไม่ระบุ');
     var meetsCriteria = isInvestigationCriteriaMet_(r.col17);
-    var hasInvestigationDate = r.col26 !== '';
+    var hasInvestigationDate = String(r.col26 || '').trim() !== '';
 
     byVillage[village] = (byVillage[village] || 0) + 1;
     byMonth[month] = (byMonth[month] || 0) + 1;
