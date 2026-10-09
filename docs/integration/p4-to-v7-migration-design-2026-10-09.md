@@ -206,3 +206,22 @@ A future proposed migration rehearsal must produce, at minimum:
 **Next allowed step:** independent review of this design; then build a *pure offline fixture-based transformation prototype* on the isolated integration branch only. A green schema scanner alone cannot authorize an actual migration.
 
 **Scope of this commit:** design documentation only. No application source, tests, installer, or external data modified.
+
+## 10. Gate 1.1 synthetic-only implementation evidence — 2026-10-09
+
+Implemented **only** in the isolated integration branch:
+- `tools/p4-v7-offline-transform.mjs`: pure Node.js proposal function `planSyntheticP4ToV7()`. Rejects inputs unless explicitly marked as synthetic, matches all exact P4 headers, validates scalar cells and user references, and returns a read-only candidate, original-field evidence, machine-readable findings and synthetic technical AuditIDs. It contains **no** Sheets/Drive/Apps Script/Gemini/HTTP invocations.
+- `tests/integration-p4-v7-offline-transform.test.mjs`: mock-only tests for MainData owner offset and lifecycle, strict IDs/Revision, attachment archive semantics, audit archive ambiguity, VisitLogs privacy, deterministic rerun and invalid calendar dates.
+
+**Important limitations:** The `syntheticOnly` marker is a usage guard, not a security control capable of detecting real patient data; never supply real records to this module. Its returned `candidate` and `legacyEvidence` carry input cell content and are **not sanitized for logging, CI artifacts, GitHub issues, public dashboards or production usage**. All IDs are synthetic UUIDv5 allocations scoped to a whole-snapshot fingerprint, including UserAccounts reference data. They are *not* evidence of historical AuditIDs nor a reviewed production audit ledger.
+
+The proposal **always** returns `status: HOLD` and `migrationAuthorized:false`. For P4 archived attachments it preserves their history and omits them from the v7 active attachment preview. It does not emit P4 VisitLogs rows into v7 until an explicit privacy policy is approved. P4 legacy AuditArchive year/storage mapping likewise stays blocked.
+
+**Remaining work / open human gates:**
+1. Independent review of design + code; no self-authored PASS claim.
+2. Real snapshot manifest, typed native Google Sheets date normalization and secure evidence storage/ACL/retention remain unimplemented.
+3. Source-linked identity ledger and partial-copy fail/replay through an isolated disposable target are not implemented. Deterministic reruns of an in-memory proposal do **not** prove recovery of a partially written workbook.
+4. Source archival duplicates/lineage and data-residency questions remain open; arbitrary Date cells are intentionally rejected rather than normalized.
+5. The existing 22 P1-P4 integration compatibility failures remain a **release gate**. No application code, tests from P1-P4, accepted G-32 V8, or real Google Sheets data were changed by the prototype.
+
+**CI verification:** PR #64 workflow `tests` runs exact One-Click parity, RPC/syntax checks, offline preflight and the full Node test suite. Record latest run's exact totals and SHA after completion. A nonzero full-suite failure remains HOLD regardless of new mock-test success.
