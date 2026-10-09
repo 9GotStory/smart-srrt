@@ -118,6 +118,25 @@ contract first, including P4 exposed RPC names. If a name is still called in
 current `main` UI/API, preserve it or explicitly migrate all its callers
 and corresponding tests in the isolated integration candidate.
 
+## Verified schema and API semantics — hard integration gate
+
+Static code inspection at the pinned revisions found **actual incompatible
+interface/migration boundaries**, beyond function-name differences:
+
+| Contract | `main` P1–P4 | Accepted V8 G-chain | Required reconciliation |
+|---|---|---|---|
+| Schema constant | `CONFIG.SCHEMA_VERSION: '4'` | `CONFIG.SCHEMA_VERSION: '7'` | never downgrade a staging v7 workbook; establish one monotonic, idempotent migration ledger and compatibility rules |
+| MasterData RPC | `listMasterItems(sessionToken,type)`, `saveMasterItem(sessionToken,item)`, `disableMasterItem(...)` | `getMasterDataAdmin(...)`, `saveMasterDataItem(sessionToken,item)`, policy-bound handling | preserve UI RPC callers and permission/policy semantics before deprecating the old names |
+| Attachment changes | `archiveEventAttachment(sessionToken,attachmentId)` plus P4 archive workflow | `removeEventAttachment(sessionToken,attachmentId,removeReason,expectedRevision)` and revision/role checks | do **not** equate archive with removal; explicitly reconcile retention, authorization and audit requirements |
+| Migration entry | `migrateP4Governance`, `migrateVisitLogHeader_` | `migrateG11EventAttachments`, `migrateG21AuditRetention`, `migrateG29VisitLogs` | compare headers, schema version guards, idempotency and data preservation using fixtures without mutating staging |
+| Audit archiving UI | `archiveAuditUi()` calling `archiveAuditLogs(token,days)` | G-21 retention/archive administration under different UI/flow | keep audit retention secure and avoid silently removing P4 user workflow |
+
+These differences show that **a simple overwrite or merge accepting only one
+side can silently break callers or data contracts.** No application code
+integration should proceed until there is an explicit compatibility decision
+for the above behaviors. The staging workbook's current schema and the
+accepted V8 runtime must **not** be migrated or altered during this phase.
+
 ## Ordered execution plan, each gate independently verifiable
 
 1. **Freeze bases** — re-fetch the current remote `main` and all PR head SHAs;
