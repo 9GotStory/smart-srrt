@@ -2229,6 +2229,13 @@ function deriveEventConsistencyWarnings_(event) {
   if (criteria === 'รอดำเนินการ' && investigationDate) {
     add_('CRITERIA_PENDING_BUT_INVESTIGATED', 'ยังรอประเมินเกณฑ์ แต่มีวันที่ลงสอบสวนโรค');
   }
+  // Preserve P3 nonblocking consistency notices independently of G-04 warnings.
+  if (investigationDecision === 'ลงสอบสวน' && !isInvestigationCriteriaMet_(criteria)) {
+    add_('INVESTIGATION_FLAG_WITHOUT_CRITERIA', 'ระบุว่าลงสอบสวน แต่สถานะเข้าเกณฑ์สอบสวนโรคไม่ใช่ "เข้าเกณฑ์"');
+  }
+  if (String(event.col22 || '').trim() && !String(event.col21 || '').trim()) {
+    add_('MEASURES_DATE_WITHOUT_DETAILS', 'มีวันที่ดำเนินมาตรการ แต่ยังไม่มีรายละเอียดการดำเนินการตามมาตรการ');
+  }
   if (investigationDecision === 'ไม่ลงสอบสวน' && investigationDate) {
     add_('NO_INVESTIGATION_BUT_DATE_SET', 'ระบุว่าไม่ลงสอบสวน แต่มีวันที่ลงสอบสวนโรค');
   }
