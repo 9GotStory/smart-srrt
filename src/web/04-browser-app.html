@@ -76,7 +76,7 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -406,7 +406,7 @@
       }
       closeModal('reportNewConfirmModal');
       closeModal('reportHistoryModal');
-      await makeReport(eventId,button);
+      await makeReport(eventId,button,true);
     }catch(e){if(token===session&&currentUser)toast(String(e.message||e))}
     finally{
       reportNewConfirmSubmitting=false;
@@ -571,6 +571,8 @@
   }
   const reportReadinessInFlight = new Set();
   const reportActionPreflightInFlight = new Set();
+  let pendingReportExplicitRegeneration=false;
+  let reportWarningContinueRequest=0,reportWarningContinueInFlight=false;
   const reportGenerationInFlight = new Set();
   const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
   const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
@@ -1001,7 +1003,7 @@
       refreshReportActionButtons();
     }
   }
-  async function makeReport(eventId,btn){
+  async function makeReport(eventId,btn,allowExistingReport){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
     if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
       toast('ยังไม่สามารถยืนยันผลของงานรายงานก่อนหน้าได้ กรุณาตรวจสอบสถานะก่อนสร้างซ้ำ');return;
@@ -1012,14 +1014,16 @@
       return;
     }
     reportReadinessInFlight.add(eventId);
-    const old=btn.innerHTML;
+    const old=btn.innerHTML,session=token,user=currentUser;
     refreshReportActionButtons();
     try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจข้อมูล';
-      const readiness=await gs('getAIReportReadiness',token,eventId);
+      const readiness=await gs('getAIReportReadiness',session,eventId);
+      if(session!==token||user!==currentUser)return;
       if(readiness&&readiness.level==='ready'){
         return await executeReport(eventId,btn);
       }
+      pendingReportExplicitRegeneration=!!allowExistingReport;
       renderReportReadinessModal(readiness,eventId);
     }catch(e){toast(e.message||e)}
     finally{
@@ -1035,11 +1039,59 @@
   async function continueReportFromWarning(){
     const eventId=el('pendingReportEventId').value;
     if(!eventId){toast('ไม่พบ EventID');return}
-    if(reportGenerationInFlight.size > 0){
-      toast('มีคำขอรายงานอยู่แล้ว กรุณารอผลก่อน');return;
+    if(reportWarningContinueInFlight)return;
+    if(reportGenerationInFlight.size > 0||reportUnknownNeedsVerification||
+       activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
+      toast('ยังมีคำขอรายงานที่ต้องตรวจสอบสถานะก่อน');return;
     }
-    closeModal('reportReadinessModal');
-    await executeReport(eventId,el('continueReportBtn'));
+    const request=++reportWarningContinueRequest;
+    const session=token,user=currentUser,summaryVersion=reportSummaryRequest;
+    const explicit=!!pendingReportExplicitRegeneration;
+    const button=el('continueReportBtn'),old=button.innerHTML;
+    reportWarningContinueInFlight=true;
+    button.disabled=true;
+    button.textContent='กำลังตรวจสอบทะเบียนรายงาน...';
+    try{
+      if(!explicit){
+        // Warnings can stay open while another account registers the first
+        // report. A stale zero-count may not authorize implicit regeneration.
+        const result=await gs('getReportSummariesForEvents',session,[eventId]);
+        if(session!==token||user!==currentUser||request!==reportWarningContinueRequest||
+           summaryVersion!==reportSummaryRequest)return;
+        const summary=result&&result.summaries&&result.summaries[eventId];
+        if(!summary||!Number.isSafeInteger(summary.count)||summary.count<0||
+           !Number.isSafeInteger(summary.invalidCount)||summary.invalidCount)
+          throw new Error('ยังยืนยันทะเบียนรายงานไม่ได้');
+        if(summary.count>0){
+          // The action must now open existing history instead of silently
+          // creating a second document that the user did not request.
+          reportSummaryState={status:'loading',summaries:{}};
+          closeModal('reportReadinessModal');
+          void refreshReportSummaries();
+          toast('มีรายงานที่ลงทะเบียนแล้ว กรุณาเปิดดูรายงานก่อน หากต้องการฉบับใหม่ให้ยืนยันในหน้ารายงาน');
+          return;
+        }
+      }
+      if(session!==token||user!==currentUser||request!==reportWarningContinueRequest||
+         summaryVersion!==reportSummaryRequest)return;
+      if(reportUnknownNeedsVerification||
+         activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))return;
+      pendingReportExplicitRegeneration=false;
+      closeModal('reportReadinessModal');
+      await executeReport(eventId,button);
+    }catch(error){
+      if(session===token&&user===currentUser&&request===reportWarningContinueRequest){
+        reportSummaryState={status:'error',summaries:{}};
+        toast('ยังตรวจสอบทะเบียนรายงานไม่ได้: '+String(error.message||error));
+      }
+    }finally{
+      if(request===reportWarningContinueRequest){
+        reportWarningContinueInFlight=false;
+        button.disabled=false;
+        button.innerHTML=old;
+        refreshReportActionButtons();
+      }
+    }
   }
 
   function exportClientExcel(){
