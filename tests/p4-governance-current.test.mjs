@@ -51,7 +51,7 @@ function makeContext(){
 }
 
 
-test('P4 schema keeps MainData at 44 columns and adds governance sheets instead',()=>{
+test('P4 44-column owner collision is refused while canonical v7 uses 38+1',()=>{
   const ctx=makeContext();
   assert.equal(ctx.MAIN_HEADERS.length,30);
   assert.equal(ctx.MAIN_SCHEMA_HEADERS.length,38);
@@ -71,7 +71,7 @@ test('P4 schema keeps MainData at 44 columns and adds governance sheets instead'
   assert.throws(()=>ctx.ensureEventOwnerSchema_({getSheetByName:()=>main}),/คอลัมน์ 39/);
 });
 
-test('VisitLogs migration renames only the misleading header and preserves rows',()=>{
+test('VisitLogs preserves supported legacy rows and blocks unknown P4 RequestParams header',()=>{
   const ctx=makeContext();
   const privateParams='{"token":"historical-synthetic-secret"}';
   const safeLegacy=new FakeSheet([
@@ -106,7 +106,7 @@ test('attachment upload path is private and has a bounded allowlist',()=>{
 });
 
 
-test('attachment list/download requires view and upload/archive requires edit',()=>{
+test('attachment RPCs enforce separate view upload edit and remove delete permissions',()=>{
   const find=name=>source.match(new RegExp('function '+name+'\\([\\s\\S]*?(?=\\nfunction )'))?.[0]??'';
   const list=find('listEventAttachments');
   const download=find('downloadEventAttachment');
@@ -179,7 +179,7 @@ test('audit archive is explicit, retention-preserving and idempotency-aware',()=
   assert.equal(ctx.getAuditRetentionDays_(),3650);
 });
 
-test('audit archive key is deterministic for the same row',()=>{
+test('v7 AuditID is stable on rerun and distinct for identical raw audit records',()=>{
   const ctx=makeContext();
   assert.equal(ctx.AUDIT_COL.AUDIT_ID,10);
   let next=0;
@@ -202,7 +202,7 @@ test('audit archive key is deterministic for the same row',()=>{
   assert.equal(typeof ctx.auditArchiveKey_,'undefined');
 });
 
-test('browser exposes governance controls only in authenticated/admin surfaces',()=>{
+test('browser uses v7 governance endpoints with protected server RPCs',()=>{
   assert.match(html,/openAttachmentModal/);
   assert.match(html,/uploadEventAttachment/);
   assert.match(html,/downloadEventAttachment/);
