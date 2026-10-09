@@ -625,7 +625,9 @@
     el('reportCancelKeepBtn').focus();
   }
   async function confirmReportCancelRequest(){
-    if(reportCancelSubmitting||!currentUser||!activeReportJob||
+    // Ignore duplicate clicks during a pending RPC without dismissing the dialog.
+    if(reportCancelSubmitting)return;
+    if(!currentUser||!activeReportJob||
        activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
        ['cancel_requested','finalizing'].includes(activeReportJob.status)){
       hideReportCancelConfirm();
