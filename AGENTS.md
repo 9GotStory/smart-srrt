@@ -53,6 +53,8 @@ Index_Smart_SRRT_OneClick.html
 
 **Modular Source is canonical**. `tools/build-one-click.mjs` ประกอบ Source 7+5 ไฟล์ตามลำดับตายตัวให้กลายเป็น One-Click Artifacts สองไฟล์ที่อยู่ Root. Source Code ไม่ได้แยก Deploy เป็น GAS Files รายตัวโดยอัตโนมัติ. ผู้ดูแลใช้ Artifacts ไปวางใน `Code.gs` และ `Index` ตาม Deployment Guide
 
+**G-34 Native Multi-file Candidate:** `tools/build-apps-script-multifile.mjs` สร้าง `dist/apps-script/` แบบ Generated/Untracked ประกอบด้วย 7 `.gs` + 5 HTML Partials + `Index.html` (ใช้ `<?!= include(...) ?>`). ต้องตรวจ `npm run build:gas-multifile` → `npm run check:gas-multifile` และ Regression Tests ก่อนส่งให้ผู้ตรวจอิสระ. **ชุด 13 ไฟล์ไม่รวม `appsscript.json`**: ต้องรักษา Project Manifest, OAuth scopes, V8 runtime และสิทธิ์ของโปรเจกต์ Apps Script เดิมไว้ และห้ามนำ Candidate เข้าระบบใช้งานจริงหรือถอด One-Click เดิมออกจาก Apps Script ที่กำลังให้บริการเพียงเพราะสร้างไฟล์สำเร็จ; Deployment/Migration ยังคงใช้ Human Gate แยก. หากใช้ `clasp` ในอนาคต ต้องรักษา Config/Credentials นอก Git และระวังว่า `clasp push` เขียนทับไฟล์ทั้งหมดของ Project. ดู [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md).
+
 ## 4. Engineering Invariants — DO NOT BREAK
 
 1. **Source/Build Parity:** แก้ `src/server/` หรือ `src/web/` เป็นอันดับแรก แล้วประกอบและตรวจ byte-for-byte ด้วย `npm run build` / `npm run build:check` ตาม Scope งาน. ห้ามแก้ Generated Artifact อย่างเดียว. **ใน PR ที่เป็น Documentation Only ห้ามเปลี่ยน Artifacts ทั้งสอง**

@@ -8,7 +8,9 @@
     "build:check": "node tools/build-one-click.mjs --check",
     "check:contracts": "node --test tests/g30-release-parity.test.mjs",
     "test": "node --test tests/*.test.mjs",
-    "release:preflight": "node tools/p6-release-preflight.mjs"
+    "release:preflight": "node tools/p6-release-preflight.mjs",
+    "build:gas-multifile": "node tools/build-apps-script-multifile.mjs --write",
+    "check:gas-multifile": "node tools/build-apps-script-multifile.mjs --check"
   },
   "engines": {
     "node": ">=20"

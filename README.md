@@ -45,7 +45,7 @@ Smart SRRT เป็น Web App สำหรับหน่วยงานสา
 | Repository / CI | GitHub / GitHub Actions |
 | การเผยแพร่ | Google Apps Script Web App |
 
-หลักการ: **Modular Source, Simple One-Click Deployment** — พัฒนาในไฟล์แยกส่วน แต่ส่งมอบเป็น One-Click Artifacts 2 ไฟล์ให้ผู้ดูแลนำไปติดตั้งได้โดยไม่จำเป็นต้องใช้ Node/npm/Git
+หลักการ: **Modular Source, Multi-file Apps Script Candidate, One-Click Legacy Compatibility** — พัฒนาในไฟล์แยกส่วนที่ `src/server/` และ `src/web/` โดยกำลังเปลี่ยนรูปแบบการเผยแพร่ที่ต้องการเป็น Native Multi-file จำนวน 13 Source/HTML Files. ในระหว่างรอตรวจรับและ Cutover ยังคง One-Click Artifacts เดิมไว้สำหรับการใช้งานที่ผ่านการตรวจและการย้อนกลับ; ยังไม่ถือว่ารูปแบบ Multi-file ถูก Deploy แล้ว
 
 ### โครงสร้าง Repository ปัจจุบัน
 
@@ -78,9 +78,24 @@ npm run release:preflight
 
 คำสั่งข้างต้นเป็นข้อมูลอ้างอิงสำหรับกระบวนการพัฒนา **ไม่ใช่คำสั่งให้ดำเนินการกับระบบ Production หรือข้อมูลจริง**
 
+### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
+
+รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 5 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 13 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่าให้ผล HTML ตรงกับ One-Click เดิม
+
+```bash
+npm run build:gas-multifile   # สร้างไฟล์ 13 ไฟล์ใน dist/apps-script/
+npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร้างแล้วและความตรงกับ Source (ไม่เขียนไฟล์)
+```
+
+อ่าน [คู่มือการย้ายเป็น Native Multi-file Apps Script](docs/deployment/g34-native-multifile-apps-script.md) ก่อนนำไปใช้จริง **สถานะปัจจุบันเป็น Deployment Candidate เท่านั้น**: การสร้างไฟล์ใน GitHub หรือ CI PASS ยังไม่ใช่การทดสอบบน Apps Script และไม่อนุญาตให้เปลี่ยนโปรเจกต์/Deployment จริงโดยอัตโนมัติ ไฟล์ One-Click เดิมจึงยังคงอยู่เพื่อการใช้งานและย้อนกลับในระหว่างเปลี่ยนผ่าน
+
+
+
 ## การติดตั้งและอัปเดต: ภาพรวม
 
-สำหรับการติดตั้งใหม่ ให้ปฏิบัติตาม [คู่มือติดตั้งระดับอำเภอ](คู่มือติดตั้ง_Smart_SRRT_ระดับอำเภอ_v2026.09.08.1.txt) และ [One-Click Compatibility Contract](docs/deployment/one-click-compatibility-contract.md) โดยหลักการคือเตรียม Google Sheet, สร้างโปรเจกต์ Apps Script ที่ผูกกับ Sheet, วาง Server Artifact ลง `Code.gs` และ HTML Artifact ในไฟล์ `Index`, อนุญาตสิทธิ์ที่เกี่ยวข้อง, รัน `installSmartSRRT()` สำหรับ **การติดตั้งใหม่ที่ได้รับอนุมัติ** จากนั้น Deploy เป็น Web App
+**รูปแบบติดตั้งที่ผ่านการรับรองเดิม (One-Click):** สำหรับการติดตั้งใหม่ในขอบเขต Legacy ให้ปฏิบัติตาม [คู่มือติดตั้งระดับอำเภอ](คู่มือติดตั้ง_Smart_SRRT_ระดับอำเภอ_v2026.09.08.1.txt) และ [One-Click Compatibility Contract](docs/deployment/one-click-compatibility-contract.md) โดยเตรียม Google Sheet และ Apps Script ที่ผูกกับ Sheet, วาง Server Artifact ลง `Code.gs` และ HTML Artifact ในไฟล์ `Index`, แล้วดำเนินการ Installer/Deployment **เมื่อมีการอนุมัติการติดตั้งแยกต่างหาก** เท่านั้น
+
+**รูปแบบเป้าหมาย (G-34 Multi-file):** เมื่อผ่าน Review/Approval และการตรวจบน Apps Script แล้ว ให้ใช้ไฟล์ 13 ไฟล์จาก `dist/apps-script/` ตาม [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md) และ **คงค่า `appsscript.json`/OAuth Scopes ของโปรเจกต์ปลายทาง** โดยไม่วาง One-Click ซ้ำในโปรเจกต์เดียวกัน; Build/CI PASS เพียงอย่างเดียวยังไม่อนุญาตให้ Cutover/Deploy
 
 **สำคัญสำหรับระบบที่มีข้อมูลอยู่แล้ว:** อย่าตีความว่าการแทนที่โค้ดและรัน Installer เป็นการ Migration จากทุกเวอร์ชันได้โดยอัตโนมัติ ต้องตรวจ Schema จริง สำรองข้อมูล แยกกระบวนการ Deploy กับ Migration และผ่าน [Migration/Version/Release Policy](docs/governance/migration-version-release-policy.md) ก่อนทุกครั้ง โดยเฉพาะประเด็น **P4→v7 Historical Migration** ที่ยังไม่ได้รับอนุญาต คู่มือเดิมบางส่วนเป็น Legacy Snapshot จึงต้องเทียบกับโค้ดและสัญญาปัจจุบันก่อนใช้
 
