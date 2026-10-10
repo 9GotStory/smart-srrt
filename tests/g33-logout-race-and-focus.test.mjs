@@ -291,3 +291,62 @@ test('G33 R1/R2 corrective markers are present in the canonical One-Click UI',()
   assert.match(html,/id="reportHistoryCloseBtn"/);
   assert.match(html,/if\(!currentUser\|\|!token\)return;\n    if\(reportUnknownNeedsVerification/);
 });
+
+test('G33 R1 run-failure warning stays in its own session across logout and re-login',async()=>{
+  const settle=async(rounds=6)=>{for(let i=0;i<rounds;i++)await new Promise(resolve=>setImmediate(resolve))};
+  // Unchanged live session: a transport-failed run still warns against re-creating.
+  const live=logoutHarness();
+  live.on('createReportJob',()=>Promise.resolve({id:'job-a',eventId:EVENT,status:'queued',stage:'queued'}));
+  live.on('runReportJob',()=>Promise.reject(new Error('transport dropped')));
+  live.on('getReportJobStatus',()=>Promise.reject(new Error('status lookup dropped')));
+  await live.ctx.executeReport(EVENT,live.el('live-action'));
+  await settle();
+  assert.ok(live.toasts.some(msg=>msg.includes('ตรวจสอบคำขอไม่สำเร็จ')),
+    'the unchanged live session keeps its fail-closed warning');
+  assert.equal(live.calls.filter(call=>call[0]==='runReportJob').length,1);
+
+  // Logout during the recovery await, no re-login: no stale warning.
+  const loggedOut=logoutHarness();
+  let rejectRunA,resolvePollA;
+  loggedOut.on('runReportJob',()=>new Promise((resolve,reject)=>{rejectRunA=reject}));
+  loggedOut.on('getReportJobStatus',()=>new Promise(resolve=>{resolvePollA=resolve}));
+  loggedOut.read('activeReportJob={id:"job-a",eventId:'+JSON.stringify(EVENT)+',status:"running"}');
+  const runA=loggedOut.ctx.runReportJobClient('job-a','session-a');
+  rejectRunA(new Error('transport failed'));
+  await settle();
+  assert.ok(resolvePollA,'the catch entered its status-recovery await before logout');
+  const logoutA=loggedOut.ctx.doLogout();
+  const toastsBefore=loggedOut.toasts.length;
+  resolvePollA({id:'job-a',eventId:EVENT,status:'running',stage:'gemini_1'});
+  await runA;
+  await logoutA;
+  assert.equal(loggedOut.toasts.length,toastsBefore,
+    'no run-failure warning may appear after logout without re-login');
+  assert.equal(loggedOut.read('activeReportJob'),null);
+
+  // Re-login with a different job during the same await: the next session's UI stays intact.
+  const next=logoutHarness();
+  let rejectRunB,resolvePollB;
+  next.on('runReportJob',()=>new Promise((resolve,reject)=>{rejectRunB=reject}));
+  next.on('getReportJobStatus',()=>new Promise(resolve=>{resolvePollB=resolve}));
+  next.read('activeReportJob={id:"job-a",eventId:'+JSON.stringify(EVENT)+',status:"running"}');
+  const runB=next.ctx.runReportJobClient('job-a','session-a');
+  rejectRunB(new Error('transport failed'));
+  await settle();
+  const logoutB=next.ctx.doLogout();
+  next.ctx.token='session-b';
+  next.ctx.currentUser={role:'Admin',email:'b@example.test'};
+  next.read('activeReportJob={id:"job-b",eventId:'+JSON.stringify(EVENT)+',status:"running"}');
+  next.el('reportTaskStatus').textContent='SESSION_B_STATUS';
+  const before=next.toasts.length;
+  resolvePollB({id:'job-a',eventId:EVENT,status:'running',stage:'gemini_1'});
+  await runB;
+  await logoutB;
+  assert.equal(next.toasts.length,before,
+    'an old run-failure catch cannot warn the next session');
+  assert.equal(next.ctx.token,'session-b');
+  assert.equal(next.read('activeReportJob.id'),'job-b');
+  assert.equal(next.el('reportTaskStatus').textContent,'SESSION_B_STATUS');
+  assert.equal(next.calls.filter(call=>call[0]==='runReportJob').length,1,
+    'backend execution semantics unchanged: one kick, no extra dispatch');
+});
