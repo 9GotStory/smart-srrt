@@ -65,6 +65,9 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
       fs.mkdirSync(path.dirname(path.join(fixture,src)),{recursive:true});
       fs.copyFileSync(path.join(ROOT,src),path.join(fixture,src));
     }
+    for (const artifact of ['Code_Smart_SRRT_OneClick_v2026.09.08.1.gs','Index_Smart_SRRT_OneClick.html']) {
+      fs.copyFileSync(path.join(ROOT,artifact),path.join(fixture,artifact));
+    }
     const run=flag => spawnSync(process.execPath,
       [path.join(fixture,'tools','build-apps-script-multifile.mjs'),flag],
       {cwd:fixture,encoding:'utf8'});
@@ -84,6 +87,19 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
     assert.equal(run('--check').status,1,'check must reject extra files');
     assert.equal(run('--write').status,0,'write must clear stale generated content');
     assert.equal(run('--check').status,0);
+
+    // Strong provenance gate: never claim package parity when source drifted
+    // from either committed legacy release artifact.
+    fs.appendFileSync(path.join(fixture,'src','server','00-bootstrap.gs'),'\n// uncommitted source drift\n');
+    const parityReject = run('--write');
+    assert.equal(parityReject.status,1,'source drift from committed artifact must reject the build');
+    assert.match(parityReject.stderr,/differs from committed One-Click artifact/);
+    fs.copyFileSync(path.join(ROOT,'src','server','00-bootstrap.gs'),
+      path.join(fixture,'src','server','00-bootstrap.gs'));
+    fs.appendFileSync(path.join(fixture,'src','web','01-styles.html'),'\n<!-- source drift -->');
+    const htmlReject = run('--check');
+    assert.equal(htmlReject.status,1,'HTML drift from committed artifact must reject check');
+    assert.match(htmlReject.stderr,/HTML partial expansion differs from committed One-Click artifact/);
   } finally {
     fs.rmSync(fixture,{recursive:true,force:true});
   }
