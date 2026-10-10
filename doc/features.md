@@ -159,7 +159,7 @@ Modal ชื่อ `รายงานของเหตุการณ์` เ�
 
 เส้นทางสร้างรายงานใช้ `models/gemini-3.8-flash` เท่านั้น ไม่สลับโมเดลอื่นหากไม่พร้อม; G-32 V8 อาจ Retry **HTTP 503 ได้สูงสุดหนึ่งครั้งต่อส่วน** ภายใต้ Time Budget โดยไม่ Retry HTTP 429 หรือ Error อื่นอัตโนมัติ ผลสำเร็จบันทึก ReportID, EventID, SourceRevision, DocumentID/URL, ผู้สร้าง, เวลาสร้าง, โมเดล/เวอร์ชัน API ที่สำเร็จจริง, PromptVersion และ TemplateDocID
 
-ถ้าสร้าง Google Doc แล้วแต่ Append Registry ไม่สำเร็จ มี Compensation เพื่อย้ายเอกสารใหม่ไป Trash; เมื่อ Registry Commit แล้วแต่ Audit เขียนไม่สำเร็จ Server บันทึกคำเตือนเชิงปฏิบัติการแทนการกล่าวเท็จว่าการสร้างรายงานล้มเหลว
+ถ้าสร้าง Google Doc แล้วแต่ Append Registry ไม่สำเร็จ มี Compensation เพื่อย้ายเอกสารใหม่ไป Trash; เมื่อ Registry Commit แล้ว การสร้างรายงานถือเป็นผลสำเร็จและไม่ย้อนกลับเพียงเพราะ Audit มีปัญหา **ข้อจำกัดที่ต้องรู้:** `writeAudit_` จับ Exception ภายในโดยไม่ส่งต่อ จึงไม่อาจอ้างจากผลสร้างรายงานสำเร็จว่า Audit Entry ถูกเขียนครบแน่นอน ต้องตรวจหลักฐาน Audit แยกเมื่อจำเป็น
 
 ### 5.6 Job Tracking, การยกเลิกและความไม่แน่นอน (G-32)
 
