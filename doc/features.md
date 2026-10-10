@@ -46,6 +46,8 @@ Smart SRRT สนับสนุนการเฝ้าระวังแบบ
 
 Server ส่ง `kpi`, `byVillage`, `byMonth`, `byDiseaseGroup`, `byRisk`, `topDisease`, `topVillage` เท่านั้นสำหรับ Public Dashboard; ไม่ส่ง `EventID`, `Revision`, `MainData` rows, Narratives, รายละเอียดผู้แจ้งหรือไฟล์ Export แบบข้อมูลดิบ หน้าจอล้าง `allData` เมื่อ Logout และ Guard ผลตอบกลับเก่าจาก Session/Filter ที่เปลี่ยนแล้ว
 
+**ข้อจำกัดของ Public Aggregate:** Source ปัจจุบันไม่ได้กำหนด Small-cell Suppression หรือ Minimum Reporting Threshold ใน `buildDashboardAggregate_`; การแสดงจำนวนรายหมู่บ้านและหมวดข้อมูลที่มีเหตุการณ์น้อยอาจเกิดความเสี่ยงต่อการอนุมานตัวบุคคลได้ การไม่ส่ง Raw Rows ช่วยจำกัดข้อมูลแต่ **ไม่เท่ากับการรับรองว่าไม่มีความเสี่ยงต่อการระบุตัวบุคคล**. นี่เป็นข้อสังเกตเชิง Privacy จากการตรวจ Source ไม่ใช่การกล่าวว่ามีฟีเจอร์ปกปิด Small Cell แล้ว
+
 > หมายเหตุเชิง Implementation: `getAnalytics(sessionToken)` ของส่วน Admin มีชุดตัวนับภายในของตนเอง โดยค่า `investigated` นับเหตุการณ์ที่มี `col26` แม้ไม่เข้าเกณฑ์ ไม่ควรนำไปแทนความหมาย KPI `ลงสอบสวนโรคแล้ว` บน Dashboard โดยไม่ปรับนิยาม
 
 Source: [`src/server/03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [P2 Privacy/KPI Contract](../docs/architecture/p2-privacy-kpi-contract.md)
