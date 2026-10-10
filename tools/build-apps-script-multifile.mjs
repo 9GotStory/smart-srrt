@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ONE_CLICK_TARGETS, assembleOneClick } from './build-one-click.mjs';
+import { ONE_CLICK_TARGETS } from './build-one-click.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const GAS_OUTPUT_DIR = path.join(ROOT, 'dist', 'apps-script');
@@ -55,11 +55,13 @@ export function verifyGasMultiFileParity(entries = buildGasMultiFileEntries()) {
   }
 
   const server = Buffer.concat(GAS_SERVER_SOURCES.map(source => entries.get(nameFromSource(source))));
-  if (!server.equals(assembleOneClick(ONE_CLICK_TARGETS[0].target))) {
-    throw new Error('Modular server is not byte-identical to original server packaging');
+  const committedServer = fs.readFileSync(path.join(ROOT, ONE_CLICK_TARGETS[0].target));
+  if (!server.equals(committedServer)) {
+    throw new Error('Modular server differs from committed One-Click artifact');
   }
-  if (!renderGasIndexOffline(entries).equals(assembleOneClick(ONE_CLICK_TARGETS[1].target))) {
-    throw new Error('HTML partials do not reproduce the original HTML packaging');
+  const committedHtml = fs.readFileSync(path.join(ROOT, ONE_CLICK_TARGETS[1].target));
+  if (!renderGasIndexOffline(entries).equals(committedHtml)) {
+    throw new Error('HTML partial expansion differs from committed One-Click artifact');
   }
   return true;
 }
