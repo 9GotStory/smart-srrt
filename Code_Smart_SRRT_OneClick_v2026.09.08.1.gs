@@ -3407,6 +3407,91 @@ function listReportsForEvent(sessionToken, eventId) {
   };
 }
 
+/**
+ * Issue #66: One bounded, read-only authenticated summary for the visible Events.
+ * Never writes report metadata to MainData and never repairs ReportRegistry on a read.
+ * A corrupt matching row makes the summary unknown, not an authoritative zero.
+ */
+function getReportSummariesForEvents(sessionToken, eventIds) {
+  requireAuth_(sessionToken, 'report');
+  if (!Array.isArray(eventIds) || eventIds.length > 500) {
+    throw new Error('รายการเหตุการณ์สำหรับสรุปรายงานไม่ถูกต้องหรือเกิน 500 รายการ กรุณากรองข้อมูลก่อน');
+  }
+  var requested = Object.create(null);
+  eventIds.forEach(function(id) {
+    var value = String(id || '').trim();
+    if (!isUuid_(value)) throw new Error('EventID สำหรับสรุปรายงานไม่ถูกต้อง');
+    requested[value] = true;
+  });
+  var ids = Object.keys(requested);
+  if (!ids.length) return {summaries:{}};
+
+  // Use the same non-void Event universe as the authenticated dashboard.
+  var available = Object.create(null);
+  getFilteredEventRows_({}).forEach(function(event) {
+    available[String(event.eventId || '').trim()] = true;
+  });
+  ids.forEach(function(id) {
+    if (!available[id]) throw new Error('ไม่พบเหตุการณ์หรือเหตุการณ์ถูกยกเลิก กรุณารีเฟรช');
+  });
+
+  var registry = getDb_().getSheetByName(CONFIG.SHEETS.REPORTS);
+  if (!registry || registry.getLastRow() < 1 ||
+      registry.getLastColumn() < REPORT_REGISTRY_HEADERS.length) {
+    throw new Error('ยังไม่มีทะเบียน ReportRegistry ที่พร้อมใช้งาน กรุณาดำเนินการ migration G-17 ก่อน');
+  }
+  var headers = registry.getRange(1, 1, 1, REPORT_REGISTRY_HEADERS.length).getDisplayValues()[0];
+  REPORT_REGISTRY_HEADERS.forEach(function(expected, index) {
+    if (String(headers[index] || '').trim() !== expected) {
+      throw new Error('หัวข้อ ReportRegistry ไม่ตรงกับ schema v7 ที่คอลัมน์ ' + (index + 1));
+    }
+  });
+
+  var summaries = Object.create(null);
+  var visited = Object.create(null);
+  ids.forEach(function(id) {
+    summaries[id] = {count:0, latestSourceRevision:0, invalidCount:0};
+    visited[id] = Object.create(null);
+  });
+  var latest = Object.create(null);
+  var rows = registry.getLastRow() > 1
+    ? registry.getRange(2, 1, registry.getLastRow() - 1, REPORT_REGISTRY_HEADERS.length).getValues()
+    : [];
+  rows.forEach(function(row, index) {
+    var eventId = String(row[REPORT_REGISTRY_COL.EVENT_ID - 1] || '').trim();
+    if (!Object.prototype.hasOwnProperty.call(requested, eventId)) return;
+    var reportId = String(row[REPORT_REGISTRY_COL.REPORT_ID - 1] || '').trim();
+    var docId = String(row[REPORT_REGISTRY_COL.DOCUMENT_ID - 1] || '').trim();
+    if (!isUuid_(reportId) || !docId ||
+        Object.prototype.hasOwnProperty.call(visited[eventId], reportId)) {
+      summaries[eventId].invalidCount++;
+      return;
+    }
+    visited[eventId][reportId] = true;
+    summaries[eventId].count++;
+    var sourceRevision = Number(row[REPORT_REGISTRY_COL.SOURCE_REVISION - 1]);
+    if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 1) {
+      summaries[eventId].invalidCount++;
+      return;
+    }
+    var rawDate = row[REPORT_REGISTRY_COL.GENERATED_AT - 1];
+    var millis = rawDate instanceof Date && !isNaN(rawDate.getTime()) ? rawDate.getTime() : NaN;
+    var validDate = isFinite(millis);
+    var old = latest[eventId];
+    if (!old || (validDate && !old.validDate) ||
+        (validDate === old.validDate && (!validDate || millis >= old.millis))) {
+      latest[eventId] = {validDate:validDate, millis:millis, revision:sourceRevision, index:index};
+      summaries[eventId].latestSourceRevision = sourceRevision;
+    }
+  });
+  ids.forEach(function(id) {
+    if (summaries[id].invalidCount) {
+      throw new Error('พบข้อมูลทะเบียนรายงานไม่สมบูรณ์ กรุณาตรวจสอบก่อนสร้างรายงานใหม่');
+    }
+  });
+  return {summaries:summaries};
+}
+
 function getAIReportReadiness(sessionToken, eventId) {
   requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);

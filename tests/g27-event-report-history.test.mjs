@@ -171,7 +171,13 @@ test('Event and Reporter views have read-only history controls without public re
   const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
   assert.match(render,/el\('eventBody'\)\.innerHTML=allData\.map/);
   assert.match(render,/el\('reportBody'\)\.innerHTML=allData\.map/);
-  assert.equal((render.match(/openEventReportHistoryByIndex\(\$\{i\}\)/g)||[]).length,2);
+  assert.equal((render.match(/openEventReportHistoryByIndex/g)||[]).length,0,
+    'standalone history buttons must be removed from both tables');
+  assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,2,
+    'one report action per table');
+  assert.match(html,/function handleReportAction\(eventId,btn\)/);
+  assert.match(html,/id="reportHistoryNewBtn"/);
+  assert.match(html,/id="reportNewConfirmModal"/);
   assert.match(html,/if\(!currentUser\|\|!roleCanRecord\(\)/);
   assert.match(html,/rel="noopener noreferrer"/);
   assert.match(html,/escapeHtml\(url\)/);
