@@ -38,6 +38,21 @@ test('G-34 server sources parse individually, without changing existing global R
   assert.match(merged.toString('utf8'),/function include\(filename\)/);
 });
 
+test('G-34 server modules initialize in the explicit order in a shared V8-like context', () => {
+  const entries=buildGasMultiFileEntries();
+  const context=vm.createContext({});
+  for (const source of GAS_SERVER_SOURCES) {
+    const file=path.basename(source);
+    assert.doesNotThrow(() => new vm.Script(entries.get(file).toString('utf8'), {filename:file})
+      .runInContext(context, {timeout:2000}), file);
+  }
+  assert.equal(context.CONFIG.VERSION,'2026.09.08.1');
+  assert.equal(context.CONFIG.SCHEMA_VERSION,'7');
+  for (const api of ['doGet','include','getDashboardData','getPublicDashboardData','login','createReportJob','listReportsForEvent']) {
+    assert.equal(typeof context[api],'function',api+' missing from shared Apps Script global scope');
+  }
+});
+
 test('G-34 trusted template expands HTML partials in exact original order and bytes', () => {
   const entries = buildGasMultiFileEntries();
   const template = gasIndexTemplate();
