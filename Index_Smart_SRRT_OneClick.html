@@ -1406,7 +1406,11 @@
       // The server may still be executing despite a disconnected client callback.
       if(token===session&&activeReportJob&&activeReportJob.id===jobId){
         await pollReportTask();
-        toast('ตรวจสอบคำขอไม่สำเร็จ กรุณาเปิดสถานะรายงาน ห้ามสั่งสร้างซ้ำ');
+        // G-33/R1: the recovery await may span logout and a newer login; the
+        // warning belongs only to the unchanged session and job that failed.
+        if(token===session&&activeReportJob&&activeReportJob.id===jobId){
+          toast('ตรวจสอบคำขอไม่สำเร็จ กรุณาเปิดสถานะรายงาน ห้ามสั่งสร้างซ้ำ');
+        }
       }
     }
   }
