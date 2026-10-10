@@ -1,6 +1,4 @@
-# Generated Apps Script multi-file release candidate; do not commit runtime package
-/dist/apps-script/
-
+# Native Apps Script package under dist/apps-script/ is intentionally committed for direct GitHub access.
 # Never commit Apps Script project identifiers or local OAuth session credentials
 .clasp.json
 .clasprc.json

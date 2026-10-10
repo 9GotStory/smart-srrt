@@ -87,6 +87,8 @@ npm run build:gas-multifile   # สร้างไฟล์ 13 ไฟล์ใ�
 npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร้างแล้วและความตรงกับ Source (ไม่เขียนไฟล์)
 ```
 
+**ไฟล์ทั้ง 13 ไฟล์ถูกเก็บไว้ใน [dist/apps-script/](dist/apps-script/) บน GitHub แล้ว** เพื่อเปิดดูหรือดาวน์โหลดแต่ละไฟล์ได้โดยตรง โดย `src/server/` และ `src/web/` ยังคงเป็น Source of Truth; เมื่อแก้ Source ต้อง Build แล้ว Commit ไฟล์ที่สร้างใหม่ควบคู่กันเสมอ GitHub Actions ตรวจ Parity ของไฟล์ที่ Commit ก่อน Build เพื่อจับ Drift
+
 อ่าน [คู่มือการย้ายเป็น Native Multi-file Apps Script](docs/deployment/g34-native-multifile-apps-script.md) ก่อนนำไปใช้จริง **สถานะปัจจุบันเป็น Deployment Candidate เท่านั้น**: การสร้างไฟล์ใน GitHub หรือ CI PASS ยังไม่ใช่การทดสอบบน Apps Script และไม่อนุญาตให้เปลี่ยนโปรเจกต์/Deployment จริงโดยอัตโนมัติ ไฟล์ One-Click เดิมจึงยังคงอยู่เพื่อการใช้งานและย้อนกลับในระหว่างเปลี่ยนผ่าน
 
 

@@ -51,6 +51,8 @@ The existing `doGet` in `00-bootstrap.gs` already uses `HtmlService.createTempla
 
 ## Build and verify locally (offline only)
 
+The 13-file distribution is **committed under [dist/apps-script/](../../dist/apps-script/)** for straightforward browsing and download from GitHub. Before rebuilding, run `npm run check:gas-multifile` to detect any drift in the committed files. When source changes, regenerate, re-check and commit **both source and distribution**. CI enforces a read-only distribution parity check **before** its rebuild to prevent hidden source/distribution drift.
+
 ```bash
 npm run build:gas-multifile
 npm run check:gas-multifile
@@ -58,7 +60,7 @@ npm run build:check
 npm test
 ```
 
-The first command creates a **generated, untracked** `dist/apps-script/` directory containing exactly 13 files. This is the source for copying into an Apps Script project. The second command checks that each generated file matches its canonical source, detects stale/missing/extra files, and **directly compares** the ordered server bytes and simulated expansion of `Index.html` with both *committed* One-Click artifact files. It is read-only and rejects source-to-artifact drift.
+The first command writes the **generated and Git-tracked** `dist/apps-script/` directory containing exactly 13 files. GitHub directly displays these files once committed; no local npm run is needed just to browse/download them. This is the source for copying into an Apps Script project. The second command checks that each generated file matches its canonical source, detects stale/missing/extra files, and **directly compares** the ordered server bytes and simulated expansion of `Index.html` with both *committed* One-Click artifact files. It is read-only and rejects source-to-artifact drift.
 
 `npm run build:check` independently verifies that the **committed** One-Click compatibility artifacts still match the sources. Tests also verify basic JavaScript syntax, server RPC visibility and unchanged HTML byte sequence. These are **offline checks**, not real Apps Script editor/compiler/runtime, template rendering, Google Workspace, permissions or deployed Web App verification.
 
