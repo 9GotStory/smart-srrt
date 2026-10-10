@@ -78,6 +78,19 @@ npm run release:preflight
 
 คำสั่งข้างต้นเป็นข้อมูลอ้างอิงสำหรับกระบวนการพัฒนา **ไม่ใช่คำสั่งให้ดำเนินการกับระบบ Production หรือข้อมูลจริง**
 
+### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
+
+รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 5 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 13 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่าให้ผล HTML ตรงกับ One-Click เดิม
+
+```bash
+npm run build:gas-multifile   # สร้างไฟล์ 13 ไฟล์ใน dist/apps-script/
+npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร้างแล้วและความตรงกับ Source (ไม่เขียนไฟล์)
+```
+
+อ่าน [คู่มือการย้ายเป็น Native Multi-file Apps Script](docs/deployment/g34-native-multifile-apps-script.md) ก่อนนำไปใช้จริง **สถานะปัจจุบันเป็น Deployment Candidate เท่านั้น**: การสร้างไฟล์ใน GitHub หรือ CI PASS ยังไม่ใช่การทดสอบบน Apps Script และไม่อนุญาตให้เปลี่ยนโปรเจกต์/Deployment จริงโดยอัตโนมัติ ไฟล์ One-Click เดิมจึงยังคงอยู่เพื่อการใช้งานและย้อนกลับในระหว่างเปลี่ยนผ่าน
+
+
+
 ## การติดตั้งและอัปเดต: ภาพรวม
 
 สำหรับการติดตั้งใหม่ ให้ปฏิบัติตาม [คู่มือติดตั้งระดับอำเภอ](คู่มือติดตั้ง_Smart_SRRT_ระดับอำเภอ_v2026.09.08.1.txt) และ [One-Click Compatibility Contract](docs/deployment/one-click-compatibility-contract.md) โดยหลักการคือเตรียม Google Sheet, สร้างโปรเจกต์ Apps Script ที่ผูกกับ Sheet, วาง Server Artifact ลง `Code.gs` และ HTML Artifact ในไฟล์ `Index`, อนุญาตสิทธิ์ที่เกี่ยวข้อง, รัน `installSmartSRRT()` สำหรับ **การติดตั้งใหม่ที่ได้รับอนุมัติ** จากนั้น Deploy เป็น Web App
