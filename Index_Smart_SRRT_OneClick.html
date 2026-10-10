@@ -280,7 +280,7 @@
   <div class="help" style="margin-top:12px">แสดงเฉพาะรายงานที่ลงทะเบียนใน ReportRegistry ตั้งแต่ G-17 เป็นต้นไป เอกสารเก่าที่ไม่มีทะเบียนจะไม่ถูกคาดเดาความเชื่อมโยง รายการนี้ไม่ใช่ระบบอนุมัติหรือระบบเวอร์ชันเอกสาร</div>
   <div class="actions">
     <button class="btn green" type="button" id="reportHistoryNewBtn" style="display:none" onclick="requestNewReportFromHistory()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานฉบับใหม่</button>
-    <button class="btn light" onclick="closeModal('reportHistoryModal')">ปิด</button>
+    <button class="btn light" type="button" id="reportHistoryCloseBtn" onclick="closeModal('reportHistoryModal')">ปิด</button>
   </div>
 </div></div>
 
@@ -460,7 +460,20 @@
       token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
-  async function doLogout(){++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;closeModal('reportNewConfirmModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');try{await gs('logout',token)}catch(e){}token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));await loadDashboard()}
+  async function doLogout(){
+    // G-33/R1: invalidate the local session synchronously at logout entry so no
+    // in-flight readiness, create, warning-continuation or recovery callback can
+    // still pass its session guard after the user chose logout. The previous
+    // token survives only inside the server-side logout RPC below.
+    const logoutToken=token;
+    ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
+    token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;
+    updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));
+    try{await gs('logout',logoutToken)}catch(e){}
+    // A newer login may have started while the logout RPC was in flight; never clobber it.
+    if(token)return;
+    await loadDashboard()
+  }
   async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
 
   function setupDashboardFilters(){
@@ -707,6 +720,7 @@
   let reportHistoryRequest = 0;
   let reportHistoryEventId = '';
   let reportNewConfirmSubmitting=false;
+  let reportNewConfirmReturnFocus=null;
   async function openEventReportHistoryByIndex(index){
     const event=allData[index];
     if(!currentUser||!roleCanRecord()||!event||!event.eventId){
@@ -768,11 +782,30 @@
       toast('ยังยืนยันประวัติรายงานไม่ได้ กรุณารีเฟรชข้อมูล');return;
     }
     el('reportNewConfirmSummary').textContent='ระบบจะสร้าง Google Doc และ ReportID ใหม่สำหรับเหตุการณ์นี้ โดยคงเอกสารและประวัติรายงานเดิมทั้งหมดไว้';
+    if(!el('reportNewConfirmModal').classList.contains('open')){
+      // G-33/R2: remember where keyboard focus came from so Back/Escape can
+      // return it to the history view; keep the first opener on re-open.
+      const opener=document.activeElement;
+      reportNewConfirmReturnFocus=opener&&typeof opener.focus==='function'?opener:null;
+    }
     openModal('reportNewConfirmModal');
     el('reportNewConfirmBackBtn').focus();
   }
+  function restoreNewReportConfirmFocus(){
+    // G-33/R2: Back/Escape returns the keyboard to the still-visible history
+    // view — never into a dismissed, hidden, disabled or logged-out one.
+    const opener=reportNewConfirmReturnFocus;
+    reportNewConfirmReturnFocus=null;
+    if(!currentUser||!token)return;
+    if(!el('reportHistoryModal').classList.contains('open'))return;
+    const usable=node=>node&&node.style&&node.style.display!=='none'&&!node.disabled&&typeof node.focus==='function'?node:null;
+    const target=usable(opener)||usable(el('reportHistoryNewBtn'))||usable(el('reportHistoryCloseBtn'));
+    if(target)target.focus();
+  }
   function cancelNewReportFromHistory(){
-    if(!reportNewConfirmSubmitting)closeModal('reportNewConfirmModal');
+    if(reportNewConfirmSubmitting)return;
+    closeModal('reportNewConfirmModal');
+    restoreNewReportConfirmFocus();
   }
   async function confirmNewReportFromHistory(){
     const eventId=reportHistoryEventId,session=token,button=el('reportHistoryNewBtn');
@@ -789,12 +822,17 @@
         throw new Error('ยังมีงานรายงานที่ต้องตรวจสอบสถานะก่อน');
       }
       closeModal('reportNewConfirmModal');
+      reportNewConfirmReturnFocus=null;
       closeModal('reportHistoryModal');
       await makeReport(eventId,button,true);
     }catch(e){if(token===session&&currentUser)toast(String(e.message||e))}
     finally{
-      reportNewConfirmSubmitting=false;
-      confirmButton.disabled=false;backButton.disabled=false;
+      // G-33/R1: the same session always reopens a usable dialog, but a stale
+      // callback from before logout must not reset a newer session's submit lock.
+      if(session===token){
+        reportNewConfirmSubmitting=false;
+        confirmButton.disabled=false;backButton.disabled=false;
+      }
     }
   }
 
@@ -1092,8 +1130,11 @@
         toast('ยังยืนยันทะเบียนรายงานไม่ได้ กรุณาตรวจสอบสถานะก่อนสร้าง: '+String(error.message||error));
       }
     }finally{
-      reportActionPreflightInFlight.delete(eventId);
-      refreshReportActionButtons();
+      // G-33/R1: a stale preflight must not drop the in-flight marker of a newer session.
+      if(session===token&&user===currentUser){
+        reportActionPreflightInFlight.delete(eventId);
+        refreshReportActionButtons();
+      }
     }
     if(canGenerate&&session===token&&user===currentUser&&version===reportSummaryRequest){
       await makeReport(eventId,btn);
@@ -1241,7 +1282,9 @@
       if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
     }catch(error){
       // A transient status-lookup failure is not proof that generation stopped.
-      if(activeReportJob&&activeReportJob.id===id){
+      // G-33/R1: a stale poll from an older session must not rewrite a newer
+      // session's task status even for the same server-side job id.
+      if(token===session&&activeReportJob&&activeReportJob.id===id){
         el('reportTaskStatus').textContent='ตรวจสอบสถานะไม่ได้ · งานอาจยังทำอยู่';
       }
     }finally{reportPollBusy=false}
@@ -1354,6 +1397,8 @@
     }
   }
   async function runReportJobClient(jobId,session){
+    // G-33/R1: never kick a run RPC once the session that queued it is gone.
+    if(token!==session||!currentUser)return;
     try{
       const state=await gs('runReportJob',session,jobId);
       if(token===session&&activeReportJob&&activeReportJob.id===jobId)paintReportTask(state);
@@ -1366,6 +1411,9 @@
     }
   }
   async function executeReport(eventId,btn){
+    // G-33/R1: report generation stops at its dispatch point the moment the
+    // local session is gone; logout invalidates token and user synchronously.
+    if(!currentUser||!token)return;
     if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown'){
       toast('ยังไม่สามารถยืนยันงานรายงานเดิมได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');return;
     }
@@ -1429,20 +1477,26 @@
       }
       pendingReportExplicitRegeneration=!!allowExistingReport;
       renderReportReadinessModal(readiness,eventId);
-    }catch(e){toast(e.message||e)}
+    }catch(e){if(session===token&&user===currentUser)toast(e.message||e)}
     finally{
-      reportReadinessInFlight.delete(eventId);
-      // executeReport may have restored the temporary "กำลังตรวจข้อมูล" label.
-      // The outer readiness action owns the original label and must always
-      // restore it, whether queued, cancelled, failed or terminal.
-      btn.disabled=false;
-      btn.innerHTML=old;
-      refreshReportActionButtons();
+      // G-33/R1: a readiness continuation that resolved during or after logout
+      // must not touch the UI or drop locks that now belong to a newer session.
+      if(session===token&&user===currentUser){
+        reportReadinessInFlight.delete(eventId);
+        // executeReport may have restored the temporary "กำลังตรวจข้อมูล" label.
+        // The outer readiness action owns the original label and must always
+        // restore it, whether queued, cancelled, failed or terminal.
+        btn.disabled=false;
+        btn.innerHTML=old;
+        refreshReportActionButtons();
+      }
     }
   }
   async function continueReportFromWarning(){
     const eventId=el('pendingReportEventId').value;
     if(!eventId){toast('ไม่พบ EventID');return}
+    // G-33/R1: a warning continuation left over from before logout must not dispatch.
+    if(!currentUser||!token)return;
     if(reportWarningContinueInFlight)return;
     if(reportGenerationInFlight.size > 0||reportUnknownNeedsVerification||
        activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
