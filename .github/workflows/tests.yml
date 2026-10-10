@@ -25,6 +25,10 @@ jobs:
           node-version: '24'
       - name: Verify deterministic One-Click build parity
         run: npm run build:check
+      - name: Build and verify native Apps Script multi-file package (offline)
+        run: |
+          npm run build:gas-multifile
+          npm run check:gas-multifile
       - name: Verify syntax, RPC and duplicate declarations
         run: npm run check:contracts
       - name: Verify offline P6 release readiness without deployment
