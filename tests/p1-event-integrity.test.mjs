@@ -195,6 +195,12 @@ test('updateRecord resolves by EventID and increments Revision', () => {
   const audits=[];
   ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
   ctx.getSheetByIdOrName_=()=>sheet;
+  // V8 introduces an active-MasterData validation. Supply a genuine empty
+  // MasterData fixture rather than bypassing validateEventMasterData_.
+  ctx.getSheet_=name=>{
+    assert.equal(name,ctx.CONFIG.SHEETS.MASTER);
+    return {getDataRange:()=>({getValues:()=>[['Type','Value','Label','SortOrder','Active']]})};
+  };
   ctx.writeAudit_=(...args)=>audits.push(args);
   ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
 
@@ -304,4 +310,34 @@ test('deleteRecord rejects a stale or missing Revision before voiding', () => {
   );
   assert.equal(sheet.rows[1][31],3);
   assert.equal(sheet.rows[1][32],'active');
+});
+
+test('P1 update cannot bypass active MasterData validation when V8 adds the guard',()=>{
+  const ctx=makeContext();
+  const id='88888888-8888-4888-8888-888888888888';
+  const r=makeRow();r[30]=id;r[31]=2;r[32]='active';
+  const sheet=new FakeSheet([Array(38).fill(''),r]);
+  const audits=[];
+  ctx.requireAuth_=()=>({email:'admin@example.test',role:'Admin'});
+  ctx.getSheetByIdOrName_=()=>sheet;
+  ctx.getSheet_=name=>{
+    assert.equal(name,ctx.CONFIG.SHEETS.MASTER);
+    return {getDataRange:()=>({getValues:()=>[
+      ['Type','Value','Label','SortOrder','Active'],
+      ['disease_group','กลุ่มที่เปิดใช้','ตัวอย่าง',1,true]
+    ]})};
+  };
+  ctx.writeAudit_=(...args)=>audits.push(args);
+  ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};
+  assert.throws(
+    ()=>ctx.updateRecord('token',id,{col5:'กลุ่มที่ไม่อนุญาต'},2),
+    /ไม่อยู่ใน MasterData ที่เปิดใช้งาน/
+  );
+  assert.equal(sheet.rows[1][31],2);
+  assert.equal(sheet.rows[1][4],'');
+  assert.equal(audits.length,0);
+  assert.match(ctx.updateRecord('token',id,{col5:'กลุ่มที่เปิดใช้'},2),/อัปเดต/);
+  assert.equal(sheet.rows[1][31],3);
+  assert.equal(sheet.rows[1][4],'กลุ่มที่เปิดใช้');
+  assert.equal(audits.length,1);
 });

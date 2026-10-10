@@ -33,16 +33,18 @@ test('raw Event RPC requires authentication and public RPC is aggregate-only', (
   assert.match(source, /function getPublicDashboardData\(filter\)/);
 
   const publicBlock = source.match(/function getPublicDashboardData[\s\S]*?(?=\nfunction )/)?.[0] ?? '';
-  assert.match(publicBlock, /aggregateEventRows_/);
+  assert.match(publicBlock, /buildDashboardAggregate_/);
   assert.doesNotMatch(publicBlock, /rowToObject_/);
   assert.doesNotMatch(publicBlock, /return\s+getFilteredEventRows_/);
 });
 
 test('browser chooses aggregate public dashboard and authenticated raw rows', () => {
-  assert.match(html, /dashboardSummary=await gs\('getPublicDashboardData',filter\)/);
-  assert.match(html, /allData=currentUser\?await gs\('getDashboardData',token,filter\):\[\]/);
-  assert.doesNotMatch(html, /exportClientExcel/);
-  assert.match(html, /authenticated-dashboard/);
+  const loader = html.match(/async function loadDashboard\(\)\{[\s\S]*?(?=\n  function resetFilter\()/)?.[0] ?? '';
+  assert.match(loader, /if\(currentUser\)\{/);
+  assert.match(loader, /allData=await gs\('getDashboardData',token,filter\)/);
+  assert.match(loader, /allData=\[\];\s*dashboardSummary=await gs\('getPublicDashboardData',filter\)/);
+  assert.match(html, /function exportClientExcel\(\)\{\s*if\(!currentUser\)/);
+  assert.match(html, /if\(!currentUser\)\{el\('eventBody'\)\.innerHTML='';/);
 });
 
 test('criteria matching is exact and does not count ไม่เข้าเกณฑ์', () => {
@@ -54,7 +56,7 @@ test('criteria matching is exact and does not count ไม่เข้าเก�
     {col17:'รอดำเนินการ', col26:'2026-10-04', col5:'B', col6:'โรค B', col19:'สูง', col29:'บ้าน 2', col2:'2569-10-04'}
   ];
 
-  const summary = ctx.aggregateEventRows_(rows);
+  const summary = ctx.buildDashboardAggregate_(rows);
   assert.equal(summary.kpi.events,4);
   assert.equal(summary.kpi.criteria,2);
   assert.equal(summary.kpi.investigated,1);
@@ -69,7 +71,7 @@ test('investigated KPI numerator is a subset of exact criteria rows', () => {
     {col17:'รอดำเนินการ',col26:'2569-10-01'},
     {col17:'เข้าเกณฑ์',col26:''}
   ];
-  const summary=ctx.aggregateEventRows_(rows);
+  const summary=ctx.buildDashboardAggregate_(rows);
   assert.equal(summary.kpi.criteria,1);
   assert.equal(summary.kpi.investigated,0);
   assert.equal(summary.kpi.investigationRate,0);
@@ -93,13 +95,13 @@ test('public aggregate contains counts/insight only, not raw Event fields or Eve
       recordStatus:'active'
     }
   ];
-  const summary=ctx.aggregateEventRows_(rows);
+  const summary=ctx.buildDashboardAggregate_(rows);
   const json=JSON.stringify(summary);
   assert.doesNotMatch(json,/รายละเอียดลับ/);
   assert.doesNotMatch(json,/user@example\.test/);
   assert.doesNotMatch(json,/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
   assert.equal(summary.kpi.events,1);
-  assert.equal(summary.insight.topDisease,'ไข้หวัดใหญ่');
+  assert.equal(summary.topDisease,'ไข้หวัดใหญ่');
 });
 
 test('aggregate chart payloads are map-shaped and deterministic', () => {
@@ -109,10 +111,10 @@ test('aggregate chart payloads are map-shaped and deterministic', () => {
     {col2:'2569-10-01',col5:'A',col6:'โรค A',col17:'เข้าเกณฑ์',col19:'ต่ำ',col29:'หมู่ 1'},
     {col2:'2569-10-01',col5:'A',col6:'โรค A',col17:'ไม่เข้าเกณฑ์',col19:'ต่ำ',col29:'หมู่ 1'}
   ];
-  const summary=ctx.aggregateEventRows_(rows);
-  assert.deepEqual(JSON.parse(JSON.stringify(summary.charts.byDiseaseGroup)),{B:1,A:2});
-  assert.deepEqual(JSON.parse(JSON.stringify(summary.charts.byRisk)),{'สูง':1,'ต่ำ':2});
-  assert.deepEqual(JSON.parse(JSON.stringify(summary.charts.byMonth)),{'2569-10':3});
-  assert.equal(summary.insight.topDisease,'โรค A');
-  assert.equal(summary.insight.topVillage,'หมู่ 1');
+  const summary=ctx.buildDashboardAggregate_(rows);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.byDiseaseGroup)),[['A',2],['B',1]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.byRisk)),[['ต่ำ',2],['สูง',1]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.byMonth)),[['2569-10',3]]);
+  assert.equal(summary.topDisease,'โรค A');
+  assert.equal(summary.topVillage,'บ้านหมู่ 1');
 });
