@@ -27,12 +27,12 @@
       <div id="captureArea">
         <div class="filter card">
           <b><i class="fa-solid fa-filter"></i> ตัวกรอง</b>
-          <input class="input" type="date" id="startDate" title="วันที่เริ่มต้น">
-          <input class="input" type="date" id="endDate" title="วันที่สิ้นสุด">
-          <select class="input" id="filterProvince" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select>
-          <select class="input" id="filterAmphoe" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select>
-          <select class="input" id="filterTambon" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select>
-          <select class="input" id="filterVillage"><option value="">ทุกหมู่บ้าน</option></select>
+          <input class="input" type="date" id="startDate" aria-label="วันที่เริ่มต้น" title="วันที่เริ่มต้น">
+          <input class="input" type="date" id="endDate" aria-label="วันที่สิ้นสุด" title="วันที่สิ้นสุด">
+          <select class="input" id="filterProvince" aria-label="จังหวัด" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select>
+          <select class="input" id="filterAmphoe" aria-label="อำเภอ" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select>
+          <select class="input" id="filterTambon" aria-label="ตำบล" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select>
+          <select class="input" id="filterVillage" aria-label="หมู่บ้าน"><option value="">ทุกหมู่บ้าน</option></select>
           <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
           <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
           <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
@@ -53,7 +53,7 @@
       </div>
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
-        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
+        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div class="srrt-action-group"><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><table aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
@@ -88,32 +88,32 @@
         <div class="settings-grid">
           <div class="setting-group">
             <h4>ข้อมูลเว็บไซต์</h4>
-            <div class="fg"><label>ชื่อระบบ</label><input id="set_APP_NAME"></div>
-            <div class="fg"><label>คำอธิบายระบบ</label><input id="set_APP_SUBTITLE"></div>
-            <div class="fg"><label>ชื่อหน่วยงาน</label><input id="set_ORG_NAME"></div>
-            <div class="fg"><label>ข้อมูลติดต่อ</label><input id="set_CONTACT_INFO"></div>
-            <div class="fg"><label>ข้อความประกาศ</label><input id="set_BANNER_TEXT"></div>
+            <div class="fg"><label for="set_APP_NAME">ชื่อระบบ</label><input id="set_APP_NAME"></div>
+            <div class="fg"><label for="set_APP_SUBTITLE">คำอธิบายระบบ</label><input id="set_APP_SUBTITLE"></div>
+            <div class="fg"><label for="set_ORG_NAME">ชื่อหน่วยงาน</label><input id="set_ORG_NAME"></div>
+            <div class="fg"><label for="set_CONTACT_INFO">ข้อมูลติดต่อ</label><input id="set_CONTACT_INFO"></div>
+            <div class="fg"><label for="set_BANNER_TEXT">ข้อความประกาศ</label><input id="set_BANNER_TEXT"></div>
             <div class="form-grid" style="grid-template-columns:1fr 1fr">
-              <div class="fg"><label>สีหลัก</label><input type="color" id="set_PRIMARY_COLOR"></div>
-              <div class="fg"><label>สีรอง</label><input type="color" id="set_SECONDARY_COLOR"></div>
+              <div class="fg"><label for="set_PRIMARY_COLOR">สีหลัก</label><input type="color" id="set_PRIMARY_COLOR"></div>
+              <div class="fg"><label for="set_SECONDARY_COLOR">สีรอง</label><input type="color" id="set_SECONDARY_COLOR"></div>
             </div>
             <div class="form-grid" style="grid-template-columns:1fr 1fr">
-              <div class="fg"><label>สถานะระบบ</label><select id="set_SYSTEM_STATUS"><option value="open">เปิดใช้งาน</option><option value="closed">ปิดบันทึกชั่วคราว</option></select></div>
-              <div class="fg"><label>เปิดสมัครผู้ใช้</label><select id="set_ALLOW_SELF_REGISTER"><option value="true">เปิด</option><option value="false">ปิด</option></select></div>
+              <div class="fg"><label for="set_SYSTEM_STATUS">สถานะระบบ</label><select id="set_SYSTEM_STATUS"><option value="open">เปิดใช้งาน</option><option value="closed">ปิดบันทึกชั่วคราว</option></select></div>
+              <div class="fg"><label for="set_ALLOW_SELF_REGISTER">เปิดสมัครผู้ใช้</label><select id="set_ALLOW_SELF_REGISTER"><option value="true">เปิด</option><option value="false">ปิด</option></select></div>
             </div>
           </div>
           <div class="setting-group">
             <h4>โลโก้ระบบ</h4>
             <div class="logo-preview"><img id="adminLogoPreview" src="" alt="preview"><div><b>อัปโหลดจากหน้าเว็บได้โดยตรง</b><div class="mini">PNG, JPG/JPEG หรือ WEBP ขนาดไม่เกิน 3 MB</div></div></div>
-            <input class="input" type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" style="width:100%">
+            <input class="input" type="file" id="logoFile" aria-label="เลือกไฟล์โลโก้" accept="image/png,image/jpeg,image/webp" style="width:100%">
             <button class="btn" style="width:100%;margin-top:10px" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
             <div id="logoProgress" class="progress">กำลังอัปโหลด...</div>
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
             <h4>AI Reporter</h4>
-            <div class="fg"><label>Gemini API Key</label><input type="password" id="set_GEMINI_API_KEY" autocomplete="off"></div>
-            <div class="fg"><label>Gemini Model</label><input id="set_GEMINI_MODEL" placeholder="AUTO"></div>
-            <div class="fg"><label>Template Google Doc ID</label><input id="set_TEMPLATE_DOC_ID"></div>
-            <div class="fg"><label>Report Folder ID</label><input id="set_REPORT_FOLDER_ID"></div>
+            <div class="fg"><label for="set_GEMINI_API_KEY">Gemini API Key</label><input type="password" id="set_GEMINI_API_KEY" autocomplete="off"></div>
+            <div class="fg"><label for="set_GEMINI_MODEL">Gemini Model</label><input id="set_GEMINI_MODEL" placeholder="AUTO"></div>
+            <div class="fg"><label for="set_TEMPLATE_DOC_ID">Template Google Doc ID</label><input id="set_TEMPLATE_DOC_ID"></div>
+            <div class="fg"><label for="set_REPORT_FOLDER_ID">Report Folder ID</label><input id="set_REPORT_FOLDER_ID"></div>
             <div class="mini">ระบบสร้าง Template และ Folder ให้แล้วอัตโนมัติ สามารถเปลี่ยนเป็นไฟล์/โฟลเดอร์อื่นได้จากหน้านี้</div>
           </div>
         </div>
@@ -126,23 +126,23 @@
         </div>
         <div class="help">จัดการได้เฉพาะ Type ที่ระบบรองรับ ค่า criteria และ verify_status เป็นค่าควบคุมของระบบ จึงไม่สามารถเพิ่ม Value ใหม่หรือปิดใช้งานได้</div>
         <div class="form-grid" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);margin:12px 0">
-          <div class="fg"><label>กรองตาม Type</label><select id="masterTypeFilter" onchange="renderMasterDataAdmin()"><option value="">ทั้งหมด</option></select></div>
-          <div class="fg"><label>ค้นหา</label><input id="masterSearch" placeholder="ค้นหา Value / Label" oninput="renderMasterDataAdmin()"></div>
+          <div class="fg"><label for="masterTypeFilter">กรองตาม Type</label><select id="masterTypeFilter" onchange="renderMasterDataAdmin()"><option value="">ทั้งหมด</option></select></div>
+          <div class="fg"><label for="masterSearch">ค้นหา</label><input id="masterSearch" placeholder="ค้นหา Value / Label" oninput="renderMasterDataAdmin()"></div>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>อ้างอิง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterDataBody"></tbody></table></div>
+        <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลตัวเลือกมาตรฐาน"><table aria-label="ตารางจัดการข้อมูลตัวเลือกมาตรฐาน"><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>อ้างอิง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterDataBody"></tbody></table></div>
       </div>
 
       <div class="card" style="margin-top:16px">
-        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" aria-label="เลือกไฟล์นำเข้าข้อมูลพื้นที่" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
         <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
-        <input class="input" id="areaSearch" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
-        <div class="table-wrap"><table><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
+        <input class="input" id="areaSearch" aria-label="ค้นหาข้อมูลพื้นที่ระดับหมู่บ้าน" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
+        <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><table aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
       </div>
 
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3>จัดการผู้ใช้งาน</h3><button class="btn" onclick="loadUsers()"><i class="fa-solid fa-rotate"></i>โหลดผู้ใช้</button></div>
-        <input class="input" id="userSearch" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
-        <div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
+        <input class="input" id="userSearch" aria-label="ค้นหาผู้ใช้งาน" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
+        <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><table aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
       </div>
 
       <div class="grid charts" style="margin-top:16px">
@@ -157,7 +157,7 @@
     </div>
   </div>
   <div id="auditRetentionStatus" class="help" style="margin-bottom:12px">กำลังโหลดนโยบาย Audit retention...</div>
-  <div class="table-wrap"><table><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+  <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางประวัติการดำเนินงาน"><table aria-label="ตารางประวัติการดำเนินงาน"><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div>
 </div>
       </div>
     </section>
