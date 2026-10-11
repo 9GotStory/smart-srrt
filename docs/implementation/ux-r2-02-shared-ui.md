@@ -63,4 +63,4 @@ The synthetic Node tests verify source contracts and functions in a stubbed DOM.
 | Library | `book-open.svg` |
 | Hamburger | `menu.svg` |
 
-All six paths are trusted static repository assets, copied into HTML at source authoring time, and marked `aria-hidden="true" focusable="false"`. Visible Thai navigation text supplies accessible names; there are no network requests for SVG at runtime.
+The original ISC/Feather attribution text is retained in [Lucide license notices](../licenses/lucide-LICENSE.txt).\n\nAll six paths are trusted static repository assets, copied into HTML at source authoring time, and marked `aria-hidden="true" focusable="false"`. Visible Thai navigation text supplies accessible names; there are no network requests for SVG at runtime.
