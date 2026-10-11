@@ -1,0 +1,212 @@
+# Smart SRRT — UX-R1 Screen Specifications & Acceptance Matrix
+
+> **Status:** PROPOSED / DESIGN ONLY. This is a map of all existing user-facing surfaces, not a declaration that the redesign has shipped.
+> **Verified source baseline:** `main@1c5e9e2bf0dbb04e6d82fff049d5b4a5123c74bf`, 11 October 2026.
+> **Existing screens:** five top-level `page-*` sections in `src/web/02-app-layout.html`; 13 modal containers in `src/web/03-modals.html`.
+> **Behavior authority:** `src/web/04-browser-app.html`, `docs/features.md`, current tests, server-side RBAC and G-33 UX rules.
+> See [Redesign plan](./ui-ux-redesign-plan.md) and [Design system](./design-system.md).
+
+## 1. Shared navigation and information architecture
+
+**Primary navigation (preserve stable page values/IDs unless a separately reviewed refactor updates all client tests):**
+
+| Page / selector | Public | Authorized user | Functional purpose |
+| --- | --- | --- | --- |
+| `dashboard` / `page-dashboard` | Aggregate only | Aggregate/KPIs plus authorized raw event table | Surveillance overview |
+| `records` / `page-records` | Hidden | Roles with record-create/edit entitlement only in current nav | Incident record management |
+| `reporter` / `page-reporter` | Hidden | Roles with reporting entitlement only in current nav | Preliminary AI investigation report |
+| `admin` / `page-admin` | Hidden | Manager/Super Admin | Admin operations |
+| `library` / `page-library` | Public content | Public content | Announcements/guidance |
+
+**Important:** `Staff` currently can view/export authenticated data but cannot create/edit/report; the redesigned UX must avoid promising Staff a write screen. Menu visibility never replaces server-side permissions.
+
+### Shared desktop wireframe (conceptual, not implemented)
+
+```text
++------------------------+---------------------------------------------------------+
+| Smart SRRT logo/title  | Page title + contextual description         user/actions|
+| Dashboard              +---------------------------------------------------------+
+| Events                 | Filter/search/action bar                                |
+| AI preliminary report  +------------------+------------------+-------------------+
+| Admin (authorized)     | Main content: KPIs, charts, data, or form               |
+| Library                |                                                     ... |
+| Session / sign out     | Inline loading/empty/error + contextual support         |
++------------------------+---------------------------------------------------------+
+```
+
+**Mobile:** top-bar title + accessible menu button, overlay drawer, one-column content, fixed-width data columns only inside scrollable table containers. Keep context and primary action visible, but do not use persistent bottom banners that obscure report dialog actions. Sidebar active page announces current location and `aria-current` or equivalent semantic cue. Skip-to-content target and visible keyboard focus.
+
+## 2. Dashboard (`page-dashboard`)
+
+**Goal:** understand event load, qualifying incidents, investigation completion and time/place distribution without violating public/private data boundaries.
+
+### Proposed layout
+1. Clear page title with time period and area context; one filter disclosure/toolbar for start/end date, province → district → subdistrict → village, Search and Reset.
+2. Four KPIs: `kpiTotal`, `kpiCriteria`, `kpiInvestigated`, `kpiRate`, plus concise denominator explanation for the rate.
+3. Smart Insight (`smartInsight`) with explicit no-data/error and summary language that does not over-interpret sparse groups.
+4. Charts: villages (`barChart`), monthly trend (`lineChart`), disease groups (`pieDisease`), risk (`pieRisk`). Show zero, absent and loading without phantom segments.
+5. Authenticated event list `eventDetailPanel` / `eventBody`: identity/date/area/status/owner/verification/criteria/risk/attachments/actions as permitted, with export controls. Anonymous users see `publicAggregateNotice` instead.
+6. Dashboard image export (`captureArea`) and Excel export should remain discoverable without altering permissions or revealing rows.
+
+**Proposed interaction:** Filter changes do not implicitly mix requests; explicit Search applies current selection, Reset restores default and reloads. While a request is pending, show a meaningful local state; late request from old filter, logout or session mode must not repaint data. Provide chart accessible alternative or small data table.
+
+**Acceptance:** same KPI values and definitions for identical synthetic input; 4 charts correspond to existing authorized/public arrays; public cannot see event table/exports/raw detail; Chart.js capture PNG shows actual charts; responsive layouts at defined widths; `getPublicDashboardData` still contains aggregate only.
+
+## 3. Record management (`page-records`)
+
+**Goal:** locate and update an epidemiological event with minimal ambiguity and no accidental data loss.
+
+**Layout:** search/filter block as allowed by available data; structured table (`recordBody`) showing receipt date, disease/event, village/area, lifecycle, owner, recorder, attachments and permitted actions; one visible `เพิ่มข้อมูลใหม่` action for authorized editors.
+
+**Entry/edit form** (`recordModal`, preserving `buildRecordForm`, `openRecordForm`, `saveRecord`): present grouped sections rather than one unstructured wall:
+- 1. **รับแจ้ง:** date received, notifier, surveillance type, event/disease and event type.
+- 2. **สถานที่และเวลา:** onset, province, district, subdistrict, village number/name/code, incident location.
+- 3. **รายละเอียดและตรวจสอบ:** narrative, verification status and method, criteria determination, risk and notified parties.
+- 4. **มาตรการและการสอบสวน:** investigation type, decision/date, actions and action date.
+- 5. **Review before save:** highlighted missing/contradictory fields, summary and permission-specific action.
+
+Groups are visual; do not change underlying `col2 ... col30` mapping or server schema. If a stepper is later approved, preserve edit review of all fields and do not silently drop values hidden between steps.
+
+**Acceptance:** EventID/Revision retained, required/optional semantics unchanged, explicit error if expectedRevision is stale, disabled while save request in flight, no duplicate submit, accessible labels and clear backend validation, warnings advisory unless the current server enforces otherwise. Existing close/reopen/void, owner assignment and attachments remain separate guarded actions.
+
+## 4. AI preliminary report (`page-reporter`)
+
+**Goal:** operator immediately knows whether a report exists and what the single safe next action is for each event.
+
+**Information order:** event identity + area/date → readiness summary → registered report state/history → exactly **one contextual primary report action** per row → persistent job status and available resulting document.
+
+**Suggested labels (must be reconciled with existing G-33 state machine and approved Thai copy):**
+
+| Effective state | UX presentation | Safety |
+| --- | --- | --- |
+| No registered report, permission granted | `สร้างรายงานด้วย AI` | Readiness first; warn about unsupported/missing facts |
+| Registered report exists | `เปิดรายงานล่าสุด` + history | Never create a new report from click on existing report |
+| Explicit new-report request | Separate `สร้างรายงานฉบับใหม่` flow after history and confirmation | Old registry record retained, new version appended |
+| Queued/running | `กำลังสร้างรายงาน...` with stage/status and option to minimize window | Duplicate start disabled; restoring view does not start a second job |
+| Cancelling/cancelled | Distinct labelled status and safely available actions | No false success; only server-confirmed cancelled |
+| Unknown/recovery pending | `ยังไม่ยืนยันผลการสร้างรายงาน` with recover/status path | Do not claim report succeeded or automatically retry as a new job |
+| Failed | Error + whether it is safe to retry; explicit operator action | No silent retry/extra Gemini calls |
+
+**Acceptance:** G-17 registry append-only, G-26 advisory readiness, G-27 report history, G-32 job states and one-active-job control, G-33 single primary action, safe URL verification, logout/session race tests and no duplicate AI invocation. All automated tests use mocked report jobs and synthetic events only. Human review of generated draft remains mandatory.
+
+## 5. Admin (`page-admin`)
+
+**Goal:** move from a very long page to navigable **in-page workspaces** while retaining the same server APIs and authority.
+
+| Proposed workspace | Existing UI anchors | UX requirements | Risk checks |
+| --- | --- | --- | --- |
+| Overview / install status | `akUsers`, `akActive`, `akAreas`, `akEvents`, `installStatus` | Compact KPI + current install state, separate repair command with confirmation | `repairSystem()` must never run on load/tab click |
+| Settings & branding | `set_*`, `logoFile`, `adminLogoPreview` | Organize identity, theme, system-open/closed and integration settings, save confirmation, file validation | Secrets masked; never put API key into logs, telemetry or unsafe preview |
+| Users & access | `userBody`, `userSearch`, `userModal` | Search/filter, clear roles/account state, status and reset-password affordances | Mutations Manager/Super Admin only |
+| MasterData | `masterTypeFilter`, `masterSearch`, `masterDataBody`, `masterDataModal` | Explain Type policy; protected criteria/verify statuses obvious | Preserve controlled enumerations and validation |
+| AreaMaster & import | `areaBody`, `areaSearch`, `areaImportFile`, `areaModal` | Hierarchy, CSV/XLSX preview/validation, no accidental duplicate import | Import is a mutation and requires explicit operator action |
+| Notices/content | `contentAdminList`, `contentModal` | Draft/published state, preview, category and safe link validation | Content visibility and URL handling retained |
+| Audit & retention | `auditBody`, `auditRetentionStatus`, `archiveAuditBtn` | Separate read-only audit exploration from archive control | Archive requires explicit confirmation; copy/verify guard unchanged |
+
+**Loading:** Current `loadAdmin()` loads several datasets via `Promise.allSettled`. Proposed tabs can lazily fetch on first view, provided the implementation preserves auth, error and stale-session guards and does **not** add hidden write operations. A pending Admin subrequest must not leak after logout.
+
+**Acceptance:** each admin subsection reachable from keyboard, correct role-gated visibility and server permission, no unintended writes on tab change, accurate loading/failure states, safe import/repair/archive confirmation.
+
+## 6. Notices, guidelines and manuals (`page-library`)
+
+**Goal:** make trusted reference material easy to scan/find.
+
+**Layout:** simple page heading → optional category and search tools using currently available content fields → publication cards for title/description/category/action. No invented approval workflow or external CMS. Empty state differentiates no published content and search with no results.
+
+**Acceptance:** public list shows only content currently allowed for anonymous users; external links have explicit purpose, safe URL handling and appropriate `target`/`rel`; long Thai titles wrap; no new exposure of draft content.
+
+## 7. Authentication, session and global feedback
+
+- **Login** (`loginModal`): visible labels, input types, password reveal if approved (must not affect storage), submitting/invalid/unavailable states, keyboard focus and role-relevant next route.
+- **Registration:** only if `ALLOW_SELF_REGISTER=true`; explain that new accounts are pending approval (not auto-authorized).
+- **Session banner/auth box:** distinguish signed-out/public vs signed-in, show allowed navigation; remove private cached UI immediately on logout, and ignore callbacks from earlier tokens.
+- **Closed-system banner:** current `closedBox` means recording/report actions closed while Dashboard remains readable; preserve precise communication.
+- **Status feedback:** accessible toast/status and action-specific inline error; failures must not be rendered as success.
+
+## 8. Existing modal inventory — all 13 surfaces
+
+The following IDs are observed in `src/web/03-modals.html`. All must be reviewed, even if the visible HTML is moved to shared components later.
+
+| ID | Purpose / critical UX requirement |
+| --- | --- |
+| `loginModal` | Login + optional registration, status and focus |
+| `recordModal` | Add/edit event; multi-section field navigation and unsaved changes |
+| `ownerModal` | Assign/reassign owner; only eligible active users and expectedRevision |
+| `attachmentModal` | Add/view/remove files, upload progress, document privacy |
+| `reportHistoryModal` | Read-only history, latest report and optional explicit new report path |
+| `reportNewConfirmModal` | High-friction deliberate new report confirmation; no silent recreation |
+| `reportResultModal` | Job progress, minimize/restore, cancel request, result link only after verified registration |
+| `reportCancelConfirmModal` | Explicit cancellation, no false terminal status |
+| `reportReadinessModal` | Advisory warnings and human decision to continue |
+| `userModal` | Role/status/user edits, password reset control |
+| `masterDataModal` | Policy-controlled enum fields, active flag and validation |
+| `areaModal` | Village/area fields, code and status |
+| `contentModal` | Announcement/guideline categories, description, URL, draft/published |
+
+**Common dialog acceptance:** semantic dialog title, keyboard entry, focus trap and return, Escape behavior defined per pending operation, nested dialog z-index test, no overlay scroll-through, no auto-mutating close, readable mobile height/scroll region and confirmation copy matched to server action. Include floating `reportTaskIndicator` as a **separate global control** (not a fourteenth modal).
+
+## 9. Proposed UI component/test coverage mapping
+
+| Shared component | Pages & surfaces using it | Contract test ideas |
+| --- | --- | --- |
+| `AppShell` / `NavItem` | All five pages, role-dependent nav | Active-state, mobile drawer, stale session, no unauthorized links |
+| `FilterBar` | Dashboard, records where data supports it, admin tables | Selected filters survive redraw, clear filters, late requests ignored |
+| `MetricCard` | Dashboard, admin overview | Number formatting, definition and denominators, zero vs no-data |
+| `ChartPanel` | Dashboard four widgets | Same series, empty handling, text/table alternative, PNG export |
+| `DataTable` / responsive record rows | Dashboard authorized view, records, reporter, admin | Role-specific actions, keyboard headers, overflow and mobile |
+| `FormField` / `FormSection` | Record, user, master, area, content, settings, login | Label, error, required info, locale, async lock, focus |
+| `StatusBadge` / `InlineNotice` | Risk, lifecycle, readiness, report job, closed system | Textual state, contrast and no color-only signal |
+| `ConfirmDialog` | New report, cancel, close/reopen/void, archive/repair | Confirmation cannot be bypassed and no duplicate write |
+| `Toast` / `AsyncState` | Entire application | Correct success/error/unknown, ARIA live, old-session callbacks dropped |
+
+**Names are design vocabulary, not implemented modules.** A shared template/renderer is permitted, but avoid inventing framework APIs that do not exist in the current repo.
+
+## 10. Core acceptance journey matrix (synthetic/offline first)
+
+| Case | Initial state | Expected outcome |
+| --- | --- | --- |
+| J01 Public first load | No token | Aggregate KPIs/charts and library only; no row details |
+| J02 Dashboard filter race | Change dates quickly | Only newest results shown; no stale chart or count |
+| J03 Dashboard export | Authorized synthetic chart dataset | Image includes Chart.js canvases; raw Excel export still permission-gated |
+| J04 Staff view | Staff token | No record/report/admin mutation affordances; allowed read/export semantics retained |
+| J05 Revision collision | Event changed by another user | Save rejected with actionable reload; no overwrite |
+| J06 Owner & attachment | Authorized event | Owner/attachment changes audited and permission-checked |
+| J07 Close/reopen/void | Confirmed mutation with reason | Lifecycle and revision maintained; cancel leaves state untouched |
+| J08 First report | No registered report | One primary start action, readiness review before actual start |
+| J09 Existing report | One or more registered reports | Primary action opens latest registered doc; never implicitly regenerates |
+| J10 Report job progress | Running/unknown/cancelled mock | Status distinctions clear; no duplicate start or false completion |
+| J11 Session logout mid-request | Pending authenticated response | Private rows/report metadata are not repainted |
+| J12 Admin high-risk action | Visit Overview/Audit | No installer/archive automatically invoked |
+| J13 Admin import | Invalid/duplicate synthetic area data | Validation visible and no accidental mass mutation |
+| J14 Responsive and keyboard | 360/390/768/1024/1440 px | Navigation, modal, form and chart are usable |
+| J15 Broken asset network | Font/icon/chart dependency blocked | Graceful failure/fallback; never silently misstate data or submission result |
+
+**Test scope:** Visual regression snapshots, programmatic keyboard/dialog contract tests, chart synthetic data checks, existing Node tests. A browser-verified GAS deployment against test/synthetic data is a separate permission gate; no automatic live Google Workspace, patient records or Gemini report runs.
+
+## 11. Copy glossary and interaction consistency
+
+Proposed Thai-first labels to standardize in design review, while preserving official domain status values:
+
+| Concept | Suggested visible label | Avoid |
+| --- | --- | --- |
+| Dashboard entry | `ภาพรวมสถานการณ์` | Unexplained "Analytics" |
+| Qualifying events | `เข้าเกณฑ์สอบสวนโรค` | "สอบสวนแล้ว" as a synonym |
+| Investigation completed marker | `ลงสอบสวนโรคแล้ว` | Claiming completion for events without date |
+| Report page heading | `สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI` | Treating drafts as automatically approved reports |
+| Report unknown | `ยังไม่สามารถยืนยันผลการสร้างรายงาน` | "สำเร็จ" on missing registry |
+| Report draft link | `เปิดร่างรายงาน` | "รับรองรายงาน" without human review |
+| Event status | `สถานะเหตุการณ์` | Mixing lifecycle and risk classification |
+| System closed | `ปิดการบันทึกและสร้างรายงานชั่วคราว` | "ระบบไม่พร้อมใช้งาน" when Dashboard is still readable |
+
+## 12. Design review checklist and boundaries
+
+- [ ] Confirm all 5 pages, 7 Admin workspaces, 13 modals and report indicator have mockups at desktop/tablet/mobile or a documented reuse pattern.
+- [ ] Confirm code-specific IDs, event flows and authorization match current `src/web/*` + `docs/features.md`.
+- [ ] Confirm no new fields, schemas, status values, backend calls or permissions are invented as already shipped.
+- [ ] Review interactive/success/error/empty/loading states with synthetic content and Thai text at real wrapping lengths.
+- [ ] Review privacy of public aggregates and small counts; do not promise anonymity that has not been assessed.
+- [ ] Review AI report primary action, warning, prior-report history, cancellation and unknown state against G-32/G-33 tests.
+- [ ] Record accessibility and mobile visual review results separately from unit/contract tests.
+- [ ] Obtain distinct-author Independent Review and Product Owner go/no-go for Phase P2 implementation, with separate merge/deploy gates.
+
+**Current release disposition:** This file is a **planning deliverable only**. No frontend changes, external dependencies, Apps Script deployment, migrated records or real AI calls have been made by preparing it.
