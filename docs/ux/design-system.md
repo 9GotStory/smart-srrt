@@ -132,7 +132,39 @@ Implementation requirements: Chart.js responsive container with explicit parent 
 - Do not let chart/insight copy imply patient-level inference from sparse public aggregates. Add privacy notes or deliberate suppression only through separately approved server change.
 - Admin dangerous buttons (`repairSystem`, `archiveAuditNow`, close/reopen/void, file removal) remain user-confirmed and are never triggered automatically by tab navigation.
 
-## 8. Accessibility and test references
+## 8. Clinical-surveillance usability and component hierarchy (UX recheck)
+
+**This system is an event-surveillance operations tool, not a generic analytics dashboard.** The design system must optimize data interpretation, field entry and safe follow-up before decoration.
+
+1. **Action hierarchy:** one prominent contextual primary action; other operations secondary. Dashboard KPI cards are descriptive **not clickable** unless a real permission-checked destination/filtered view exists. Public cards never deep-link to private event rows.
+2. **Operational work first:** for authenticated users put selected period/area, official KPI definitions, outstanding qualified investigation-date count and compact event worklist before optional charts. For anonymous users place aggregate trends and safety/context notices in the corresponding position, without raw-data leaks.
+3. **Categorical charts:** long Thai village and group names favor labelled bars with common numeric baseline over multiple doughnuts. A doughnut can stay for a few interpretable proportions but must have counts, meaningful denominator and an accessible data-table alternative. Do **not** change `byVillage/byMonth/byDiseaseGroup/byRisk` semantics or public API.
+4. **Precise status representation:** use separate tokens/badges for verification, criteria, investigation, risk, lifecycle and report job. **Do not derive a global green/red "completed" status** from one column. Typography must express status meaning even in monochrome.
+5. **Form information density:** grouped anchored **single form**, not forced wizard. Preserve source 26 field mappings, area dependency and old MasterData values on edit; label actual inputs, errors and help, without inventing required-field logic. Respect mobile keyboard and fixed footer overlap.
+6. **Report trust:** show "ร่างรายงาน ต้องตรวจทาน" near registered report links; a completed AI job is not a document approval. Unknown state is high visibility with explicit recovery; never auto-retry an expensive or mutating report command.
+7. **Authorised vs public states:** design two variants of the same Dashboard shell, plus Staff vs Manager operation variants. Anonymous experience has no event IDs, actor identity, attachment or raw export.
+8. **Figma review:** the initial 2 desktop editable drafts are **WIP and not visually verified**. They use Noto Sans Thai while source uses Prompt; **Prompt is the target font**. Mark all illustrative KPIs/events as sample content in every draft frame, then review Thai line wraps in 360/390 px widths before signoff.
+9. **Accessibility:** all `button` and `a` targets must be actual semantic controls; after redesign dialogs need focus containment and restoration, with special handling for a report job that continues when its dialog is minimized. Form labels must use corresponding `for`/`id` (source currently builds bare `label` text). Tab focus must not reach hidden/offscreen nav sections.
+10. **GAS-compatible interaction:** preserve stable DOM `id` and `data-*` hooks until a deliberately verified renderer migration; avoid wholesale replacement of all inline event handlers and charts in one change. Test `google.script.run` asynchronous state, IFRAME sandbox link targets, font and icon loading failures, and export while charts animate.
+
+### Updated visualization priority (semantic before decorative)
+
+| Surface | First screen / priority | Secondary content |
+| --- | --- | --- |
+| Public Dashboard | Period+area, 4 accurately defined KPIs, aggregate-only note and first trend | 3 remaining charts + published guidance |
+| Authenticated Dashboard | Period+area, KPIs, explicit follow-up count and event queue/action list | Further chart gallery + exports |
+| Event management | Search/filters, lifecycle/owner/last action, new event action, current relevant rows | Chart-free details, grouped record form |
+| AI Reporter | Report registry state, one contextual action, visible running/unknown status | History, readiness detail and draft notice |
+| Admin | Workspace nav, role scope and selected workspace heading | Only that workspace's cards/tables |
+| Library | Published guidance, clear links and readable content | Category/search within published subset |
+
+### Layout and loading verification
+
+Do not load/chart-render every hidden section eagerly merely to fill a template. Prefer lazy UI rendering compatible with existing `showPage` and `loadAdmin` patterns, but preserve server permission and session-race defenses when introducing lazy loads. The same KPI and report action should not appear twice with contradictory states across pages.
+
+In a synthetic browser check, compare **Dashboard anonymous and authenticated**, screen widths 360/390/768/1024/1440, long Thai case descriptions and empty tables, and report status `loading / ready / unknown / completed / cancelled`. Capture before/after UI snapshots only with mock data. Do not claim pass from CI alone.
+
+## 9. Accessibility and test references
 
 Target WCAG 2.2 AA for new components: keyboard-visible focus, 4.5:1 normal-text contrast, relevant 3:1 non-text contrast, semantic dialogs, meaningful icons, ARIA live updates and `prefers-reduced-motion` respect. Manual audit is necessary; do not label WCAG PASS based on static checks.
 
