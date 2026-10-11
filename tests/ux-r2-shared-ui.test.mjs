@@ -22,7 +22,7 @@ test('R2-02 keeps 5 page roles/handlers and mounts pinned inline Lucide SVGs wit
   const pages=[...nav.matchAll(/data-page="([^"]+)"/g)].map(x=>x[1]);
   assert.deepEqual(pages,['dashboard','records','reporter','admin','library']);
   assert.deepEqual([...nav.matchAll(/data-lucide="([^"]+)"/g)].map(x=>x[1]),['layout-dashboard','clipboard-list','file-text','settings','book-open']);
-  for(const page of pages)assert.match(nav,new RegExp('onclick="showPage\\(\\\''+page+'\\\',this\\)"'));
+  for(const page of pages)assert.ok(nav.includes(`onclick="showPage('${page}',this)"`),'missing handler for '+page);
   assert.match(nav,/data-page="dashboard" aria-current="page"/);
   assert.match(nav,/class="auth-only" data-page="reporter"/);
   assert.match(nav,/class="manager-only" data-page="admin"/);
