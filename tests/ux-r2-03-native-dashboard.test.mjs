@@ -41,7 +41,7 @@ test('R2-03 component has separately parsed and stable compact CSS/JS',()=>{
 test('R2-03 old One-Click files remain committed historical, not updated from native partial list',()=>{
   const legacy=fs.readFileSync(path.join(ROOT,'Index_Smart_SRRT_OneClick.html'),'utf8');
   const native=renderGasIndexOffline(buildGasMultiFileEntries()).toString('utf8');
-  assert.ok(native.includes('03a-dashboard-mobile'));
+  assert.ok(native.includes('srrtDashboardCards'));
   assert.ok(!legacy.includes('03a-dashboard-mobile'),'frozen One-Click should NOT acquire native UI');
   assert.ok(native.length>legacy.length);
   assert.ok(legacy.endsWith('</html>'));
