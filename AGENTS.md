@@ -40,6 +40,7 @@ src/web/
   01-styles.html
   02-app-layout.html
   03-modals.html
+  03a-dashboard-mobile.html
   04-browser-app.html
 tools/                Build, Release Preflight, Offline Migration Assessment
 tests/                Node Tests, Integration/Contract and Mocked Tests
@@ -53,7 +54,7 @@ Index_Smart_SRRT_OneClick.html
 
 **Native Modular Source is canonical (UX-R2-03 onwards)**. `tools/native-sources.mjs` ประกอบ Native 7+6 ไฟล์และ `Index.html` เป็น Apps Script 14 ไฟล์. One-Click Artifacts สองไฟล์ที่ Root เป็น Snapshot Legacy และห้ามเขียนทับ. Source Code ไม่ได้แยก Deploy เป็น GAS Files รายตัวโดยอัตโนมัติ. ผู้ดูแลใช้ Artifacts ไปวางใน `Code.gs` และ `Index` ตาม Deployment Guide
 
-**G-34 Native Multi-file Candidate:** `tools/build-apps-script-multifile.mjs` สร้าง `dist/apps-script/` แบบ Generated/Untracked ประกอบด้วย 7 `.gs` + 5 HTML Partials + `Index.html` (ใช้ `<?!= include(...) ?>`). ต้องตรวจ `npm run build:gas-multifile` → `npm run check:gas-multifile` และ Regression Tests ก่อนส่งให้ผู้ตรวจอิสระ. **ชุด 13 ไฟล์ไม่รวม `appsscript.json`**: ต้องรักษา Project Manifest, OAuth scopes, V8 runtime และสิทธิ์ของโปรเจกต์ Apps Script เดิมไว้ และห้ามนำ Candidate เข้าระบบใช้งานจริงหรือถอด One-Click เดิมออกจาก Apps Script ที่กำลังให้บริการเพียงเพราะสร้างไฟล์สำเร็จ; Deployment/Migration ยังคงใช้ Human Gate แยก. หากใช้ `clasp` ในอนาคต ต้องรักษา Config/Credentials นอก Git และระวังว่า `clasp push` เขียนทับไฟล์ทั้งหมดของ Project. ดู [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md).
+**G-34 Native Multi-file Candidate:** `tools/build-apps-script-multifile.mjs` สร้าง `dist/apps-script/` แบบ Generated/Untracked ประกอบด้วย 7 `.gs` + 6 HTML Partials + `Index.html` (ใช้ `<?!= include(...) ?>`). ต้องตรวจ `npm run build:gas-multifile` → `npm run check:gas-multifile` และ Regression Tests ก่อนส่งให้ผู้ตรวจอิสระ. **ชุด 14 ไฟล์ไม่รวม `appsscript.json`**: ต้องรักษา Project Manifest, OAuth scopes, V8 runtime และสิทธิ์ของโปรเจกต์ Apps Script เดิมไว้ และห้ามนำ Candidate เข้าระบบใช้งานจริงหรือถอด One-Click เดิมออกจาก Apps Script ที่กำลังให้บริการเพียงเพราะสร้างไฟล์สำเร็จ; Deployment/Migration ยังคงใช้ Human Gate แยก. หากใช้ `clasp` ในอนาคต ต้องรักษา Config/Credentials นอก Git และระวังว่า `clasp push` เขียนทับไฟล์ทั้งหมดของ Project. ดู [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md).
 
 ## 4. Engineering Invariants — DO NOT BREAK
 
@@ -110,17 +111,16 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. UX-R2-03 Native-only Dashboard Gate (11 October 2026)
+## 9. UX-R2-03B Native Release Inspection Gate (12 October 2026)
 
-Product Owner authorized R2-03 on `feat/ux-r2-03-native-dashboard-cards` from `main@80d111cc5517375067e289ef95b412a185ffbd65` with an **explicit new authority: do not modify or regenerate One-Click artifacts again.**
+Product Owner authorized Issue #86 following PR #85 merge at `main@60f6eca0300341879d227b25121cdb31af351439`, specifically to eliminate old One-Click dependency from release verification and regression tests.
 
-- **Canonical deployment source:** `tools/native-sources.mjs` ordered manifest + small `src/web/*.html` / `src/server/*.gs` modules. Native staged output is `dist/apps-script/` (ignored), now **7 .gs + 6 HTML partials + Index.html = 14 files**. No extra runtime API, Web App or credential.
-- **Frozen legacy references:** `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` and `Index_Smart_SRRT_OneClick.html` are historical, **MUST NOT BE MODIFIED**. No One-Click rebuild for new UI work. `tools/build-one-click.mjs` / old G-30/P6 parity tests may exist solely for historical regression until explicitly migrated off; do not treat them as the canonical native release gate.
-- **Authorized now:** add isolated `03a-dashboard-mobile.html` responsive/authorized event cards, decouple Native build/source parity from One-Click, update 14-file CLI/CI/guarded deploy-stage allowlist, native tests and related documentation.
-- **Protected:** Public receives only aggregate Dashboard and public PNG, never private raw Event rows. Server RBAC; `EventID`, expectedRevision, criteria/investigation (col17/col26), ReportRegistry, G-32/G-33 one-report-action controls and `google.script.run` contracts must remain untouched.
-- **Build rule:** `npm run build` builds UI CSS + stages Native; `npm run build:check` is read-only on the staged Native candidate. CI must stage before `--check`. Do not modify `appsscript.json`, remote source or deployment.
-- **Future gate:** Before modifying the original 5 HTML or 7 server modules in a later Native-only PR, complete migration of historical G-30/P6 One-Click equality assertions to canonical Native source checks; never update One-Click merely to make old tests pass.
-- **Review/release:** ChatGPT source/CI review is author-assisted, not independent; explicit Product Owner Merge approval and separate Production Apps Script Deployment approval remain mandatory. Existing Web App @10 untouched.
+- **Source of Truth:** `tools/native-sources.mjs`; **7 server `.gs` + 6 HTML partials + generated `Index.html` = 14 staged Native files**. `src/web/03a-dashboard-mobile.html` remains a separate small component; no existing production HTML/server logic is changed in this task.
+- **Current verification:** `tools/native-release-inspection.mjs` reads ordered Native source and `dist/apps-script/` byte-for-byte; `tests/g30-release-parity.test.mjs`, G-34, P6 offline preflight, and behavioral regression tests use the **current** Native release instead of a frozen One-Click image. Preserve installer/migration, auth/report/privacy, schema v7 and release-HOLD checks.
+- **Frozen historical references:** `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` / `Index_Smart_SRRT_OneClick.html` must remain **byte-identical** to Git blobs `e762751ff5da5813f7c64c104b67d545378f1608` / `ba4e0aeb5fdb0b1434320c351f32ed877a96d51d`. `tests/legacy-one-click-freeze.test.mjs` checks these as **archival integrity only**, never latest release source. `tools/build-one-click.mjs` is historical and must NOT be run with `--write`.
+- **Allowed work:** Tests, read-only Native inspector, P6 source/stage checks, documentation, CI when needed and analysis of guarded clasp staging. **Forbidden:** production `.gs`, Browser App, UI behavior, Data/Sheets schema, permissions, report generation, `clasp push`, installer, migration, Apps Script @10 deployment.
+- **Ordered pipeline:** `npm ci --ignore-scripts` → `check:ui-assets` → `build:gas-multifile` → `build:check` / `check:gas-multifile` → `check:contracts` → `release:preflight` → `npm test`. Source/Stage drift and missing files fail closed. All checks read-only except explicit output staging.
+- **Human gates:** ChatGPT Technical Review (author-assisted, not independent), explicit Product Owner **PR Merge** approval, and separate explicit **Apps Script Deployment** approval. CI PASS is not HTML Service/real-user/UAT approval.
 
 ## 10. Pre-change Checklist (must be followed)
 
