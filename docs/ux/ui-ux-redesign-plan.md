@@ -83,7 +83,18 @@ Performance budgets (bundle bytes, loading/fetch and interaction latency) must b
 4. **CSS migration strategy:** initially bridge legacy selectors, then remove obsolete legacy rules after screenshots + tests. Tailwind class detection must see template and dynamically built HTML classes; use explicit static classes or safe source declarations. No uncontrolled runtime class concatenation.
 5. **GAS packaging/quota:** inspect actual bundled output size, inlined assets, HTML Service response, file-size quotas, V8 evaluation order, CSP/iframe behavior and production-equivalent staging. A passing Node build does not prove deployability.
 
-## 8. Governance and immediate next actions
+## 8. Editable Figma wireframe working draft (not approved)
+
+A new [Smart SRRT UX-R1 Figma Design file](https://www.figma.com/design/5NXcUVOhKVw2SRVxxNmZ03) was created as a **non-production visual working draft** on 11 October 2026.
+
+- **Authored so far:** editable desktop Dashboard and Record/Event Management wireframes, with Thai labels, SVG-style navigation icons and explicitly synthetic sample values.
+- **Not yet authored:** AI preliminary report, Admin workspaces, Library, mobile/tablet variants, detailed 13-dialog designs.
+- **Visual QA status:** **NOT VERIFIED**. Figma MCP Starter-plan tool-call limit interrupted the screenshot/visual review; the two created frames must be opened and inspected in Figma before acceptance. Do not claim they meet visual/accessibility criteria.
+- **Typeface note:** product source currently loads Prompt; draft Figma nodes use Noto Sans Thai because the available Figma font list permitted it. Font choice requires visual approval before implementation.
+- **No implementation authority:** this Figma file is a design aid; it does not change current GAS source, @10 deployment, Chart.js/Tailwind dependencies, API calls, or migration data.
+- **Next:** resume screen authoring when Figma edit access is available, then perform a visual review and complete the design acceptance checklist.
+
+## 9. Governance and immediate next actions
 
 This PR is **documentation-only**. It proposes a UX baseline and does not authorize dependencies, code changes, GitHub merge, Apps Script push, schema migration or production UAT. Next: independent reviewer checks that the inventory matches the real source and that no feature is misrepresented; Product Owner accepts/adjusts design direction. Then open a separately approved implementation issue for P2 with a concrete build/asset ADR and dependency/version verification.
 
