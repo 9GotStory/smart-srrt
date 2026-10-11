@@ -1,3 +1,4 @@
+import {expectedNativeFiles} from '../tools/native-release-inspection.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -78,4 +79,16 @@ test('G-34 legacy backup gate accepts exactly one Code.gs or Thai รหัส.g
   assert.match(wrongCode.stderr,/expected doGet\/include entrypoints/);
   const oldRuntime=runFixture('รหัส.gs',expectedCode,{v8:false});
   assert.notEqual(oldRuntime.status,0,'Non-V8 runtime must fail');
+});
+
+test('G-34 future clasp stage allowlist matches canonical Native manifest (14 + preserved appsscript.json)',()=>{
+  const match=source.match(/const expected = \[([\s\S]*?)\]\.sort\(\);/);
+  assert.ok(match,'Guarded clasp stage allowlist missing');
+  const names=[...match[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
+  assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort(),
+    'Clasp allowlist drifted from approved canonical Native manifest');
+  assert.match(source,/REMOTE_MANIFEST_V8=PASS/);
+  assert.match(source,/fs\.readFileSync\(oldManifest\)/);
+  assert.match(source,/SMART_SRRT_CONFIRM_DEPLOY/);
+  assert.match(source,/"$CLASP" update-deployment "$DEPLOYMENT_ID"/);
 });
