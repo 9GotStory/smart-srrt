@@ -50,7 +50,7 @@
 
 **Proposed interaction:** Filter changes do not implicitly mix requests; explicit Search applies current selection, Reset restores default and reloads. While a request is pending, show a meaningful local state; late request from old filter, logout or session mode must not repaint data. Provide chart accessible alternative or small data table.
 
-**Acceptance:** same KPI values and definitions for identical synthetic input; 4 charts correspond to existing authorized/public arrays; public cannot see event table/exports/raw detail; Chart.js capture PNG shows actual charts; responsive layouts at defined widths; `getPublicDashboardData` still contains aggregate only.
+**Acceptance:** same KPI values and definitions for identical synthetic input; 4 charts correspond to existing authorized/public arrays; public cannot see raw event table/Excel data exports/private details; aggregate-only Dashboard PNG capture remains available; Chart.js capture PNG shows actual charts; responsive layouts at defined widths; `getPublicDashboardData` still contains aggregate only.
 
 ## 3. Record management (`page-records`)
 
@@ -167,7 +167,7 @@ The following IDs are observed in `src/web/03-modals.html`. All must be reviewed
 | --- | --- | --- |
 | J01 Public first load | No token | Aggregate KPIs/charts and library only; no row details |
 | J02 Dashboard filter race | Change dates quickly | Only newest results shown; no stale chart or count |
-| J03 Dashboard export | Authorized synthetic chart dataset | Image includes Chart.js canvases; raw Excel export still permission-gated |
+| J03 Dashboard export | Public synthetic aggregates and authorized event dataset, tested separately | Public aggregate PNG includes Chart.js canvases only; authenticated PNG also works; raw Excel export remains permission-gated |
 | J04 Staff view | Staff token | No record/report/admin mutation affordances; allowed read/export semantics retained |
 | J05 Revision collision | Event changed by another user | Save rejected with actionable reload; no overwrite |
 | J06 Owner & attachment | Authorized event | Owner/attachment changes audited and permission-checked |
@@ -213,10 +213,12 @@ These directions supersede any **generic chart-first** or **forced wizard-steppe
 [คำอธิบายนิยามตัวชี้วัด + ขอบเขต/ช่วงเวลาข้อมูล]
 [แนวโน้มรายเดือน] [จำนวนเหตุการณ์ตามพื้นที่]
 [กลุ่มโรค] [ระดับความเสี่ยง]   [ข้อควรระวังการตีความข้อมูลสรุป]
-[ประกาศ/แนวทาง]              (NO raw events/IDs/export)
+[บันทึกภาพ Dashboard สรุป]       (NO raw events/IDs/raw Excel export)
 ```
 
 **Authenticated officer dashboard:** same four KPI calculations and filters; add an **operational follow-up strip** derived only from authorized `allData` and current `col17/col26` semantics. Display explicit labels such as **เข้าเกณฑ์และยังไม่ระบุวันที่ลงสอบสวน** and scope of filter, rather than an invented algorithm that "predicts" risk. Put searchable/sortable (where implemented) event worklist **before the long chart gallery**. Use a compact top chart row, make remaining charts secondary and accessible by section anchors. Staff can view/export data but must never see create/edit/report action controls without permission.
+
+**Public PNG export note:** the existing public `captureDashboard()` control is inside `captureArea` and captures the aggregate KPI/insight/chart region, whereas raw Excel buttons are within `eventDetailPanel` and are hidden from anonymous users. Retain safe public capture of aggregate information; prevent capture/export of private incident rows.
 
 **Data caution:** a public `byVillage` bar is itself a potentially sparse aggregate. Do not infer patient identity or add tiny-group drill-down, direct links to individual event rows, or named patient-level alerts. Privacy/small-cell policy requires a separate backend decision, not a UI-only switch.
 
