@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LEGACY = path.join(ROOT, 'src/styles/legacy.css');
+const SHARED = path.join(ROOT, 'src/styles/shared-ui.css');
 const TAILWIND = path.join(ROOT, 'src/styles/tailwind.css');
 const TARGET = path.join(ROOT, 'src/web/01-styles.html');
 const BIN = path.join(ROOT, 'node_modules/.bin/tailwindcss');
@@ -27,7 +28,8 @@ export function buildUiStyles() {
     if (!css || !css.includes('tw')) throw new Error('Tailwind output is empty or lacks prefixed utilities');
     if (css.toLowerCase().includes('</style')) throw new Error('Unsafe HTML style terminator in CSS output');
     const legacy = fs.readFileSync(LEGACY, 'utf8');
-    return Buffer.from('<style>' + legacy + '\n/* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */\n' + css + '\n</style>', 'utf8');
+    const shared = fs.readFileSync(SHARED, 'utf8');
+    return Buffer.from('<style>' + legacy + '\n/* UX-R2 shared UI */\n' + shared + '\n/* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */\n' + css + '\n</style>', 'utf8');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
