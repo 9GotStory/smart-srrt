@@ -94,7 +94,40 @@ A new [Smart SRRT UX-R1 Figma Design file](https://www.figma.com/design/5NXcUVOh
 - **No implementation authority:** this Figma file is a design aid; it does not change current GAS source, @10 deployment, Chart.js/Tailwind dependencies, API calls, or migration data.
 - **Next:** resume screen authoring when Figma edit access is available, then perform a visual review and complete the design acceptance checklist.
 
-## 9. Governance and immediate next actions
+## 9. UX product-fit recheck — review findings / design corrections (11 October 2026)
+
+**Review type:** source-grounded author-assisted recheck, **not independent review and not visual Figma QA**. Inputs: existing `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-app.html`, `docs/features.md` and deployed G-34 structural evidence. The Starter-plan Figma MCP limit still prevents screenshot inspection of the two WIP desktop screens. Findings below describe design changes required **before approval of high-fidelity mockups**, not bugs asserted against untested deployed behavior.
+
+| ID / priority | Source-grounded product-fit issue | Design correction and test |
+| --- | --- | --- |
+| UX-F01 / **P0** | Dashboard draft devotes the opening region to charts and obscures what an authorized SRRT worker must act on. Existing `smartInsight` and authenticated `allData` offer summary and list data. | Above-the-fold: date/area context + **four contract KPIs**, one focused **รายการที่ควรติดตาม** / pending-work summary for authenticated users, then supporting trends. Any exact row shortcut must be role-gated; **public aggregates never reveal incident rows, IDs or small-cell drill-down**. Use existing derivable fields; do not invent an alert/notification engine. |
+| UX-F02 / **P0** | Public page shares visual dashboard with signed-in detailed records, and grouped village/disease results may expose small-cell inference. | Design **two explicit UI states** (anonymous aggregate and signed-in operational). No raw event table, person, owner, attachments, exact-event deep link or Excel raw export for anonymous users. Add clear data scope and selected period/area context; evaluate any new public breakdown against privacy review. |
+| UX-F03 / **P0** | Four different concepts may look like one badge: verification `col15`, investigation criterion `col17`, investigation entry/date `col24/col26`, risk `col19`, plus derived lifecycle. | Separate labelled columns/sections for **การตรวจสอบข้อเท็จจริง**, **เกณฑ์สอบสวน**, **การสอบสวน**, **ความเสี่ยง**, and **สถานะเหตุการณ์**. Do not label a recorded investigation date as a clinically approved/completed report. |
+| UX-F04 / **P0** | G-33 report action is more nuanced than a generic green `Generate` button; registry summary, unknown jobs and one active job matter. | Design a state-driven single primary action with history/readiness/unknown/cancel distinctions, confirmation before *new report*, no automatic retry/regeneration, and mandatory human review of draft documents. |
+| UX-F05 / **P1** | Current event form dynamically renders **25 business fields** in `fields[]` with location dependencies and revision semantics; design stepper pills could falsely imply enforced stages or lose filled values. | Prefer **one editable form with grouped/expandable sections and a persistent Save/Cancel footer**; visual step indicators are navigation only, never new server workflow. Review all field-column mappings, retain previous values, warn about unsaved changes, and show advisory inconsistency warnings without manufacturing validation requirements. |
+| UX-F06 / **P1** | Wide raw-event grids contain rich action cells and long Thai area/incident descriptions. | Desktop compact table + explicit row actions; tablet/mobile **summary row/card** with progressive details and scrollable table fallback. Keep action labels, relevant statuses and role restrictions visible. Avoid tiny icons as sole actions. |
+| UX-F07 / **P1** | Admin `loadAdmin()` currently requests multiple sources; setup/repair/archive/import are high-impact mutations. | Seven proposed Admin workspaces are **in-page navigation**, not new backend routes. Lazy read-only loads may be evaluated later, but no automatic repair, archive or import; distinct confirmations and post-action result displays required. |
+| UX-F08 / **P1** | Figma draft uses **Noto Sans Thai**, while deployed UI uses **Prompt**, and synthetic KPI/event values may be mistaken for operational evidence. | High-fidelity approval target should use **Prompt** if available, or document a font exception; every draft screen clearly marked **ข้อมูลตัวอย่าง / ไม่ใช่ข้อมูลจริง**. Values, notifications, person labels and map names must remain synthetic. Current screenshots/contrast/overflow **NOT VERIFIED**. |
+| UX-F09 / **P1** | Current charts show counts by village/month/disease group/risk; doughnuts can obscure comparisons of many categories. | Favor labelled horizontal bars for categorical comparisons; line for monthly trend; doughnut only where few categories and proportions are interpretable. Show `จำนวนเหตุการณ์`, denominators/period, empty-data state and accessible equivalent. Use **existing aggregates**, no invented rate or top-N denominator change. |
+| UX-F10 / **P1** | Source uses iframe HTML Service, a generated `Index`, Google Charts and html2canvas; changing all to Tailwind/Chart.js at once risks layout, build parity and image capture. | **Tailwind v4 compile-time** + pinned SVG/icon/Chart assets with deterministic build and source parity; migrate one chart at a time using synthetic fixtures; test canvas capture and iframe; preserve 13-GAS-file manifest. Official GAS iframe and Tailwind CLI rules apply. |
+| UX-F11 / **P2** | Thai administrative wording and dense menu/content terminology currently vary. | Consolidate Thai-first labels across navigation and 13 modals; prioritize plain-language causes, warnings, retry guidance; never conflate `void`, `closed`, `pending investigation`, `AI draft`, and approved/final documents. |
+
+### Revised high-fidelity design priority
+
+1. **Dashboard—operational overview:** two role-specific states, first-screen priority strip, meaningful chart alternatives and compact incident worklist. No invented backend alert engine.
+2. **Record experience:** search/list then same-page grouped form, data-quality and concurrent-edit response, owner/attachment/lifecycle flows.
+3. **AI report:** event state matrix with history, readiness, generation status, job uncertainty and draft-review notice.
+4. **Admin:** functional subsections and clear mutation safeguards; then public reference library and login/registration.
+5. **Responsive/multi-state review:** test desktop/tablet/mobile, long Thai strings, empty/error/loading, unauthorized views, keyboard and dialogs **before** claiming mockup ready.
+
+### Phase-1 exit decision
+
+- **Documentation completeness:** complete, with the above design corrections.
+- **Visual design signoff:** **HOLD**, because Figma screenshot review, all five screen mockups, mobile variants and all 13 modal patterns are not finished/validated.
+- **Implementation authority:** **HOLD** until Product Owner reviews revised direction, distinct-author reviewer checks this PR, and a separate Phase-2 engineering/architecture decision is approved.
+- **Runtime:** Apps Script @10 untouched. No server RPC, data schema, reports, users, or real health records accessed.
+
+## 10. Governance and immediate next actions
 
 This PR is **documentation-only**. It proposes a UX baseline and does not authorize dependencies, code changes, GitHub merge, Apps Script push, schema migration or production UAT. Next: independent reviewer checks that the inventory matches the real source and that no feature is misrepresented; Product Owner accepts/adjusts design direction. Then open a separately approved implementation issue for P2 with a concrete build/asset ADR and dependency/version verification.
 
