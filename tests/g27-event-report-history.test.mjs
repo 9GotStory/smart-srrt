@@ -1,10 +1,11 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
-const html=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
+const source=nativeServer;
+const html=nativeHtml;
 const EVENT='11111111-1111-4111-8111-111111111111';
 const OTHER='22222222-2222-4222-8222-222222222222';
 const ID_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -194,5 +195,5 @@ test('public dashboard response stays unrelated to private report registry',()=>
 test('inline browser JavaScript parses without executing the UI',()=>{
   const script=html.split('<script>')[1]?.split('</script>')[0]??'';
   assert.ok(script.trim().length>0);
-  assert.doesNotThrow(()=>new vm.Script(script,{filename:'Index_Smart_SRRT_OneClick.html'}));
+  assert.doesNotThrow(()=>new vm.Script(script,{filename:'04-browser-app.html'}));
 });
