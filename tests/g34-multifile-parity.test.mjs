@@ -32,7 +32,8 @@ test('G-34 server sources parse individually, without changing existing global R
     assert.doesNotThrow(() => new vm.Script(entries.get(name).toString('utf8'), {filename:name}));
   }
   const merged = Buffer.concat(GAS_SERVER_SOURCES.map(x => entries.get(path.basename(x))));
-  assert.deepEqual(merged,fs.readFileSync(path.join(ROOT,'Code_Smart_SRRT_OneClick_v2026.09.08.1.gs')));
+  assert.equal(merged.length,GAS_SERVER_SOURCES.reduce((n,p)=>n+fs.statSync(path.join(ROOT,p)).size,0));
+  assert.ok(!merged.includes(Buffer.from('ONE_CLICK_TARGETS')),'Native compiled server must not contain Legacy builder tokens');
   assert.match(merged.toString('utf8'),/function doGet\(e\)/);
   assert.match(merged.toString('utf8'),/HtmlService\.createTemplateFromFile\('Index'\)\.evaluate\(\)/);
   assert.match(merged.toString('utf8'),/function include\(filename\)/);
@@ -81,9 +82,7 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
       fs.mkdirSync(path.dirname(path.join(fixture,src)),{recursive:true});
       fs.copyFileSync(path.join(ROOT,src),path.join(fixture,src));
     }
-    for (const artifact of ['Code_Smart_SRRT_OneClick_v2026.09.08.1.gs','Index_Smart_SRRT_OneClick.html']) {
-      fs.copyFileSync(path.join(ROOT,artifact),path.join(fixture,artifact));
-    }
+    // Native fixture deliberately excludes both frozen One-Click files.
     const run=flag => spawnSync(process.execPath,
       [path.join(fixture,'tools','build-apps-script-multifile.mjs'),flag],
       {cwd:fixture,encoding:'utf8'});
