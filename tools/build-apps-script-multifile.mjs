@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
+export { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const GAS_OUTPUT_DIR = path.join(ROOT, 'dist', 'apps-script');
