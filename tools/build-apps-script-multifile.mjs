@@ -63,7 +63,7 @@ export function verifyGasMultiFileParity(entries = buildGasMultiFileEntries()) {
     }
   }
   const rendered = renderGasIndexOffline(entries);
-  if (!rendered.length || !rendered.toString('utf8').endsWith('</html>')) {
+  if (!rendered.length || !rendered.toString('utf8').trimEnd().endsWith('</html>')) {
     throw new Error('Native HTML expansion incomplete');
   }
   for (const source of GAS_HTML_SOURCES) {
