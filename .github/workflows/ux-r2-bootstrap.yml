@@ -2,6 +2,7 @@ name: UX-R2 bootstrap fixture generator (TEMPORARY)
 
 # Temporary, read-only, branch-scoped job. Remove before PR merge.
 # Rerun after fixture drift assertion correction.
+# Print raw base64 only for verified lockfile and synthetic CSS; removed before PR.
 on:
   push:
     branches:
@@ -28,13 +29,13 @@ jobs:
           npm run build:ui-assets
           node tools/build-one-click.mjs --write
           node --test tests/ux-r2-ui-assets.test.mjs
-          echo "LOCKFILE_GZIP_BASE64_BEGIN"
-          gzip -n -c package-lock.json | base64 -w0
+          echo "LOCKFILE_BASE64_BEGIN"
+          base64 -w0 package-lock.json
           echo
-          echo "LOCKFILE_GZIP_BASE64_END"
-          echo "STYLE_GZIP_BASE64_BEGIN"
-          gzip -n -c src/web/01-styles.html | base64 -w0
+          echo "LOCKFILE_BASE64_END"
+          echo "STYLE_BASE64_BEGIN"
+          base64 -w0 src/web/01-styles.html
           echo
-          echo "STYLE_GZIP_BASE64_END"
+          echo "STYLE_BASE64_END"
           echo "SOURCE_SHA256_SUMS"
           sha256sum package-lock.json src/web/01-styles.html Index_Smart_SRRT_OneClick.html
