@@ -110,15 +110,15 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. Current Documentation-Only Gate (11 Oct 2026)
+## 9. UX-R2-01 Frontend Build Foundation Gate (11 Oct 2026)
 
-สำหรับงานจัดทำเอกสารตาม Handoff ล่าสุด **Scope เฉพาะ `README.md`, `docs/features.md` และ `AGENTS.md`**:
-- ห้ามแก้ Application Source, Tests, Schema, Generated One-Click Artifacts หรือ Deployment
-- ห้ามรัน Migration, เรียก Gemini, เปิด Browser UAT หรือสร้าง Additional Test Tasks
-- อนุญาต Documentation Branch และ PR เพื่อ Product Owner ตรวจรับ; ไม่ Merge เอง
-- เป้าหมายคือเอกสารระบบที่คนอ่านเข้าใจและ AI Agent ใช้เริ่มงานต่อได้ โดยไม่อ้างสิ่งที่ยังไม่ตรวจว่า PASS
+Historical documentation-only gate is superseded **only for the explicitly PO-approved R2-01 implementation branch** `feat/ux-r2-01-build-foundation`.
 
-เมื่อมีคำสั่งรอบใหม่ ให้ยืนยัน Scope/Approval ใหม่แทนการถือว่า Gate นี้ขยายเอง
+- **Authorized:** add pinned Tailwind v4 build dependencies and lockfile; build-time prefixed CSS without Preflight; deterministic generated `src/web/01-styles.html`; regenerate tracked `Index_Smart_SRRT_OneClick.html`; update checks/tests/CI and directly related documentation.
+- **Not authorized:** changing server `.gs` logic, authentication, RPC, event schemas, public data contract, AI ReportRegistry or job state; Lucide/Chart.js migration, UI redesign of pages, install/migration/repair, `clasp push` or deployment @10.
+- **Invariant:** 7 `.gs` + 5 HTML source partials + `Index.html` = 13 GAS files, ordered include expansion, exact Byte Parity with One-Click. `dist/apps-script/` stays an ignored generated package.
+- **Process:** develop on branch, CI/exact SHA, ChatGPT author-assisted Technical Review (not independent) and Product Owner **separate merge approval**. Apps Script deployment requires another explicit approval even after merge.
+- **Test requirements:** `npm ci --ignore-scripts`, `npm run check:ui-assets`, `npm run build:check`, `npm run build:gas-multifile && npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test`.
 
 ## 10. Pre-change Checklist (must be followed)
 
@@ -130,7 +130,7 @@ Index_Smart_SRRT_OneClick.html
 - **Data boundaries:** v7 MainData 39 columns (OwnerUserID at 39), EventAttachments 13, ReportRegistry 11, AuditLogs 10, VisitLogs 3. Treat P3/P4 conceptual contracts as historical unless reconciled to live source.
 - **Report guardrails:** Permission `report`; G-26 warnings advisory; G-17 registry append-only; G-32 one active job per project and unknown-state recovery; G-33 one primary action per Event; Gemini report path pinned to `models/gemini-3.8-flash` and bounded 503 retry only. Human must review generated drafts.
 - **Security/privacy:** Never commit real event/health data, Drive/Sheet URLs or IDs copied from production, secrets, access tokens, private configuration, or raw logs. Public aggregate is *not* guaranteed anonymous when groups are small.
-- **Independent Review:** Author may run deterministic checks but must not self-certify an independent approval. Distinct reviewer examines exact SHA, docs links/paths, UI claims, code drift, CI and privacy; Product Owner alone authorizes Merge. Deploy/Migration remain separate approvals.
+- **Review authority:** For UX-R2, Product Owner selected ChatGPT Technical Review even when author-assisted; explicitly disclose that it is not an independent/distinct-author approval. Verify exact SHA, diff, docs, CI, parity and privacy. Product Owner alone authorizes Merge. Deploy/Migration remain separate approvals. Other projects may maintain stricter independent-review requirements.
 - **Context7:** Detect tools first. For version-dependent external APIs use Context7 library resolution and version-matched docs where available; fall back to official Google Apps Script/Sheets/Drive/Docs/Gemini or Node docs. External docs never supersede repository source, schema or approved baseline.
 
 **Documentation-only boundary of this PR:** Never modify `src/`, `tests/`, `tools/`, `.github/`, schema, generated One-Click files, existing `doc/features.md`, Workspace data, or production deployment. No Browser UAT or additional UAT task.
