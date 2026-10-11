@@ -83,6 +83,8 @@ npm run release:preflight
 
 รายละเอียด R2-01: [Frontend Build Foundation](docs/implementation/ux-r2-01-build-foundation.md) — Tailwind v4 ใช้แบบ Compile ล่วงหน้าและไม่มี Preflight ในระยะแรก; ยังไม่ใช่การปรับ UI ทุกหน้า, ยังไม่ติดตั้ง Lucide/Chart.js, และไม่เปลี่ยน Deployment Apps Script ที่ใช้งานอยู่.
 
+**UX-R2-02 Shared UI (Branch/PR Candidate):** [การปรับ Navigation และ Shared UI](docs/implementation/ux-r2-02-shared-ui.md) — เมนูเดิม 5 หน้า, Lucide SVG 6 รายการจาก Source ตรึง Commit, Focus/Keyboard, Mobile Drawer และตารางหลัก 3 ส่วน โดยยังไม่ Deploy Apps Script หรือแทนที่ UI ทั้งระบบ.
+
 ### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
 
 รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 5 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 13 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่าให้ผล HTML ตรงกับ One-Click เดิม

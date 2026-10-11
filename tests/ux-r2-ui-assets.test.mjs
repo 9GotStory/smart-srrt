@@ -18,6 +18,8 @@ test('UX-R2 CSS output is deterministic, prefixed and keeps legacy rules', () =>
   assert.equal((text.match(/<style>/g)||[]).length,1);
   assert.equal(text.split('</style>').length-1,1);
   assert.ok(text.includes('UX-R2 Tailwind CSS v4'));
+  assert.ok(text.includes('UX-R2 shared UI'));
+  assert.ok(text.includes('.srrt-skip-link'),'shared a11y styles missing');
   assert.ok(text.includes(':root{'),'must preserve legacy custom properties');
   assert.ok(text.includes('tw\\:flex') || text.includes('tw\\\\:flex') || text.includes('tw:flex'),'prefixed probe class missing');
   assert.deepEqual(a,fs.readFileSync(path.join(ROOT,target)),'tracked CSS differs from reproducible build');
@@ -26,7 +28,7 @@ test('UX-R2 CSS output is deterministic, prefixed and keeps legacy rules', () =>
 test('UX-R2 --check is read-only; generated CSS drift fails closed (synthetic checkout)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(),'smart-srrt-ui-build-test-'));
   try {
-    for (const f of ['tools/build-ui-assets.mjs','src/styles/legacy.css','src/styles/tailwind.css']) {
+    for (const f of ['tools/build-ui-assets.mjs','src/styles/legacy.css','src/styles/shared-ui.css','src/styles/tailwind.css']) {
       fs.mkdirSync(path.dirname(path.join(tmp,f)),{recursive:true});
       fs.copyFileSync(path.join(ROOT,f),path.join(tmp,f));
     }
