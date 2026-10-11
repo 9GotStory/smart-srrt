@@ -51,13 +51,13 @@ Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
 Index_Smart_SRRT_OneClick.html
 ```
 
-**Modular Source is canonical**. `tools/build-one-click.mjs` ประกอบ Source 7+5 ไฟล์ตามลำดับตายตัวให้กลายเป็น One-Click Artifacts สองไฟล์ที่อยู่ Root. Source Code ไม่ได้แยก Deploy เป็น GAS Files รายตัวโดยอัตโนมัติ. ผู้ดูแลใช้ Artifacts ไปวางใน `Code.gs` และ `Index` ตาม Deployment Guide
+**Native Modular Source is canonical (UX-R2-03 onwards)**. `tools/native-sources.mjs` ประกอบ Native 7+6 ไฟล์และ `Index.html` เป็น Apps Script 14 ไฟล์. One-Click Artifacts สองไฟล์ที่ Root เป็น Snapshot Legacy และห้ามเขียนทับ. Source Code ไม่ได้แยก Deploy เป็น GAS Files รายตัวโดยอัตโนมัติ. ผู้ดูแลใช้ Artifacts ไปวางใน `Code.gs` และ `Index` ตาม Deployment Guide
 
 **G-34 Native Multi-file Candidate:** `tools/build-apps-script-multifile.mjs` สร้าง `dist/apps-script/` แบบ Generated/Untracked ประกอบด้วย 7 `.gs` + 5 HTML Partials + `Index.html` (ใช้ `<?!= include(...) ?>`). ต้องตรวจ `npm run build:gas-multifile` → `npm run check:gas-multifile` และ Regression Tests ก่อนส่งให้ผู้ตรวจอิสระ. **ชุด 13 ไฟล์ไม่รวม `appsscript.json`**: ต้องรักษา Project Manifest, OAuth scopes, V8 runtime และสิทธิ์ของโปรเจกต์ Apps Script เดิมไว้ และห้ามนำ Candidate เข้าระบบใช้งานจริงหรือถอด One-Click เดิมออกจาก Apps Script ที่กำลังให้บริการเพียงเพราะสร้างไฟล์สำเร็จ; Deployment/Migration ยังคงใช้ Human Gate แยก. หากใช้ `clasp` ในอนาคต ต้องรักษา Config/Credentials นอก Git และระวังว่า `clasp push` เขียนทับไฟล์ทั้งหมดของ Project. ดู [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md).
 
 ## 4. Engineering Invariants — DO NOT BREAK
 
-1. **Source/Build Parity:** แก้ `src/server/` หรือ `src/web/` เป็นอันดับแรก แล้วประกอบและตรวจ byte-for-byte ด้วย `npm run build` / `npm run build:check` ตาม Scope งาน. ห้ามแก้ Generated Artifact อย่างเดียว. **ใน PR ที่เป็น Documentation Only ห้ามเปลี่ยน Artifacts ทั้งสอง**
+1. **Native Source/Build Parity (UX-R2-03+):** แก้ `src/server/` หรือ `src/web/` เป็นอันดับแรก จัดเรียง `tools/native-sources.mjs` อย่างชัดเจน และตรวจ `npm run build:gas-multifile` → `npm run build:check`/ `check:gas-multifile`. `npm run build` สร้าง Native Package ไม่สร้าง One-Click. **ห้ามปรับ One-Click Artifacts ทั้งสอง**; G-30/P6 legacy checks ต้องปรับสู่ Native ก่อนแก้โมดูลเดิมในเฟสอนาคต.
 2. **Public Privacy Boundary:** `getPublicDashboardData` ต้องคืน Aggregate เท่านั้น ห้ามส่ง Raw `MainData`, `EventID`, `Revision`, ชื่อผู้แจ้ง, รายละเอียดเหตุการณ์, Document URL, Token หรือข้อมูลระบุตัวบุคคลสู่ Anonymous Dashboard. Raw Event ต้องผ่าน `getDashboardData` และ `view` Permission
    **Privacy Review Caveat:** `buildDashboardAggregate_` ปัจจุบันไม่มี Small-cell Suppression; Aggregate ตามหมู่บ้าน/โรคอาจมีจำนวนต่ำและเสี่ยงต่อการอนุมานตัวบุคคล. ให้แยก **Data Minimization (ส่งเฉพาะ Aggregate)** จาก **การรับรอง Anonymity (ยังไม่ได้พิสูจน์)** และห้ามขยายการเปิดเผยข้อมูลโดยไม่มีการทบทวน Privacy.
 3. **Authentication/RBAC:** Server-side `requireAuth_` และ Permission Matrix เป็น Authority. อย่าเชื่อเพียงการซ่อนปุ่ม/เมนูใน Browser. Roles: `Super Admin`, `Manager`, `Admin`, `Staff`. UI Guards ไม่แทน Server Authorization
@@ -110,16 +110,17 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. UX-R2-02B Controls, Forms and Tables Gate (11 Oct 2026)
+## 9. UX-R2-03 Native-only Dashboard Gate (11 October 2026)
 
-The Product Owner explicitly authorized continuation after `main@6105edbf47e8cdc00aaf08020b83af650f9359e3` (PR #81, merged), limited to [Issue #82](https://github.com/9GotStory/smart-srrt/issues/82) on `feat/ux-r2-02b-controls-forms-tables`. Earlier R2-02 navigation authorizations remain historical, not general deployment permission.
+Product Owner authorized R2-03 on `feat/ux-r2-03-native-dashboard-cards` from `main@80d111cc5517375067e289ef95b412a185ffbd65` with an **explicit new authority: do not modify or regenerate One-Click artifacts again.**
 
-- **Authorized:** semantic label associations for existing dynamic 26-field form, Dashboard date/area filters, 15 existing Admin setting/master controls, login/registration/owner inputs; named/focusable Admin tables (seven total with R2-02's three); scoped shared CSS for buttons/forms/responsive tables and action groups; new synthetic Node tests, deterministic generated CSS and One-Click HTML, documentation and CI.
-- **Not authorized:** new user-facing pages, modifying server `.gs`, record/schema/required-field semantics, permissions, auth/logout, AI report readiness/G-32/G-33/ReportRegistry, Chart.js or wider Lucide migrations, all-modals redesign, real Google Workspace data, `clasp push` or Apps Script deployment @10.
-- **Source invariants:** all 26 existing `fields[]` definitions/input IDs, 7 existing table bodies, five `data-page` values, server RPC/event revision/session guards, public aggregate PNG and private Excel boundaries remain intact.
-- **Build:** Tailwind v4 `tw:` prefixes with Preflight off; 7 server `.gs` + 5 HTML partials + expanded `Index.html` = 13 staged files. The check phase must be read-only, One-Click parity exact, and temporary asset bootstrap workflow deleted before PR.
-- **Verification:** `npm ci --ignore-scripts`, `check:ui-assets`, `build:check`, G-34 build/check, `check:contracts`, `release:preflight`, full `npm test`, plus R2-02B form/table source tests.
-- **Approval boundaries:** ChatGPT Technical Review (author-assisted, not independent), separate Product Owner Merge approval, separate approval for any actual GAS/Web App deployment. This branch cannot deploy production.
+- **Canonical deployment source:** `tools/native-sources.mjs` ordered manifest + small `src/web/*.html` / `src/server/*.gs` modules. Native staged output is `dist/apps-script/` (ignored), now **7 .gs + 6 HTML partials + Index.html = 14 files**. No extra runtime API, Web App or credential.
+- **Frozen legacy references:** `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` and `Index_Smart_SRRT_OneClick.html` are historical, **MUST NOT BE MODIFIED**. No One-Click rebuild for new UI work. `tools/build-one-click.mjs` / old G-30/P6 parity tests may exist solely for historical regression until explicitly migrated off; do not treat them as the canonical native release gate.
+- **Authorized now:** add isolated `03a-dashboard-mobile.html` responsive/authorized event cards, decouple Native build/source parity from One-Click, update 14-file CLI/CI/guarded deploy-stage allowlist, native tests and related documentation.
+- **Protected:** Public receives only aggregate Dashboard and public PNG, never private raw Event rows. Server RBAC; `EventID`, expectedRevision, criteria/investigation (col17/col26), ReportRegistry, G-32/G-33 one-report-action controls and `google.script.run` contracts must remain untouched.
+- **Build rule:** `npm run build` builds UI CSS + stages Native; `npm run build:check` is read-only on the staged Native candidate. CI must stage before `--check`. Do not modify `appsscript.json`, remote source or deployment.
+- **Future gate:** Before modifying the original 5 HTML or 7 server modules in a later Native-only PR, complete migration of historical G-30/P6 One-Click equality assertions to canonical Native source checks; never update One-Click merely to make old tests pass.
+- **Review/release:** ChatGPT source/CI review is author-assisted, not independent; explicit Product Owner Merge approval and separate Production Apps Script Deployment approval remain mandatory. Existing Web App @10 untouched.
 
 ## 10. Pre-change Checklist (must be followed)
 
