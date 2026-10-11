@@ -60,6 +60,25 @@
 @media(max-width:980px){.sidebar:not(.open){visibility:hidden}.sidebar.open{visibility:visible}}
 @media(prefers-reduced-motion:reduce){.srrt-skip-link,.sidebar,.nav button{transition:none}}
 
+/* UX-R2-02B: shared form/control and responsive data-table treatments, no reset. */
+.srrt-field-label{display:block;font-size:13px;font-weight:650;color:#115e59;margin:7px 0 5px}
+.btn{min-height:44px;line-height:1.4;max-width:100%;white-space:normal}
+.btn:hover:not(:disabled){filter:brightness(.96)}
+.btn:disabled{cursor:not-allowed}
+.fg input,.fg select,.fg textarea,.input{min-width:0;max-width:100%}
+.fg input,.fg select,.input{min-height:44px}
+.form-grid>.fg,.settings-grid>*,.card,.panel-head{min-width:0}
+.panel-head h3{overflow-wrap:anywhere}
+.srrt-action-group{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.table-wrap[role="region"]{width:100%;max-width:100%;overscroll-behavior-x:contain;scrollbar-color:#94a3b8 #e2e8f0}
+.table-wrap[role="region"]:focus-visible{box-shadow:0 0 0 3px rgba(14,165,233,.18)}
+@media(max-width:560px){
+  .srrt-action-group{width:100%;justify-content:stretch}
+  .srrt-action-group>.btn{flex:1 1 150px}
+  .panel-head{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){.btn:hover:not(:disabled){transition:none}}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}
