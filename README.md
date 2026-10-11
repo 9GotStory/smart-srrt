@@ -1,5 +1,7 @@
 # Smart SRRT
 
+> **สำคัญ — UX-R2-03 (11 ต.ค. 2569):** ตั้งแต่ R2-03 ให้พัฒนา/Build/ตรวจรับผ่าน **Native Multi-file** ตาม [Source Manifest](tools/native-sources.mjs) เท่านั้น (7 .gs + 6 HTML partials + Index.html = **14 ไฟล์**). **ห้ามแก้หรือ Generate One-Click สองไฟล์เดิมอีก**; เป็นเพียง Legacy Snapshot ของระบบที่เคยใช้. การอ้างอิง One-Click/G-34 จำนวน 13 ไฟล์ในหัวข้อประวัติด้านล่างเป็นข้อมูลก่อน R2-03 และไม่ใช่คำสั่ง Build ปัจจุบัน. ดู [คู่มือ R2-03](docs/implementation/ux-r2-03-native-dashboard-mobile.md). ไม่อนุญาต Deploy @10 โดยอัตโนมัติ.
+
 **ระบบสนับสนุนการเฝ้าระวังเหตุการณ์ทางระบาดวิทยาและการสร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI**
 
 Smart SRRT เป็น Web App สำหรับหน่วยงานสาธารณสุขระดับพื้นที่ ใช้รับแจ้งและติดตามเหตุการณ์ ประเมินข้อมูลเพื่อการเฝ้าระวัง จัดการหลักฐานประกอบ แสดงภาพรวมเชิงสถิติ และช่วยจัดทำ **ร่าง** รายงานสอบสวนโรคเบื้องต้นใน Google Docs ด้วย Gemini API
@@ -72,8 +74,9 @@ README_ติดตั้ง_Smart_SRRT_OneClick.txt
 npm ci --ignore-scripts --no-audit --no-fund # ติดตั้ง Dependencies จาก package-lock.json
 npm run check:ui-assets # ตรวจ Tailwind CSS ที่ Compile ไว้แบบ Read-only
 npm run build:ui-assets # เขียน CSS Generated เฉพาะเมื่อเปลี่ยน Source CSS โดยเจตนา
-npm run build:check      # ตรวจ byte-for-byte Source / One-Click parity โดยไม่เขียนไฟล์
-npm run build            # สร้าง One-Click Artifacts จาก Modular Source
+npm run build:gas-multifile # สร้าง Native Candidate 14 ไฟล์ใน dist/apps-script/
+npm run build:check      # ตรวจ byte-for-byte Native Stage และ CSS โดยไม่แก้ One-Click
+npm run build            # สร้าง CSS และ Native Multi-file Candidate เท่านั้น (ไม่แตะ One-Click)
 npm run check:contracts  # ตรวจ G-30 contract
 npm test                 # Node test suite
 npm run release:preflight
@@ -92,7 +95,7 @@ npm run release:preflight
 รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 5 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 13 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่าให้ผล HTML ตรงกับ One-Click เดิม
 
 ```bash
-npm run build:gas-multifile   # สร้างไฟล์ 13 ไฟล์ใน dist/apps-script/
+npm run build:gas-multifile   # สร้าง Native 14 ไฟล์ใน dist/apps-script/
 npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร้างแล้วและความตรงกับ Source (ไม่เขียนไฟล์)
 ```
 
