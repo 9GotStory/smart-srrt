@@ -1,14 +1,14 @@
 <div class="modal" id="loginModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</div>
-  <input class="input" id="loginEmail" placeholder="Email" style="width:100%;margin-bottom:10px">
-  <input class="input" id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:10px">
+  <label class="srrt-field-label" for="loginEmail">อีเมลเข้าสู่ระบบ</label>\n  <input class="input" id="loginEmail" placeholder="Email" style="width:100%;margin-bottom:10px">
+  <label class="srrt-field-label" for="loginPassword">รหัสผ่าน</label>\n  <input class="input" id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:10px">
   <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button>
   <button class="btn light" style="width:100%;margin-top:8px" onclick="closeModal('loginModal')">ปิด</button>
   <hr><b>สมัครผู้ใช้ใหม่</b>
-  <input class="input" id="regName" placeholder="ชื่อ-สกุล" style="width:100%;margin:8px 0">
-  <input class="input" id="regEmail" placeholder="Email" style="width:100%;margin-bottom:8px">
-  <input class="input" id="regPass" type="password" placeholder="Password อย่างน้อย 4 ตัว" style="width:100%;margin-bottom:8px">
-  <input class="input" id="regOrg" placeholder="หน่วยงาน" style="width:100%;margin-bottom:8px">
+  <label class="srrt-field-label" for="regName">ชื่อและนามสกุลผู้สมัคร</label>\n  <input class="input" id="regName" placeholder="ชื่อ-สกุล" style="width:100%;margin:8px 0">
+  <label class="srrt-field-label" for="regEmail">อีเมลผู้สมัคร</label>\n  <input class="input" id="regEmail" placeholder="Email" style="width:100%;margin-bottom:8px">
+  <label class="srrt-field-label" for="regPass">รหัสผ่านที่ใช้สมัคร</label>\n  <input class="input" id="regPass" type="password" placeholder="Password อย่างน้อย 4 ตัว" style="width:100%;margin-bottom:8px">
+  <label class="srrt-field-label" for="regOrg">หน่วยงานผู้สมัคร</label>\n  <input class="input" id="regOrg" placeholder="หน่วยงาน" style="width:100%;margin-bottom:8px">
   <button class="btn secondary" style="width:100%" onclick="register()">สมัครใช้งาน</button>
 </div></div>
 
@@ -17,7 +17,7 @@
 <div class="modal" id="ownerModal"><div class="modal-box modal-sm">
   <div class="modal-title"><i class="fa-solid fa-user-tag"></i> ผู้รับผิดชอบเหตุการณ์</div>
   <input type="hidden" id="ownerEventId"><input type="hidden" id="ownerRevision">
-  <label>ผู้รับผิดชอบหลัก</label>
+  <label class="srrt-field-label" for="ownerUserId">ผู้รับผิดชอบหลัก</label>
   <select class="input" id="ownerUserId" style="width:100%;margin-top:6px"></select>
   <div class="mini" style="margin-top:8px">เลือกผู้ใช้ที่ Active และมีสิทธิ์แก้ไขเหตุการณ์ หรือเลือก “ยังไม่กำหนด” เพื่อเคลียร์ผู้รับผิดชอบ</div>
   <div class="actions"><button class="btn light" onclick="closeModal('ownerModal')">ปิด</button><button class="btn green" id="saveOwnerBtn" onclick="saveEventOwner()">บันทึกผู้รับผิดชอบ</button></div>
