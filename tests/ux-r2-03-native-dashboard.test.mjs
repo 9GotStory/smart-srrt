@@ -21,7 +21,7 @@ test('R2-03 native source is canonical, One-Click is frozen and not an active bu
   assert.match(pkg.scripts.build,/build:gas-multifile/);
   assert.doesNotMatch(pkg.scripts.build,/one.click|OneClick|build-one-click/i);
   assert.doesNotMatch(pkg.scripts['build:check'],/one.click|build-one-click/i);
-  assert.doesNotMatch(fs.readFileSync(path.join(ROOT,'tools/build-apps-script-multifile.mjs'),'utf8'),/ONE_CLICK_TARGETS|from ['\"]\\.\\/build-one-click/);
+  assert.ok(!fs.readFileSync(path.join(ROOT,'tools/build-apps-script-multifile.mjs'),'utf8').includes('ONE_CLICK_TARGETS'));
   assert.doesNotMatch(manifest,/ONE_CLICK_TARGETS|build-one-click/);
 });
 
