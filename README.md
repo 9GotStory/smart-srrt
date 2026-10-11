@@ -1,5 +1,7 @@
 # Smart SRRT
 
+> **UX-R2-03B (12 ต.ค. 2569):** การตรวจ Release/Regression ปัจจุบันใช้ **Native Source 14 ไฟล์** ผ่าน `tools/native-release-inspection.mjs`, G-30/G-34 และ P6 Native Offline Preflight. `npm run release:preflight` ต้องมี `dist/apps-script/` ที่ Stage แล้วและทำงานแบบ Read-only โดย Release Decision ยังเป็น **HOLD**. One-Click สองไฟล์เป็นเพียงหลักฐานเก่า มี Test ตรวจ Git Blob ที่ตรึงไว้เท่านั้น ไม่ใช่ Current Release. ดู [คู่มือ R2-03B](docs/implementation/ux-r2-03b-native-release-tests.md).
+
 > **สำคัญ — UX-R2-03 (11 ต.ค. 2569):** ตั้งแต่ R2-03 ให้พัฒนา/Build/ตรวจรับผ่าน **Native Multi-file** ตาม [Source Manifest](tools/native-sources.mjs) เท่านั้น (7 .gs + 6 HTML partials + Index.html = **14 ไฟล์**). **ห้ามแก้หรือ Generate One-Click สองไฟล์เดิมอีก**; เป็นเพียง Legacy Snapshot ของระบบที่เคยใช้. การอ้างอิง One-Click/G-34 จำนวน 13 ไฟล์ในหัวข้อประวัติด้านล่างเป็นข้อมูลก่อน R2-03 และไม่ใช่คำสั่ง Build ปัจจุบัน. ดู [คู่มือ R2-03](docs/implementation/ux-r2-03-native-dashboard-mobile.md). ไม่อนุญาต Deploy @10 โดยอัตโนมัติ.
 
 **ระบบสนับสนุนการเฝ้าระวังเหตุการณ์ทางระบาดวิทยาและการสร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI**
@@ -47,7 +49,7 @@ Smart SRRT เป็น Web App สำหรับหน่วยงานสา
 | Repository / CI | GitHub / GitHub Actions |
 | การเผยแพร่ | Google Apps Script Web App |
 
-หลักการ: **Modular Source, Multi-file Apps Script Candidate, One-Click Legacy Compatibility** — พัฒนาในไฟล์แยกส่วนที่ `src/server/` และ `src/web/` โดยกำลังเปลี่ยนรูปแบบการเผยแพร่ที่ต้องการเป็น Native Multi-file จำนวน 13 Source/HTML Files. ในระหว่างรอตรวจรับและ Cutover ยังคง One-Click Artifacts เดิมไว้สำหรับการใช้งานที่ผ่านการตรวจและการย้อนกลับ; ยังไม่ถือว่ารูปแบบ Multi-file ถูก Deploy แล้ว
+หลักการ: **Modular Source, Multi-file Apps Script Candidate, One-Click Legacy Compatibility** — พัฒนาในไฟล์แยกส่วนที่ `src/server/` และ `src/web/` โดยกำลังเปลี่ยนรูปแบบการเผยแพร่ที่ต้องการเป็น Native Multi-file จำนวน 14 Source/HTML Files. ในระหว่างรอตรวจรับและ Cutover ยังคง One-Click Artifacts เดิมไว้สำหรับการใช้งานที่ผ่านการตรวจและการย้อนกลับ; ยังไม่ถือว่ารูปแบบ Multi-file ถูก Deploy แล้ว
 
 ### โครงสร้าง Repository ปัจจุบัน
 
@@ -66,7 +68,7 @@ Index_Smart_SRRT_OneClick.html
 README_ติดตั้ง_Smart_SRRT_OneClick.txt
 ```
 
-ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
+ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ไฟล์นี้เป็น Snapshot เก่า ห้าม Generate/แก้ไขใหม่**; งานพัฒนาต่อให้แก้ `src/server/` หรือ `src/web/` และ Build Native เท่านั้น
 
 สำหรับผู้พัฒนา (ตั้งแต่ UX-R2-01 เมื่อ PR ได้รับอนุมัติและ Merge):
 
@@ -92,7 +94,7 @@ npm run release:preflight
 
 ### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
 
-รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 5 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 13 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่าให้ผล HTML ตรงกับ One-Click เดิม
+รูปแบบที่ต้องการสำหรับการใช้งาน Apps Script ในอนาคตคือ **Script 7 ไฟล์ + HTML Partials 6 ไฟล์ + `Index.html` สำหรับประกอบหน้า** (รวม 14 ไฟล์) ซึ่งผู้พัฒนาจะจัดการโค้ดแต่ละส่วนใน Apps Script ได้โดยไม่ต้องวาง One-Click ขนาดใหญ่ การประกอบ `Index` ใช้ `<?!= include('...') ?>` กับ HTML Partials ที่มาจาก GitHub เท่านั้น และมีการตรวจสอบ Offline ว่า Native Stage ตรงกับ Source ปัจจุบัน
 
 ```bash
 npm run build:gas-multifile   # สร้าง Native 14 ไฟล์ใน dist/apps-script/
@@ -107,7 +109,7 @@ npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร
 
 **รูปแบบติดตั้งที่ผ่านการรับรองเดิม (One-Click):** สำหรับการติดตั้งใหม่ในขอบเขต Legacy ให้ปฏิบัติตาม [คู่มือติดตั้งระดับอำเภอ](คู่มือติดตั้ง_Smart_SRRT_ระดับอำเภอ_v2026.09.08.1.txt) และ [One-Click Compatibility Contract](docs/deployment/one-click-compatibility-contract.md) โดยเตรียม Google Sheet และ Apps Script ที่ผูกกับ Sheet, วาง Server Artifact ลง `Code.gs` และ HTML Artifact ในไฟล์ `Index`, แล้วดำเนินการ Installer/Deployment **เมื่อมีการอนุมัติการติดตั้งแยกต่างหาก** เท่านั้น
 
-**รูปแบบเป้าหมาย (G-34 Multi-file):** เมื่อผ่าน Review/Approval และการตรวจบน Apps Script แล้ว ให้ใช้ไฟล์ 13 ไฟล์จาก `dist/apps-script/` ตาม [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md) และ **คงค่า `appsscript.json`/OAuth Scopes ของโปรเจกต์ปลายทาง** โดยไม่วาง One-Click ซ้ำในโปรเจกต์เดียวกัน; Build/CI PASS เพียงอย่างเดียวยังไม่อนุญาตให้ Cutover/Deploy
+**รูปแบบเป้าหมาย (G-34 Multi-file):** เมื่อผ่าน Review/Approval และการตรวจบน Apps Script แล้ว ให้ใช้ไฟล์ 14 ไฟล์จาก `dist/apps-script/` ตาม [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md) และ **คงค่า `appsscript.json`/OAuth Scopes ของโปรเจกต์ปลายทาง** โดยไม่วาง One-Click ซ้ำในโปรเจกต์เดียวกัน; Build/CI PASS เพียงอย่างเดียวยังไม่อนุญาตให้ Cutover/Deploy
 
 **สำคัญสำหรับระบบที่มีข้อมูลอยู่แล้ว:** อย่าตีความว่าการแทนที่โค้ดและรัน Installer เป็นการ Migration จากทุกเวอร์ชันได้โดยอัตโนมัติ ต้องตรวจ Schema จริง สำรองข้อมูล แยกกระบวนการ Deploy กับ Migration และผ่าน [Migration/Version/Release Policy](docs/governance/migration-version-release-policy.md) ก่อนทุกครั้ง โดยเฉพาะประเด็น **P4→v7 Historical Migration** ที่ยังไม่ได้รับอนุญาต คู่มือเดิมบางส่วนเป็น Legacy Snapshot จึงต้องเทียบกับโค้ดและสัญญาปัจจุบันก่อนใช้
 
@@ -118,7 +120,7 @@ npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร
 - **Verified GitHub documentation baseline:** `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` (10 ตุลาคม 2026)
 - **ค่าใน CONFIG:** `VERSION = 2026.09.08.1`, `SCHEMA_VERSION = 7`, `REPORT_PROMPT_VERSION = 2026.10.06.1` — ไม่ใช่ค่าเดียวกันและไม่ควรใช้แทนกัน
 - **GitHub:** PR #64, #67 และ #70 (G-34) Merge แล้ว; workflow `tests` สำหรับ `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` สำเร็จ ([run #38061906543](https://github.com/9GotStory/smart-srrt/actions/runs/38061906543)). การตรวจแบบ CI/Mock/Offline ไม่ใช่การยืนยัน Apps Script Runtime
-- **Web App:** Product Owner เคยรายงานว่า Deploy เวอร์ชันของรอบ G-33 แล้วและ Basic UI Smoke 12/12 PASS; **ยังไม่ยืนยัน Deployed SHA/Artifact Parity อย่างอิสระ**. G-34 ที่ Merge ใน GitHub เป็นเพียง **Native Multi-file Deployment Candidate** ไม่ใช่หลักฐานว่าใช้ชุด 13 ไฟล์บน Apps Script จริง
+- **Web App:** Product Owner เคยรายงานว่า Deploy เวอร์ชันของรอบ G-33 แล้วและ Basic UI Smoke 12/12 PASS; **ยังไม่ยืนยัน Deployed SHA/Artifact Parity อย่างอิสระ**. G-34 ที่ Merge ใน GitHub เป็นเพียง **Native Multi-file Deployment Candidate** ไม่ใช่หลักฐานว่าใช้ชุด 14 ไฟล์บน Apps Script จริง
 - **Migration:** Historical P4→v7 ยังเป็น **HOLD / ไม่ได้รับอนุญาต**; ห้ามถือว่าผลทดสอบ Synthetic หรือ Preflight เป็นการอนุญาตใช้ข้อมูลจริง
 - **Documentation Phase:** ไม่เพิ่ม Browser UAT, ไม่เรียก Gemini, ไม่ Deploy และไม่รัน Migration ในงานจัดทำเอกสารชุดนี้
 
