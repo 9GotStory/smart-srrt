@@ -16,7 +16,7 @@ test('UX-R2 CSS output is deterministic, prefixed and keeps legacy rules', () =>
   const text = a.toString('utf8');
   assert.ok(text.startsWith('<style>') && text.endsWith('</style>'));
   assert.equal((text.match(/<style>/g)||[]).length,1);
-  assert.equal((text.match(/<\\/style>/g)||[]).length,1);
+  assert.equal(text.split('</style>').length-1,1);
   assert.ok(text.includes('UX-R2 Tailwind CSS v4'));
   assert.ok(text.includes(':root{'),'must preserve legacy custom properties');
   assert.ok(text.includes('tw\\:flex') || text.includes('tw\\\\:flex') || text.includes('tw:flex'),'prefixed probe class missing');
