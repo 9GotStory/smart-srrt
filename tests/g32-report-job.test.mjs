@@ -1,10 +1,11 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const server=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
-const browser=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
+const server=nativeServer;
+const browser=nativeHtml;
 const eventId='11111111-1111-4111-8111-111111111111';
 const chosen={modelName:'models/gemini-3.8-flash',apiVersion:'v1'};
 
