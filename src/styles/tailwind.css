@@ -1,0 +1,12 @@
+/* R2-01: build-time-only opt-in utility proof; no page uses these classes yet. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+
+/* Explicitly seeded safe utilities; broad template scanning begins in R2-02. */
+@source inline("tw:flex tw:gap-4 tw:items-center");
+
+@theme {
+  --color-srrt-brand: #0f766e;
+  --color-srrt-ink: #0f172a;
+}

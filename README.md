@@ -66,9 +66,12 @@ README_ติดตั้ง_Smart_SRRT_OneClick.txt
 
 ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
 
-สำหรับผู้พัฒนา:
+สำหรับผู้พัฒนา (ตั้งแต่ UX-R2-01 เมื่อ PR ได้รับอนุมัติและ Merge):
 
 ```bash
+npm ci --ignore-scripts --no-audit --no-fund # ติดตั้ง Dependencies จาก package-lock.json
+npm run check:ui-assets # ตรวจ Tailwind CSS ที่ Compile ไว้แบบ Read-only
+npm run build:ui-assets # เขียน CSS Generated เฉพาะเมื่อเปลี่ยน Source CSS โดยเจตนา
 npm run build:check      # ตรวจ byte-for-byte Source / One-Click parity โดยไม่เขียนไฟล์
 npm run build            # สร้าง One-Click Artifacts จาก Modular Source
 npm run check:contracts  # ตรวจ G-30 contract
@@ -77,6 +80,8 @@ npm run release:preflight
 ```
 
 คำสั่งข้างต้นเป็นข้อมูลอ้างอิงสำหรับกระบวนการพัฒนา **ไม่ใช่คำสั่งให้ดำเนินการกับระบบ Production หรือข้อมูลจริง**
+
+รายละเอียด R2-01: [Frontend Build Foundation](docs/implementation/ux-r2-01-build-foundation.md) — Tailwind v4 ใช้แบบ Compile ล่วงหน้าและไม่มี Preflight ในระยะแรก; ยังไม่ใช่การปรับ UI ทุกหน้า, ยังไม่ติดตั้ง Lucide/Chart.js, และไม่เปลี่ยน Deployment Apps Script ที่ใช้งานอยู่.
 
 ### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
 

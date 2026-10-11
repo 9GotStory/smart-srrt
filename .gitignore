@@ -4,3 +4,7 @@
 # Never commit Apps Script project identifiers or local OAuth session credentials
 .clasp.json
 .clasprc.json
+
+# Local frontend build dependencies and npm cache
+/node_modules/
+/.npm/
