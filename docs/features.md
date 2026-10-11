@@ -251,7 +251,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 
 ## 8. Feature Evidence & Traceability — รายละเอียดตรวจสอบรายฟีเจอร์
 
-ตาราง/หัวข้อด้านบนอธิบายพฤติกรรมใช้งาน ส่วนรายการด้านล่างทำหน้าที่เป็น **Implementation Inventory** เพื่อให้แต่ละฟีเจอร์มีการเชื่อม UI, สิทธิ์, ขั้นตอน, พฤติกรรมสำเร็จ/ผิดพลาด, Read/Write, RPC, Source, Tests และข้อจำกัดอย่างตรวจสอบย้อนกลับได้. ทุกข้อ F01–F23 คือ **Implemented in GitHub source `main@1486211d0cbb` / merged**; การมี Tests เป็นหลักฐาน Offline/Mock Contract ไม่ใช่ Production E2E. สำหรับสถานะ Runtime: **ยังไม่ได้ตรวจ Deployed SHA อย่างอิสระ**; มีเพียง Product Owner รายงาน UI Smoke ของ G-33, และ G-34 ยังไม่ผ่าน Cutover.
+ตาราง/หัวข้อด้านบนอธิบายพฤติกรรมใช้งาน ส่วนรายการด้านล่างทำหน้าที่เป็น **Implementation Inventory** เพื่อให้แต่ละฟีเจอร์มีการเชื่อม UI, สิทธิ์, ขั้นตอน, พฤติกรรมสำเร็จ/ผิดพลาด, Read/Write, RPC, Source, Tests และข้อจำกัดอย่างตรวจสอบย้อนกลับได้. **หลักฐาน Automated Tests:** คำว่า *Tests/Contract* หมายถึงไฟล์ที่เกี่ยวข้อง มิใช่การรับรองว่ามี Assertions ครอบคลุม RPC/UI ของฟีเจอร์ครบทั้งหมด (ระบุ Related/Indirect ไว้สำหรับ F11, F12, F16). CI PASS ยืนยันเฉพาะชุด Checks ที่รัน. ทุกข้อ F01–F23 คือ **Implemented in GitHub source `main@1486211d0cbb` / merged**; การมี Tests เป็นหลักฐาน Offline/Mock Contract ไม่ใช่ Production E2E. สำหรับสถานะ Runtime: **ยังไม่ได้ตรวจ Deployed SHA อย่างอิสระ**; มีเพียง Product Owner รายงาน UI Smoke ของ G-33, และ G-34 ยังไม่ผ่าน Cutover.
 
 ### F01 — Dashboard สาธารณะและ Privacy Boundary (P2)
 
@@ -261,7 +261,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData` แบบ non-void ผ่าน aggregate และข้อมูลพื้นที่; ไม่เขียน Event
 - **Backend RPC / Function:** `getPublicDashboardData` → `getFilteredEventRows_`, `buildDashboardAggregate_`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-app-layout.html`](../src/web/02-app-layout.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs), [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs), [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F02/F09; ไม่ส่ง EventID/Revision/Narrative/DocumentURL; ไม่มี small-cell suppression; ห้ามอ้างว่า anonymous โดยสมบูรณ์
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -273,7 +273,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`, `EventAttachments`, Owner metadata, `AreaMaster`; ไม่เขียน Event เมื่อเปิดดู
 - **Backend RPC / Function:** `getDashboardData`, `getFilteredEventRows_`, `enrichEventOwners_`, `enrichEventAttachments_`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F03/F04/F06/F08/F21; รายการละเอียดไม่ใช่ Public API
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -285,7 +285,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `UserAccounts`, `CacheService`, `SystemSettings`; ไม่คืน PasswordHash
 - **Backend RPC / Function:** `login`, `logout`, `registerUser`, `getAppBoot`, `requireAuth_`, `hasPermission_`
 - **Source:** [`01-schema-and-db.gs`](../src/server/01-schema-and-db.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html)
-- **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** ทุกส่วนที่ต้องมีสิทธิ์; SHA-256 password hash ใน Source ไม่ใช่ adaptive salted hash/MFA
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -297,7 +297,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** เขียน `MainData` 1–39; อ่าน `MasterData`, `AreaMaster`; Audit mutation
 - **Backend RPC / Function:** `addRecord`, `updateRecord`, `saveRowData_`, `findEventRowById_`, `validateEventMasterData_`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs), [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs), [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F05/F06/F07/F08/F17; Closed/void guards; Row number ไม่ใช่ stable identity
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -309,7 +309,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`; เป็น derived metadata ไม่สร้าง WorkflowStatus column ใหม่
 - **Backend RPC / Function:** `deriveEventLifecycle_`, `deriveEventConsistencyWarnings_`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs), [`g04-consistency-warnings.test.mjs`](../tests/g04-consistency-warnings.test.mjs), [`p3-workflow.test.mjs`](../tests/p3-workflow.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs), [`g04-consistency-warnings.test.mjs`](../tests/g04-consistency-warnings.test.mjs), [`p3-workflow.test.mjs`](../tests/p3-workflow.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07/F17; ไม่ใช่ task/SLA escalation engine; historical P3 column map ต่างจาก v7
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -321,19 +321,19 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `UserAccounts`; เขียน `MainData.OwnerUserID` col39 และ `AuditLogs`
 - **Backend RPC / Function:** `listAssignableEventOwners`, `assignEventOwner`, `enrichEventOwners_`
 - **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html)
-- **Tests/Contract:** [`g05-event-owner.test.mjs`](../tests/g05-event-owner.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g05-event-owner.test.mjs`](../tests/g05-event-owner.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07; migration `migrateG05EventOwner` เป็น explicit operator gate
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
 ### F07 — ปิด เปิดใหม่ และยกเลิกเหตุการณ์ (G-19/P1)
 
-- **หน้าจอ/เมนู:** `ปิดเหตุการณ์`, `เปิดเหตุการณ์อีกครั้ง`, `ยกเลิก`
+- **หน้าจอ/เมนู:** ปุ่มจริง `ปิดเหตุการณ์`, `เปิดใหม่`, `ยกเลิก` (ตอนเปิดใหม่มีข้อความขอเหตุผลว่า `กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง`)
 - **ผู้ใช้และสิทธิ์:** `close_event/delete`: Manager/Super Admin
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ต้องให้เหตุผลและ Revision ตรง; closed กลับมา active ได้ผ่าน Reopen; void เก็บประวัติ ไม่ลบแถว; invalid transition/ไม่มีสิทธิ์ต้อง error
 - **ข้อมูลอ่าน/เขียน:** เขียน `MainData.RecordStatus`, `Revision`, `Voided*` เฉพาะ void; เขียน Audit
 - **Backend RPC / Function:** `closeEvent`, `reopenEvent`, `deleteRecord`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g19-close-reopen.test.mjs`](../tests/g19-close-reopen.test.mjs), [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g19-close-reopen.test.mjs`](../tests/g19-close-reopen.test.mjs), [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F06/F08/F18; closed ไม่แก้/แนบไฟล์จน reopen; void ถูกตัดจาก Active Event Views
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -345,7 +345,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `EventAttachments` (13 columns), Drive Files, `MainData.Revision`, Audit
 - **Backend RPC / Function:** `listEventAttachments`, `uploadEventAttachment`, `downloadEventAttachment`, `removeEventAttachment`
 - **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g11-event-attachments.test.mjs`](../tests/g11-event-attachments.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g11-event-attachments.test.mjs`](../tests/g11-event-attachments.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07; ไม่ทำ public sharing และไม่รองรับไฟล์เกินขนาด
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -357,7 +357,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`; Chart Rendering ฝั่ง Browser, ไม่เขียน
 - **Backend RPC / Function:** `buildDashboardAggregate_`, `getPublicDashboardData`, `getDashboardData`, Browser `drawCharts`, `makePublicInsight`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g23-kpi-criteria.test.mjs`](../tests/g23-kpi-criteria.test.mjs), [`integration-p2-kpi-contract.test.mjs`](../tests/integration-p2-kpi-contract.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g23-kpi-criteria.test.mjs`](../tests/g23-kpi-criteria.test.mjs), [`integration-p2-kpi-contract.test.mjs`](../tests/integration-p2-kpi-contract.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F01/F02/F16; Admin `getAnalytics` ใช้นิยาม `investigated` ต่างจาก Dashboard ห้ามสลับใช้
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -369,7 +369,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `MasterData`, `AreaMaster`; ประวัติ Event ยังรักษาค่าเก่า
 - **Backend RPC / Function:** `getMasterData`, `getMasterDataAdmin`, `saveMasterDataItem`, `getAreaMaster`, `listAreas`, `saveArea`, `deleteArea`, `importAreas`
 - **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g24-masterdata-admin.test.mjs`](../tests/g24-masterdata-admin.test.mjs), [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g24-masterdata-admin.test.mjs`](../tests/g24-masterdata-admin.test.mjs), [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F05/F09; ปิด Active แทนการ hard-delete
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -377,25 +377,25 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 
 - **หน้าจอ/เมนู:** `การจัดการระบบ` → `จัดการผู้ใช้งาน`, ฟอร์ม Role/Status
 - **ผู้ใช้และสิทธิ์:** `users`: Manager/Super Admin
-- **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ค้นหา/แก้ไข Role, Status, พื้นที่และรหัสผ่าน; ผู้ใช้ pending ไม่เข้าใช้งานก่อน active; unauthorized/malformed patch ถูกปฏิเสธ
+- **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ค้นหา/แก้ไข Role, Status, พื้นที่และรหัสผ่าน; ผู้ใช้ `pending` ไม่เข้าใช้งานก่อนเปลี่ยนเป็น `active`; `updateUser` ปฏิเสธผู้ไม่มีสิทธิ์ `users` และ UserID ที่ไม่มีจริง แต่ Source ปัจจุบัน **ไม่ได้ตรวจ Allowlist ของค่า `patch.role` / `patch.status` ฝั่ง Server** ก่อนเขียน (ไม่รับประกันว่าจะปฏิเสธ malformed patch). นี่เป็นข้อจำกัดด้าน Validation ที่ต้องติดตามแก้ในงาน Code ต่างหาก ไม่ใช่ฟีเจอร์ที่มีแล้ว
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `UserAccounts`; Audit mutation
 - **Backend RPC / Function:** `listUsers`, `updateUser`, `registerUser`
 - **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html)
-- **Tests/Contract:** [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs), [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs) (หลักฐานการบังคับ Auth/Dashboard ที่เกี่ยวข้องเท่านั้น); **ไม่พบ Dedicated Automated Test ที่ยืนยัน `listUsers`/`updateUser` ครบทุกเส้นทางและ Role/Status Validation**. ไม่ใช่ Live E2E
 - **สัมพันธ์กับ/ข้อจำกัด:** F03/F06; ระบบไม่มี MFA และไม่ควรใช้ข้อมูลผู้ใช้จริงใน Test
-- **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
+- **สถานะหลักฐาน:** Source=merged in main; Automated=CI ผ่านสำหรับ Related/Indirect Tests เท่านั้น; **ไม่มีหลักฐานว่ามี Dedicated Test ครอบคลุม RPC ทุกตัวของฟีเจอร์นี้**; Runtime=Not independently verified per feature.
 
 ### F12 — ประกาศ แนวทาง และคู่มือ (ContentLibrary)
 
 - **หน้าจอ/เมนู:** เมนู `ประกาศ/แนวทาง/คู่มือ`; หน้า `ประกาศ แนวทาง และคู่มือ`
-- **ผู้ใช้และสิทธิ์:** Public ดู published; ผู้มี `settings` จัดการ
-- **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ผู้ดูเว็บเห็น published เท่านั้น; ผู้ดูแลเพิ่ม/แก้ไขเป็น draft/published; invalid data/authorization ล้มเหลวต้องไม่เปิด draft สาธารณะ
+- **ผู้ใช้และสิทธิ์:** Public ดูสถานะ `published`; การอ่านรายการหลังบ้าน (`listContent`) และบันทึก (`saveContent`) ตรวจสิทธิ์ `master` บน Server (Manager/Super Admin), **ไม่ใช่ `settings`**
+- **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ผู้ดูเว็บเห็นเฉพาะรายการ `published` ผ่าน `getPublishedContent`; ผู้ดูแลเพิ่ม/แก้ไขเนื้อหาเป็น draft/published; Server ปฏิเสธกรณีไม่มีสิทธิ์ `master`, ไม่ระบุหมวดหมู่หรือเลือกหมวดหมู่ใหม่ที่ไม่ Active ใน `MasterData` และแจ้งเมื่อไม่พบ ContentID ที่แก้ไข; **ไม่อ้างว่า Server ตรวจความถูกต้องของทุกฟิลด์/ค่า Status ด้วย Allowlist**
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `ContentLibrary`; Public อ่าน published
 - **Backend RPC / Function:** `getPublishedContent`, `listContent`, `saveContent`
 - **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`02-app-layout.html`](../src/web/02-app-layout.html)
-- **Tests/Contract:** [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g24-masterdata-admin.test.mjs`](../tests/g24-masterdata-admin.test.mjs) (ทดสอบการใช้หมวดหมู่ `content_category` จาก MasterData ใน Content Save Path บางกรณี); **ไม่ใช่ Dedicated End-to-End หรือ Comprehensive CRUD Tests สำหรับ `getPublishedContent`/`listContent`/`saveContent`**
 - **สัมพันธ์กับ/ข้อจำกัด:** F13; ไม่ใช่ CMS ภายนอก
-- **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
+- **สถานะหลักฐาน:** Source=merged in main; Automated=CI ผ่านสำหรับ Related/Indirect Tests เท่านั้น; **ไม่มีหลักฐานว่ามี Dedicated Test ครอบคลุม RPC ทุกตัวของฟีเจอร์นี้**; Runtime=Not independently verified per feature.
 
 ### F13 — ตั้งค่าระบบ โลโก้ และตรวจสถานะติดตั้ง
 
@@ -405,7 +405,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `SystemSettings`, Drive logo/system assets และ Spreadsheet metadata; Secret Key ไม่อยู่ Public Boot
 - **Backend RPC / Function:** `getInstallationStatus`, `repairInstallation`, `getSystemSettings`, `saveSystemSettings`, `uploadLogo`, `installSmartSRRT`, `setupDatabase`
 - **Source:** [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs)
-- **Tests/Contract:** [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs), [`p6-release-preflight.test.mjs`](../tests/p6-release-preflight.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs), [`p6-release-preflight.test.mjs`](../tests/p6-release-preflight.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F03/F19/F23; ไม่อนุญาต live install/repair/migration จากเอกสารนี้
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -417,7 +417,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** เขียน `AuditLogs` 10 columns, private Audit Archive Spreadsheet แยก tab ปี, summary
 - **Backend RPC / Function:** `writeAudit_`, `listAuditLogs`, `getAuditRetentionStatus`, `archiveAuditLogs`, `archiveAuditLogsCore_`
 - **Source:** [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`01-schema-and-db.gs`](../src/server/01-schema-and-db.gs)
-- **Tests/Contract:** [`g21-audit-retention.test.mjs`](../tests/g21-audit-retention.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g21-audit-retention.test.mjs`](../tests/g21-audit-retention.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07/F08/F13; `writeAudit_` บางเส้นทางจับ error ภายใน: action สำเร็จไม่พิสูจน์ว่า Audit ถูกเขียนทุกครั้ง
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -429,7 +429,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** เขียน `VisitLogs` 3 columns
 - **Backend RPC / Function:** `doGet`, `logVisit_`, `migrateG29VisitLogs` (migration gated)
 - **Source:** [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`01-schema-and-db.gs`](../src/server/01-schema-and-db.gs)
-- **Tests/Contract:** [`g29-visitlogs-semantics.test.mjs`](../tests/g29-visitlogs-semantics.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g29-visitlogs-semantics.test.mjs`](../tests/g29-visitlogs-semantics.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F13/F23; ไม่มี page-view analytics ที่พิสูจน์ตัวบุคคล
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -441,9 +441,9 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน filtered authenticated rows; Server export เขียน Google Spreadsheet ใหม่; ภาพดาวน์โหลดฝั่ง Browser
 - **Backend RPC / Function:** `exportData`, Browser `exportClientExcel`, `captureDashboard`
 - **Source:** [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs), [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs) (สัญญา Public Aggregate/Raw Access ที่เกี่ยวข้องทางอ้อม); **ไม่พบ Dedicated Automated Tests สำหรับ `exportData`, `exportClientExcel` และ `captureDashboard` จากไฟล์ Tests ที่อ้างอิง**. ไม่ถือว่า Export/Capture ผ่านการทดสอบโดยตรงหรือ Live E2E
 - **สัมพันธ์กับ/ข้อจำกัด:** F01/F02; Server export ไม่ใช่ XLSX binary response
-- **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
+- **สถานะหลักฐาน:** Source=merged in main; Automated=CI ผ่านสำหรับ Related/Indirect Tests เท่านั้น; **ไม่มีหลักฐานว่ามี Dedicated Test ครอบคลุม RPC ทุกตัวของฟีเจอร์นี้**; Runtime=Not independently verified per feature.
 
 ### F17 — ความพร้อมก่อนสร้างรายงาน AI (G-26)
 
@@ -453,7 +453,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน Event ล่าสุดและ derived warnings; ไม่เขียน MainData
 - **Backend RPC / Function:** `getAIReportReadiness`, `deriveAIReportReadiness_`, `deriveEventConsistencyWarnings_`
 - **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`03-modals.html`](../src/web/03-modals.html)
-- **Tests/Contract:** [`g26-ai-report-readiness.test.mjs`](../tests/g26-ai-report-readiness.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g26-ai-report-readiness.test.mjs`](../tests/g26-ai-report-readiness.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F05/F18/F19/F21; ไม่รับรองข้อมูลทางการแพทย์
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -465,7 +465,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `ReportRegistry` (11 cols) และ Event non-void; การ append ทำผ่าน F19; ไม่แก้/ลบ Registry เดิม
 - **Backend RPC / Function:** `listReportsForEvent`, `getReportSummariesForEvents`, `appendReportRegistry_`
 - **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g17-report-registry.test.mjs`](../tests/g17-report-registry.test.mjs), [`g27-event-report-history.test.mjs`](../tests/g27-event-report-history.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g17-report-registry.test.mjs`](../tests/g17-report-registry.test.mjs), [`g27-event-report-history.test.mjs`](../tests/g27-event-report-history.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F19/F20/F21; legacy Google Doc ที่ไม่มี Registry ไม่ auto-backfill
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Product Owner reported limited UI smoke; exact deployed SHA not verified.
 
@@ -477,7 +477,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`, settings/Template Drive; เขียน Google Docs ใหม่, `ReportRegistry`, Audit best effort
 - **Backend RPC / Function:** `runReportJob`, `generateReportFromWeb` (private nonce), `analyzeWithGemini_`, `callGeminiForReport_`, `appendReportRegistry_`
 - **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`06-gemini-and-prompts.gs`](../src/server/06-gemini-and-prompts.gs)
-- **Tests/Contract:** [`g31-ai-generation.test.mjs`](../tests/g31-ai-generation.test.mjs), [`g32-v8-retry.test.mjs`](../tests/g32-v8-retry.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g31-ai-generation.test.mjs`](../tests/g31-ai-generation.test.mjs), [`g32-v8-retry.test.mjs`](../tests/g32-v8-retry.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F17/F18/F20/F21; `models/gemini-3.8-flash` only; bounded HTTP 503 one retry/part, no 429 automatic retry; output is draft, not approved report
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -489,7 +489,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** ScriptProperties เก็บ Job metadata ชั่วคราว; ไม่ใช่ทะเบียนรายงาน; successful doc อยู่ F18
 - **Backend RPC / Function:** `createReportJob`, `runReportJob`, `getReportJobStatus`, `getCurrentReportJob`, `cancelReportJob`, `dismissReportJob`
 - **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g32-report-job.test.mjs`](../tests/g32-report-job.test.mjs), [`g32-uat-modal-and-button.test.mjs`](../tests/g32-uat-modal-and-button.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g32-report-job.test.mjs`](../tests/g32-report-job.test.mjs), [`g32-uat-modal-and-button.test.mjs`](../tests/g32-uat-modal-and-button.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F18/F19/F21; 1 active job ต่อ Project; Apps Script ไม่รับรอง background worker เมื่อปิด Tab; unknown ไม่ใช่ failed
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
@@ -501,7 +501,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `ReportRegistry` summary ≤500 EventIDs/RPC; ไม่เขียนจน F19 สำเร็จ
 - **Backend RPC / Function:** `getReportSummariesForEvents`, Browser `reportActionState`, `handleReportAction`, `preflightFirstReportGeneration`
 - **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
-- **Tests/Contract:** [`g33-single-report-action.test.mjs`](../tests/g33-single-report-action.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g33-single-report-action.test.mjs`](../tests/g33-single-report-action.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F17/F18/F20; ป้องกัน duplicate requests และ stale callbacks แต่ไม่ใช่หลักฐาน full live E2E
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Product Owner reported limited UI smoke; exact deployed SHA not verified.
 
@@ -513,7 +513,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** อ่าน `src/server/` 7 + `src/web/` 5; เขียนเฉพาะ generated dist เมื่อใช้ build; ไม่แตะ Workspace
 - **Backend RPC / Function:** `tools/build-one-click.mjs`, `tools/build-apps-script-multifile.mjs`, `include`, `doGet`
 - **Source:** [`build-one-click.mjs`](../tools/build-one-click.mjs), [`build-apps-script-multifile.mjs`](../tools/build-apps-script-multifile.mjs), [`00-bootstrap.gs`](../src/server/00-bootstrap.gs)
-- **Tests/Contract:** [`g30-release-parity.test.mjs`](../tests/g30-release-parity.test.mjs), [`g34-multifile-parity.test.mjs`](../tests/g34-multifile-parity.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`g30-release-parity.test.mjs`](../tests/g30-release-parity.test.mjs), [`g34-multifile-parity.test.mjs`](../tests/g34-multifile-parity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F13/F23; 7 .gs + 5 partials + Index.html = 13; no appsscript.json; V8 ordering/manifest/staging/human cutover required
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=G-34 package NOT runtime verified/deployed.
 
@@ -525,7 +525,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ข้อมูลอ่าน/เขียน:** สร้าง/แก้ Google Sheets และ System Assets เฉพาะเมื่อ Operator อนุมัติ; historical data untouched ใน docs task
 - **Backend RPC / Function:** `installSmartSRRT`, `setupDatabase`, `repairInstallation`, `migrateP1EventIdentity`, `migrateG05EventOwner`, `migrateG11EventAttachments`, `migrateG17ReportRegistry`, `migrateG21AuditRetention`, `migrateG29VisitLogs`
 - **Source:** [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-and-db.gs`](../src/server/01-schema-and-db.gs), [`p4-v7-schema-preflight.mjs`](../tools/p4-v7-schema-preflight.mjs)
-- **Tests/Contract:** [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs), [`integration-p4-v7-migration-readiness.test.mjs`](../tests/integration-p4-v7-migration-readiness.test.mjs), [`p6-release-preflight.test.mjs`](../tests/p6-release-preflight.test.mjs) (coverage ใน source; ไม่รับรอง Live E2E)
+- **Tests/Contract:** [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs), [`integration-p4-v7-migration-readiness.test.mjs`](../tests/integration-p4-v7-migration-readiness.test.mjs), [`p6-release-preflight.test.mjs`](../tests/p6-release-preflight.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F08/F14/F18/F22; Current Schema v7 != Historical P4; destructive/live migration forbidden without separate authorization
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
