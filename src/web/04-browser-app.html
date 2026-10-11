@@ -20,7 +20,21 @@
   function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
   function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
   function openModal(id){el(id).classList.add('open')} function closeModal(id){el(id).classList.remove('open')}
-  function toggleSidebar(show){el('sidebar').classList.toggle('open',show);el('overlay').classList.toggle('show',show)}
+  function toggleSidebar(show){
+    const sidebar=el('sidebar'), trigger=el('openSidebarBtn');
+    sidebar.classList.toggle('open',show);el('overlay').classList.toggle('show',show);
+    if(trigger)trigger.setAttribute('aria-expanded',show?'true':'false');
+    const mobile=typeof window!=='undefined' && typeof window.matchMedia==='function' && window.matchMedia('(max-width:980px)').matches;
+    if(mobile && show){
+      const active=sidebar.querySelector('.nav button.active');
+      if(active)active.focus();
+    }else if(mobile && !show && sidebar.contains(document.activeElement) && trigger){
+      trigger.focus();
+    }
+  }
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape' && el('sidebar').classList.contains('open'))toggleSidebar(false);
+  });
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function unique(arr){return [...new Set(arr.filter(v=>String(v||'').trim()!=='').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'th'))}
   function isInvestigationCriteriaMet(value){return String(value||'').trim()==='เข้าเกณฑ์'}
@@ -29,7 +43,11 @@
 
   function showPage(page,btn){
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
-    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');toggleSidebar(false);
+    const navButtons=[...document.querySelectorAll('.nav button')];
+    navButtons.forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current')});
+    const selected=btn||navButtons.find(b=>b.dataset.page===page);
+    if(selected){selected.classList.add('active');selected.setAttribute('aria-current','page')}
+    toggleSidebar(false);
     if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
   }
 
