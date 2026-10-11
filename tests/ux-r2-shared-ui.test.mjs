@@ -56,7 +56,7 @@ test('R2-02 navigation updates aria-current without redefining business routing'
   assert.equal(buttons[4].getAttribute('aria-current'),'page');
   assert.equal(sections[4].classList.contains('active'),true);
   assert.equal(sections[0].classList.contains('active'),false);
-  assert.deepEqual(calls,['sidebar',false,'library']);
+  assert.deepEqual(calls,[['sidebar',false],'library']);
   ctx.showPage('records',buttons[1]);
   assert.equal(buttons[1].getAttribute('aria-current'),'page');
   assert.equal(buttons[4].getAttribute('aria-current'),null);
@@ -92,7 +92,7 @@ test('R2-02 mobile disclosure reflects expanded state, Escape dismissal and focu
 test('R2-02 preserves shared visual keyboard CSS and identical modular/One-Click page markup',()=>{
   assert.match(sharedCSS,/srrt-skip-link:focus-visible/);
   assert.match(sharedCSS,/nav button:focus-visible/);
-  assert.match(sharedCSS,/table-wrap\\[role="region"\\]:focus-visible/);
+  assert.ok(sharedCSS.includes('.table-wrap[role="region"]:focus-visible'));
   assert.match(sharedCSS,/sidebar:not\\(\\.open\\)/);
   assert.match(sharedCSS,/prefers-reduced-motion:reduce/);
   assert.ok(buildHTML.includes(layout),'built One-Click must contain exact updated layout partial');
