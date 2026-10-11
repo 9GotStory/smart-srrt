@@ -1,9 +1,10 @@
+import {nativeServer} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
+const source=nativeServer;
 
 function run(rows){
   const ctx={Logger:{log(){}},console};

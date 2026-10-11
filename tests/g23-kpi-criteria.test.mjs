@@ -1,12 +1,11 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const SOURCE_PATH = new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs', import.meta.url);
-const HTML_PATH = new URL('../Index_Smart_SRRT_OneClick.html', import.meta.url);
-const source = fs.readFileSync(SOURCE_PATH, 'utf8');
-const html = fs.readFileSync(HTML_PATH, 'utf8');
+const source = nativeServer;
+const html = nativeHtml;
 
 function makeContext() {
   const context = {

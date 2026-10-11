@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ONE_CLICK_TARGETS } from './build-one-click.mjs';
+import { inspectNativeRelease } from './native-release-inspection.mjs';
 
 const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS = Object.freeze([
@@ -26,36 +25,16 @@ function guard(checks, id, condition, detail) {
   checks.push({ id, status:condition ? 'PASS' : 'FAIL', detail });
 }
 
-function sha256(buffer) {
-  return crypto.createHash('sha256').update(buffer).digest('hex');
-}
-
 /**
- * Only reads local committed source and release files. Does NOT invoke Apps Script,
- * Google APIs, write files, validate actual deployment, or perform migrations.
+ * Inspects canonical Native source, expanded Index and exact staged files.
+ * Does not create a stage, change source, deploy, or call any Google service.
  */
 export function runOfflinePreflight(root = DEFAULT_ROOT) {
-  const checks = [];
-  const artifacts = [];
-  const contents = new Map();
-  for (const entry of ONE_CLICK_TARGETS) {
-    let compiled = null;
-    let generated = null;
-    try {
-      compiled = fs.readFileSync(path.join(root, entry.target));
-      generated = Buffer.concat(entry.sources.map(name => fs.readFileSync(path.join(root, name))));
-    } catch (e) {
-      guard(checks, 'artifact:' + entry.target, false, 'Missing or unreadable source/artifact: ' + e.code);
-      continue;
-    }
-    const same = compiled.equals(generated);
-    guard(checks, 'artifact:' + entry.target, same, same ? 'Byte-exact modular parity' : 'Generated artifact does not match its source modules');
-    artifacts.push({path:entry.target, sha256:sha256(compiled), bytes:compiled.length, sourceParts:entry.sources.length});
-    contents.set(entry.target, compiled.toString('utf8'));
-  }
-
-  const server = contents.get('Code_Smart_SRRT_OneClick_v2026.09.08.1.gs') || '';
-  const html = contents.get('Index_Smart_SRRT_OneClick.html') || '';
+  const snapshot=inspectNativeRelease(root);
+  const checks=[...snapshot.checks];
+  const artifacts=snapshot.artifacts;
+  const server=snapshot.server;
+  const html=snapshot.html;
   const rawVersion = /SCHEMA_VERSION:\s*['"](\d+)['"]/.exec(server);
   const schemaVersion = rawVersion ? Number(rawVersion[1]) : null;
   guard(checks, 'schema-version', schemaVersion === 7, 'Expected application schema v7; observed ' + (schemaVersion ?? 'missing'));
@@ -129,9 +108,9 @@ export function runOfflinePreflight(root = DEFAULT_ROOT) {
       'Representative legacy staging dataset and migration/restore rehearsal',
       'Live Apps Script RBAC, public privacy and Event workflow testing',
       'Live Gemini, Google Docs/Drive template and registered report history',
-      'Independent human review and explicit production go/no-go'
+      'Human Product Owner technical review and explicit separate production go/no-go'
     ],
-    disclaimer:'This command does not execute migrations, installer, Google Apps Script, external APIs, staging, or production. Code PASS is not release authorization.'
+    disclaimer:'This command inspects Native source and an existing offline 14-file stage without writes. It does not execute migrations, installer, Google Apps Script, external APIs, staging creation, or production. Code PASS is not release authorization.'
   };
 }
 

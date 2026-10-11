@@ -1,9 +1,10 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
+const html=nativeHtml;
 const start=html.indexOf('  const reportReadinessInFlight = new Set();');
 const end=html.indexOf('  function exportClientExcel(){',start);
 assert.ok(start>=0&&end>start,'G-32 browser report module must be present in built HTML');

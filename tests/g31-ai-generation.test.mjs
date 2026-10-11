@@ -1,3 +1,4 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,8 +7,8 @@ import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const server = fs.readFileSync(path.join(root,'Code_Smart_SRRT_OneClick_v2026.09.08.1.gs'),'utf8');
-const html = fs.readFileSync(path.join(root,'Index_Smart_SRRT_OneClick.html'),'utf8');
+const server = nativeServer;
+const html = nativeHtml;
 
 function scriptWithMocks(responseHandler) {
   const cache = new Map();

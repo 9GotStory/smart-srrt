@@ -1,3 +1,4 @@
+import {nativeHtml} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ const layout=read('src/web/02-app-layout.html');
 const dialogs=read('src/web/03-modals.html');
 const app=read('src/web/04-browser-app.html');
 const css=read('src/styles/shared-ui.css');
-const built=read('Index_Smart_SRRT_OneClick.html');
+const built=nativeHtml;
 
 test('R2-02B labels all 26 existing incident fields without rewriting their controls',()=>{
   const start=app.indexOf('const fields=[');

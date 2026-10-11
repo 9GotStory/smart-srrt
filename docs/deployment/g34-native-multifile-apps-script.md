@@ -1,3 +1,5 @@
+> **UX-R2-03B Native verification (2026-10-12):** G-30/P6 และ Regression Tests ที่ตรวจระบบปัจจุบันใช้ Source/Stage Native 14 ไฟล์แล้ว (`tools/native-release-inspection.mjs`). ต้อง Stage ด้วย `npm run build:gas-multifile` ก่อน `npm run release:preflight`; P6 ตรวจ Read-only และให้ `releaseDecision=HOLD` เสมอแม้ Code PASS. One-Click เดิมตรวจเพียง Frozen Git Blob ไม่ใช่แหล่ง Release. ดู [คู่มือ R2-03B](../implementation/ux-r2-03b-native-release-tests.md). ยังไม่อนุญาต Deploy Apps Script @10.
+
 > **UX-R2-03 Native authority (2026-10-11):** Product Owner directed **no further One-Click file writes**. The two root One-Click artifacts are frozen historical baselines; `tools/native-sources.mjs` is the canonical source list, `npm run build` builds native files (never One-Click), and the deployment allowlist now contains **14 Native files**. Earlier G-34 statements about 13 files/One-Click comparison are historical and are superseded by this note. See [R2-03 implementation](../implementation/ux-r2-03-native-dashboard-mobile.md). Actual Web App deployment remains separate and unapproved.
 
 # Smart SRRT — Native Multi-file Google Apps Script Deployment Candidate (G-34)
@@ -8,7 +10,7 @@
 
 The preferred future Apps Script project is **native multi-file**, not a single 180 KB `Code_...OneClick.gs` + 127 KB `Index_...OneClick.html` source paste. Canonical editing remains in `src/server/` and `src/web/` in GitHub. A deterministic build now exports **14 files** (UX-R2-03: 7 server + 6 HTML partials + Index.html), with no new framework, database, services, or runtime dependencies. This package deliberately retains current interfaces, report behavior, Google Sheet schema v7, and the existing `doGet` implementation.
 
-The prior One-Click artifacts remain **legacy compatibility/rollback evidence** until the multi-file Apps Script candidate has been independently reviewed, tested, and explicitly authorized. Do not delete One-Click root artifacts from GitHub or edit the live deployment as part of building this package.
+The prior One-Click artifacts remain **legacy compatibility/rollback evidence** as frozen legacy backups pending separately approved live Native deployment. Do not delete One-Click root artifacts from GitHub or edit the live deployment as part of building this package.
 
 ## Native Apps Script project layout
 

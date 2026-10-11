@@ -16,8 +16,8 @@ function nameFromSource(source) {
 }
 
 export function gasIndexTemplate() {
-  // No extra whitespace: server-side expansion is byte-identical to the
-  // existing concatenated HTML artifact. These are trusted source fragments.
+  // Exact ordered Native expansion, with no extra whitespace; source fragments
+  // are trusted. Do not compare against or regenerate frozen One-Click files.
   return GAS_HTML_SOURCES.map(source => {
     const file = path.parse(nameFromSource(source)).name;
     return "<?!= include('" + file + "') ?>";
