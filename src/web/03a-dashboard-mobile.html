@@ -1,0 +1,91 @@
+<!-- UX-R2-03: Native-only Dashboard component, deliberately NOT added to frozen One-Click. -->
+<style>
+.srrt-mobile-worklist{display:none}
+@media(max-width:640px){
+  #eventDetailPanel .srrt-mobile-worklist{display:grid;gap:12px;margin-top:12px}
+  #eventDetailPanel .srrt-mobile-worklist .srrt-event-card{min-width:0;overflow-wrap:anywhere;border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff}
+  .srrt-event-card h4{font-size:15px;line-height:1.5;margin:0 0 6px;color:var(--primary)}
+  .srrt-event-card dl{margin:8px 0;display:grid;grid-template-columns:minmax(80px,1fr) minmax(0,1.6fr);gap:6px 10px;font-size:13px}
+  .srrt-event-card dt{color:var(--muted)}
+  .srrt-event-card dd{margin:0;overflow-wrap:anywhere}
+  .srrt-event-card .btn{width:100%;margin-top:8px}
+  #eventDetailPanel .table-wrap.srrt-mobile-table-collapsed{display:none}
+  #eventDetailPanel .table-wrap.srrt-mobile-table-expanded{display:block;margin-top:14px}
+}
+</style>
+<script>
+/* Native only: consumes the already-authorized Dashboard table; no new RPC,
+   no raw event exposure to guests, and no duplicated report/edit buttons. */
+(function(){
+  'use strict';
+  function attachDashboardCards(){
+    const tbody=document.getElementById('eventBody');
+    const panel=document.getElementById('eventDetailPanel');
+    const table=tbody&&tbody.closest('.table-wrap');
+    if(!tbody||!panel||!table||document.getElementById('srrtDashboardCards'))return;
+    const cards=document.createElement('div');
+    cards.id='srrtDashboardCards';
+    cards.className='srrt-mobile-worklist';
+    cards.setAttribute('aria-label','รายการเหตุการณ์สำหรับหน้าจอมือถือ');
+    table.parentNode.insertBefore(cards,table);
+    table.classList.add('srrt-mobile-table-collapsed');
+    const headings=['วันรับแจ้ง','โรคหรือเหตุการณ์','หมู่บ้านหรือพื้นที่','สถานะเหตุการณ์','ผู้รับผิดชอบ','การตรวจสอบ','เข้าเกณฑ์','ความเสี่ยง','ไฟล์แนบ'];
+    function addPair(dl,name,value){
+      const dt=document.createElement('dt');dt.textContent=name;
+      const dd=document.createElement('dd');dd.textContent=(value||'').trim()||'-';
+      dl.append(dt,dd);
+    }
+    function syncButtons(open){
+      cards.querySelectorAll('button[data-show-event-table]').forEach(btn=>{
+        btn.setAttribute('aria-expanded',String(open));
+        btn.textContent=open?'ซ่อนตารางรายละเอียด':'ดูรายละเอียดและดำเนินการในตาราง';
+      });
+    }
+    function render(){
+      cards.replaceChildren();
+      // Both checks matter: public is aggregate-only, and session switch must
+      // not leave stale private cards visible while a request is pending.
+      if(typeof currentUser==='undefined'||!currentUser)return;
+      const rows=[...tbody.querySelectorAll('tr')].filter(row=>row.cells.length===10);
+      if(!rows.length){
+        const empty=document.createElement('p');
+        empty.className='help';empty.textContent='ไม่มีเหตุการณ์ในช่วงที่เลือก';
+        cards.append(empty);
+        return;
+      }
+      rows.forEach((row,i)=>{
+        const card=document.createElement('article');card.className='srrt-event-card';
+        const title=document.createElement('h4');title.textContent=row.cells[1].textContent.trim()||'เหตุการณ์';
+        const dl=document.createElement('dl');
+        headings.forEach((label,index)=>{
+          if(index===1)return;
+          addPair(dl,label,row.cells[index].textContent);
+        });
+        // The original table lacks the investigation date. Authorized
+        // allData is available only after a signed-in RPC; no public fetch.
+        const source=Array.isArray(allData)?allData[i]:null;
+        addPair(dl,'ลงสอบสวนโรค',source&&source.col24?String(source.col24):'-');
+        addPair(dl,'วันที่ลงสอบสวนโรค',source&&source.col26?String(source.col26):'-');
+        const btn=document.createElement('button');btn.type='button';btn.className='btn light';
+        btn.dataset.showEventTable=String(i);btn.setAttribute('aria-controls',table.id||'srrtDashboardTable');
+        btn.setAttribute('aria-expanded',String(table.classList.contains('srrt-mobile-table-expanded')));
+        btn.textContent='ดูรายละเอียดและดำเนินการในตาราง';
+        btn.addEventListener('click',()=>{
+          const open=!table.classList.contains('srrt-mobile-table-expanded');
+          table.classList.toggle('srrt-mobile-table-expanded',open);
+          table.classList.toggle('srrt-mobile-table-collapsed',!open);
+          syncButtons(open);
+          if(open){row.setAttribute('tabindex','-1');row.focus();}
+        });
+        card.append(title,dl,btn);cards.append(card);
+      });
+      syncButtons(table.classList.contains('srrt-mobile-table-expanded'));
+    }
+    table.id='srrtDashboardTable';
+    new MutationObserver(render).observe(tbody,{childList:true});
+    render();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attachDashboardCards,{once:true});
+  else attachDashboardCards();
+})();
+</script>
