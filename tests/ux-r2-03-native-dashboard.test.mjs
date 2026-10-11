@@ -44,5 +44,5 @@ test('R2-03 old One-Click files remain committed historical, not updated from na
   assert.ok(native.includes('srrtDashboardCards'));
   assert.ok(!legacy.includes('03a-dashboard-mobile'),'frozen One-Click should NOT acquire native UI');
   assert.ok(native.length>legacy.length);
-  assert.ok(legacy.endsWith('</html>'));
+  assert.ok(legacy.trimEnd().endsWith('</html>'));
 });
