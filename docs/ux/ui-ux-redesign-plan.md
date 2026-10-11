@@ -1,6 +1,6 @@
 # Smart SRRT — UX-R1 Whole-System UI/UX Redesign Plan
 
-> **Status:** PROPOSED / PLANNING ONLY — requires Independent Review and Product Owner acceptance before implementation.
+> **Status:** PROPOSED / PLANNING ONLY — requires documented ChatGPT Technical Review (author-assisted, not distinct-author) and Product Owner acceptance before implementation.
 > **Repository/source baseline:** `9GotStory/smart-srrt` at `main@1c5e9e2bf0dbb04e6d82fff049d5b4a5123c74bf` (11 October 2026).
 > **Runtime evidence at planning time:** Operator-confirmed Apps Script Native Multi-file, existing Web App deployment version @10, 7 server `.gs` + 5 HTML partials + `Index.html`; HTTP 200. **Not** a full authenticated functional UAT result.
 > **Authority:** `AGENTS.md`, `README.md`, `docs/features.md`, current `src/web/*`, current `src/server/*`, current `tests/*`.
@@ -42,13 +42,13 @@ Source of truth is `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-a
 
 | Phase | Scope and concrete deliverable | Dependency / exit gate |
 | --- | --- | --- |
-| UX-R1/P1 — Discovery & design | This plan, component tokens, all screen & modal inventory, IA, representative responsive wireframes, task flows and acceptance matrix | Documents independently reviewed and PO accepted; no code changes |
+| UX-R1/P1 — Discovery & design | This plan, component tokens, all screen & modal inventory, IA, representative responsive wireframes, task flows and acceptance matrix | ChatGPT Technical Review recorded and PO accepted; full visual signoff remains a separate gate; no code changes |
 | UX-R1/P2 — Tooling & shared shell | Pin Tailwind v4 / Lucide assets / Chart.js 4; deterministic, offline-capable front-end build output; shared layout, navigation, controls, typography, focus and toast | Native 13-file GAS staging and One-Click parity updated by explicit ADR; no asset runtime dependency that breaks Apps Script; smoke with synthetic data |
 | UX-R1/P3 — Dashboard | Filters, KPI display, 4 charts, insight, authorized event table, export/image interactions | Same values/labels/privacy per source contracts; chart image capture verified; offline tests and visual snapshots |
 | UX-R1/P4 — Events/forms | Record list, sections, validation, owner, attachment, lifecycle dialogs | EventID/revision, RBAC, mutation consent and warning tests; keyboard form path |
 | UX-R1/P5 — AI report | List, action states, readiness/history, job indicator, cancellation/unknown state | G-17/G-26/G-27/G-32/G-33 regression checks; **no live Gemini** in automated checks |
 | UX-R1/P6 — Admin/auth/library | Seven admin subsections, login/register, library, supporting dialogs | RBAC, file-import, settings, audit/retention action safety; public-only isolation |
-| UX-R1/P7 — Integration/release | Full CSS/JS and 13-file parity, security/accessibility/responsive regression, release guide, rollback verification | Distinct-author independent review; PO merge authorization; separate staging and production deployment authorizations |
+| UX-R1/P7 — Integration/release | Full CSS/JS and 13-file parity, security/accessibility/responsive regression, release guide, rollback verification | ChatGPT Technical Review (including author-assisted limitations); PO merge authorization; separate staging and production deployment authorizations |
 
 **Recommended delivery order:** P1 → P2 shared shell → P3 dashboard → P4 event management → P5 AI reporter → P6 remaining surfaces → P7 integration. Split each implementation phase into reviewable PRs; do not deploy after each PR by default.
 
@@ -71,7 +71,7 @@ Source of truth is `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-a
 | State consistency | Loading / empty / permission denied / error / stale response / successful save clearly differentiated | Deterministic mocked client tests |
 | Charts | Legend/title/tooltips/table fallback convey same aggregates; labels and data not indicated by color alone; resize and capture image work | Synthetic chart fixture + DOM/canvas tests and approved browser check |
 | Core flows | One report action per Event; no duplicate mutation; unsaved-change warning where applicable; RBAC and revision failures preserved | Existing test suite + new contract tests |
-| Release | `npm run build:check`, `npm run build:gas-multifile`, `npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test` all PASS on candidate; exact SHA verified | CI + independent reviewer record |
+| Release | `npm run build:check`, `npm run build:gas-multifile`, `npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test` all PASS on candidate; exact SHA verified | CI + documented ChatGPT Technical Review record; not an independent review |
 
 Performance budgets (bundle bytes, loading/fetch and interaction latency) must be **measured against an as-is baseline** before setting pass/fail numbers; do not invent a performance PASS without real instrumentation. Chart and icon assets should be tree-shaken and avoid unnecessary network requests.
 
@@ -124,12 +124,12 @@ A new [Smart SRRT UX-R1 Figma Design file](https://www.figma.com/design/5NXcUVOh
 
 - **Documentation completeness:** complete, with the above design corrections.
 - **Visual design signoff:** **HOLD**, because Figma screenshot review, all five screen mockups, mobile variants and all 13 modal patterns are not finished/validated.
-- **Implementation authority:** **HOLD** until Product Owner reviews revised direction, distinct-author reviewer checks this PR, and a separate Phase-2 engineering/architecture decision is approved.
+- **Implementation authority:** **HOLD** until Product Owner reviews revised direction, ChatGPT Technical Review checks this PR under the approved same-assistant workflow, and a separate Phase-2 engineering/architecture decision is approved.
 - **Runtime:** Apps Script @10 untouched. No server RPC, data schema, reports, users, or real health records accessed.
 
 ## 10. Governance and immediate next actions
 
-This PR is **documentation-only**. It proposes a UX baseline and does not authorize dependencies, code changes, GitHub merge, Apps Script push, schema migration or production UAT. Next: independent reviewer checks that the inventory matches the real source and that no feature is misrepresented; Product Owner accepts/adjusts design direction. Then open a separately approved implementation issue for P2 with a concrete build/asset ADR and dependency/version verification.
+This PR is **documentation-only**. It proposes a UX baseline and does not authorize dependencies, code changes, GitHub merge, Apps Script push, schema migration or production UAT. Next: ChatGPT Technical Review checks that the inventory matches the real source and that no feature is misrepresented, explicitly noting that this is author-assisted self-review; Product Owner accepts/adjusts design direction. The owner-selected workflow for UX-R1 does not use Multica or codex-lead-reviewer. Then open a separately approved implementation issue for P2 with a concrete build/asset ADR and dependency/version verification.
 
 **Source links:** [app layout](../../src/web/02-app-layout.html), [modal inventory](../../src/web/03-modals.html), [browser behavior](../../src/web/04-browser-app.html), [head & current dependencies](../../src/web/00-document-head.html), [current styles](../../src/web/01-styles.html), [G-33 UX contract](./g33-single-report-action.md), [G-34 deployment](../deployment/g34-native-multifile-apps-script.md).
 
