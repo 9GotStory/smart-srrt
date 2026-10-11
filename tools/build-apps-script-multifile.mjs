@@ -54,6 +54,7 @@ export function verifyGasMultiFileParity(entries = buildGasMultiFileEntries()) {
   }
 
   const server = Buffer.concat(GAS_SERVER_SOURCES.map(source => entries.get(nameFromSource(source))));
+  if (!server.length) throw new Error('Empty native server modules');
   // Native sources are canonical. Both old One-Click artifacts stay frozen and
   // must never gate or be rewritten by future native-only improvements.
   for (const source of GAS_SERVER_SOURCES) {
@@ -67,7 +68,7 @@ export function verifyGasMultiFileParity(entries = buildGasMultiFileEntries()) {
   }
   for (const source of GAS_HTML_SOURCES) {
     const bytes=entries.get(nameFromSource(source)).toString('utf8');
-    if (/<\\?(?:=|!|\\s)/.test(bytes)) throw new Error('Untrusted Apps Script template in '+source);
+    if (bytes.includes('<?')) throw new Error('Untrusted Apps Script template in '+source);
   }
   return true;
 }
