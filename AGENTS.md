@@ -110,15 +110,16 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. UX-R2-01 Frontend Build Foundation Gate (11 Oct 2026)
+## 9. UX-R2-02 Shared UI Gate (11 Oct 2026)
 
-Historical documentation-only gate is superseded **only for the explicitly PO-approved R2-01 implementation branch** `feat/ux-r2-01-build-foundation`.
+R2-01 Tailwind v4 Build Foundation was separately reviewed and merged as `main@055677fba61e8df95f93776661386957bdb902de`. The Product Owner subsequently authorized **UX-R2-02 incremental Shared UI work**, tracked in [Issue #80](https://github.com/9GotStory/smart-srrt/issues/80) on `feat/ux-r2-02-shared-ui`. This gate supersedes the narrower R2-01 authorization **only for that branch and task**.
 
-- **Authorized:** add pinned Tailwind v4 build dependencies and lockfile; build-time prefixed CSS without Preflight; deterministic generated `src/web/01-styles.html`; regenerate tracked `Index_Smart_SRRT_OneClick.html`; update checks/tests/CI and directly related documentation.
-- **Not authorized:** changing server `.gs` logic, authentication, RPC, event schemas, public data contract, AI ReportRegistry or job state; Lucide/Chart.js migration, UI redesign of pages, install/migration/repair, `clasp push` or deployment @10.
-- **Invariant:** 7 `.gs` + 5 HTML source partials + `Index.html` = 13 GAS files, ordered include expansion, exact Byte Parity with One-Click. `dist/apps-script/` stays an ignored generated package.
-- **Process:** develop on branch, CI/exact SHA, ChatGPT author-assisted Technical Review (not independent) and Product Owner **separate merge approval**. Apps Script deployment requires another explicit approval even after merge.
-- **Test requirements:** `npm ci --ignore-scripts`, `npm run check:ui-assets`, `npm run build:check`, `npm run build:gas-multifile && npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test`.
+- **Authorized:** improve existing five-page sidebar/navigation semantics, shared focus/button/form/table CSS, skip link, mobile drawer and labelled core table regions; replace an audited small subset of static nav/hamburger icons with pinned Lucide SVGs; add `src/styles/shared-ui.css`, deterministic generated CSS/One-Click outputs, synthetic tests/CI and directly related docs/license.
+- **Not authorized:** new business pages, full visual redesign of every modal, server `.gs` changes, schema/RPC/auth changes, dashboard KPI/Excel privacy changes, G-26/G-32/G-33 AI report/job behavior, Chart.js replacement, changing Gemini, real user records or deployment.
+- **Invariant:** preserve five `data-page` values, original `page-*`, all `google.script.run` and `EventID` semantics, role-aware menu visibility, original responsive route behavior. No component-only permission assumptions.
+- **Build:** 7 `.gs` + 5 HTML partials + `Index.html` (13 GAS files), exact One-Click parity, Preflight-disabled `tw:` Tailwind and no runtime Lucide CDN. Existing external Font Awesome remains required by icons outside the migrated navigation.
+- **Verification:** `npm ci --ignore-scripts`; `check:ui-assets`; `build:check`; `build:gas-multifile` and `check:gas-multifile`; `check:contracts`; `release:preflight`; full `npm test` and controlled synthetic shared-navigation tests.
+- **Gate separation:** ChatGPT Technical Review (author-assisted; not independent), then **Product Owner explicit PR Merge approval**, then later **separate** Apps Script runtime/deploy approval. Web App @10 must not be changed by repository build or this PR.
 
 ## 10. Pre-change Checklist (must be followed)
 
