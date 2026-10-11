@@ -92,14 +92,14 @@ const expected = [
   '00-bootstrap.gs','01-schema-and-db.gs','02-auth-and-attachments.gs',
   '03-events-and-dashboard.gs','04-admin-and-audit.gs','05-reports-and-models.gs',
   '06-gemini-and-prompts.gs','00-document-head.html','01-styles.html',
-  '02-app-layout.html','03-modals.html','04-browser-app.html',
+  '02-app-layout.html','03-modals.html','03a-dashboard-mobile.html','04-browser-app.html',
   'Index.html','appsscript.json'].sort();
 const actual = fs.readdirSync(stage).sort();
 if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Wrong stage file set: '+JSON.stringify(actual));
 if(!fs.readFileSync(path.join(stage,'appsscript.json')).equals(fs.readFileSync(oldManifest))) {
   throw new Error('Manifest was modified in the staged package');
 }
-console.log('STAGE=PASS (13 files + preserved manifest; ordered script files)');
+console.log('STAGE=PASS (14 files + preserved manifest; ordered script files)');
 NODE
 (cd "$WORK" && "$CLASP" show-file-status > "$WORK/files.before.txt") || fail 'Cannot inspect proposed clasp file push.'
 

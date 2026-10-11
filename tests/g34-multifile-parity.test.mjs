@@ -13,13 +13,13 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('G-34 native Apps Script release is 7 .gs + 5 HTML partials + Index.html', () => {
+test('G-34 native Apps Script release is 7 .gs + 6 HTML partials + Index.html', () => {
   const entries = buildGasMultiFileEntries();
   assert.equal(GAS_SERVER_SOURCES.length,7);
-  assert.equal(GAS_HTML_SOURCES.length,5);
-  assert.equal(entries.size,13);
+  assert.equal(GAS_HTML_SOURCES.length,6);
+  assert.equal(entries.size,14);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).length,7);
-  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.html')).length,6);
+  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.html')).length,7);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).sort(),
     GAS_SERVER_SOURCES.map(x => path.basename(x)).sort());
   assert.ok(entries.has('Index.html'));
@@ -57,10 +57,11 @@ test('G-34 trusted template expands HTML partials in exact original order and by
   const entries = buildGasMultiFileEntries();
   const template = gasIndexTemplate();
   assert.equal(entries.get('Index.html').toString('utf8'),template);
-  assert.equal((template.match(/<\?!= include\('/g)||[]).length,5);
+  assert.equal((template.match(/<\?!= include\('/g)||[]).length,6);
   assert.ok(!template.includes('\n'),'Index expansion should add no bytes');
   assert.deepEqual(renderGasIndexOffline(entries),
-    fs.readFileSync(path.join(ROOT,'Index_Smart_SRRT_OneClick.html')));
+    Buffer.concat(GAS_HTML_SOURCES.map(source=>entries.get(path.basename(source)))));
+  assert.match(template,/03a-dashboard-mobile/);
   for (const filename of GAS_HTML_SOURCES) {
     assert.doesNotMatch(entries.get(path.basename(filename)).toString('utf8'),/<\?(?:=|!=|\s)/);
   }
@@ -73,7 +74,7 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
   try {
     fs.mkdirSync(path.join(fixture,'tools'),{recursive:true});
     fs.writeFileSync(path.join(fixture,'package.json'),JSON.stringify({type:'module'}));
-    for (const file of ['build-apps-script-multifile.mjs','build-one-click.mjs']) {
+    for (const file of ['build-apps-script-multifile.mjs','native-sources.mjs']) {
       fs.copyFileSync(path.join(ROOT,'tools',file),path.join(fixture,'tools',file));
     }
     for (const src of [...GAS_SERVER_SOURCES,...GAS_HTML_SOURCES]) {
@@ -90,7 +91,7 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
     let done=run('--write');
     assert.equal(done.status,0,done.stderr);
     const output=path.join(fixture,'dist','apps-script');
-    assert.equal(fs.readdirSync(output).length,13);
+    assert.equal(fs.readdirSync(output).length,14);
     const before=fs.statSync(path.join(output,'Index.html')).mtimeMs;
     assert.equal(run('--check').status,0,'new package should verify');
     assert.equal(fs.statSync(path.join(output,'Index.html')).mtimeMs,before,'check must not write');
@@ -103,18 +104,15 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
     assert.equal(run('--write').status,0,'write must clear stale generated content');
     assert.equal(run('--check').status,0);
 
-    // Strong provenance gate: never claim package parity when source drifted
-    // from either committed legacy release artifact.
-    fs.appendFileSync(path.join(fixture,'src','server','00-bootstrap.gs'),'\n// uncommitted source drift\n');
-    const parityReject = run('--write');
-    assert.equal(parityReject.status,1,'source drift from committed artifact must reject the build');
-    assert.match(parityReject.stderr,/differs from committed One-Click artifact/);
-    fs.copyFileSync(path.join(ROOT,'src','server','00-bootstrap.gs'),
-      path.join(fixture,'src','server','00-bootstrap.gs'));
-    fs.appendFileSync(path.join(fixture,'src','web','01-styles.html'),'\n<!-- source drift -->');
-    const htmlReject = run('--check');
-    assert.equal(htmlReject.status,1,'HTML drift from committed artifact must reject check');
-    assert.match(htmlReject.stderr,/HTML partial expansion differs from committed One-Click artifact/);
+    // Native-only sources, not frozen One-Click, govern source provenance.
+    fs.appendFileSync(path.join(fixture,'src','server','00-bootstrap.gs'),'\n// native source change\n');
+    assert.equal(run('--check').status,1,'stale server stage must reject source change');
+    assert.equal(run('--write').status,0,'write can explicitly stage changed native server');
+    assert.equal(run('--check').status,0);
+    fs.appendFileSync(path.join(fixture,'src','web','03a-dashboard-mobile.html'),'\n<!-- native only source drift -->');
+    assert.equal(run('--check').status,1,'native Dashboard partial source change must fail check');
+    assert.equal(run('--write').status,0);
+    assert.equal(run('--check').status,0,'re-staged native package matches sources');
   } finally {
     fs.rmSync(fixture,{recursive:true,force:true});
   }

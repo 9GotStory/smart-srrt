@@ -1,12 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ONE_CLICK_TARGETS } from './build-one-click.mjs';
+import { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
+export { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const GAS_OUTPUT_DIR = path.join(ROOT, 'dist', 'apps-script');
-export const GAS_SERVER_SOURCES = Object.freeze([...ONE_CLICK_TARGETS[0].sources]);
-export const GAS_HTML_SOURCES = Object.freeze([...ONE_CLICK_TARGETS[1].sources]);
 
 function nameFromSource(source) {
   const name = path.basename(source);
@@ -55,13 +54,21 @@ export function verifyGasMultiFileParity(entries = buildGasMultiFileEntries()) {
   }
 
   const server = Buffer.concat(GAS_SERVER_SOURCES.map(source => entries.get(nameFromSource(source))));
-  const committedServer = fs.readFileSync(path.join(ROOT, ONE_CLICK_TARGETS[0].target));
-  if (!server.equals(committedServer)) {
-    throw new Error('Modular server differs from committed One-Click artifact');
+  if (!server.length) throw new Error('Empty native server modules');
+  // Native sources are canonical. Both old One-Click artifacts stay frozen and
+  // must never gate or be rewritten by future native-only improvements.
+  for (const source of GAS_SERVER_SOURCES) {
+    if (!Buffer.isBuffer(entries.get(nameFromSource(source)))) {
+      throw new Error('Missing native server entry: '+source);
+    }
   }
-  const committedHtml = fs.readFileSync(path.join(ROOT, ONE_CLICK_TARGETS[1].target));
-  if (!renderGasIndexOffline(entries).equals(committedHtml)) {
-    throw new Error('HTML partial expansion differs from committed One-Click artifact');
+  const rendered = renderGasIndexOffline(entries);
+  if (!rendered.length || !rendered.toString('utf8').trimEnd().endsWith('</html>')) {
+    throw new Error('Native HTML expansion incomplete');
+  }
+  for (const source of GAS_HTML_SOURCES) {
+    const bytes=entries.get(nameFromSource(source)).toString('utf8');
+    if (bytes.includes('<?')) throw new Error('Untrusted Apps Script template in '+source);
   }
   return true;
 }
@@ -93,7 +100,7 @@ function main() {
     }
   }
   console.log('GAS MULTIFILE PASS: ' + entries.size +
-    ' files; server and HTML source parity verified; mode=' + option.slice(2));
+    ' files; native source manifest and staged bytes verified; mode=' + option.slice(2));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
