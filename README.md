@@ -83,7 +83,9 @@ npm run release:preflight
 
 รายละเอียด R2-01: [Frontend Build Foundation](docs/implementation/ux-r2-01-build-foundation.md) — Tailwind v4 ใช้แบบ Compile ล่วงหน้าและไม่มี Preflight ในระยะแรก; ยังไม่ใช่การปรับ UI ทุกหน้า, ยังไม่ติดตั้ง Lucide/Chart.js, และไม่เปลี่ยน Deployment Apps Script ที่ใช้งานอยู่.
 
-**UX-R2-02 Shared UI (Branch/PR Candidate):** [การปรับ Navigation และ Shared UI](docs/implementation/ux-r2-02-shared-ui.md) — เมนูเดิม 5 หน้า, Lucide SVG 6 รายการจาก Source ตรึง Commit, Focus/Keyboard, Mobile Drawer และตารางหลัก 3 ส่วน โดยยังไม่ Deploy Apps Script หรือแทนที่ UI ทั้งระบบ.
+**UX-R2-02 Shared UI (Merged Baseline):** [การปรับ Navigation และ Shared UI](docs/implementation/ux-r2-02-shared-ui.md) — เมนูเดิม 5 หน้า, Lucide SVG 6 รายการจาก Source ตรึง Commit, Focus/Keyboard, Mobile Drawer และตารางหลัก 3 ส่วน โดยยังไม่ Deploy Apps Script หรือแทนที่ UI ทั้งระบบ.
+
+**UX-R2-02B Shared Controls (Branch/PR Candidate):** [Form Labels, Buttons และ Responsive Tables](docs/implementation/ux-r2-02b-controls-forms-tables.md) — เพิ่มความชัดเจนของ Label ให้ข้อมูลเดิม 26 ฟิลด์ ตัวกรองและช่องตั้งค่า ทำให้ตาราง Admin 4 แห่งใช้คีย์บอร์ดเลื่อนได้ และเพิ่ม Shared CSS โดยไม่เปลี่ยน Backend, RPC หรือสิทธิ์ผู้ใช้และยังไม่ Deploy Apps Script.
 
 ### รูปแบบ Multi-file ใน Google Apps Script (G-34 — Candidate)
 
