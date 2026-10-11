@@ -332,6 +332,6 @@ A separate browser-openable, standalone mock was refined after reviewing the mob
 - [ ] Review privacy of public aggregates and small counts; do not promise anonymity that has not been assessed.
 - [ ] Review AI report primary action, warning, prior-report history, cancellation and unknown state against G-32/G-33 tests.
 - [ ] Record accessibility and mobile visual review results separately from unit/contract tests.
-- [ ] Obtain distinct-author Independent Review and Product Owner go/no-go for Phase P2 implementation, with separate merge/deploy gates.
+- [ ] Record owner-requested ChatGPT Technical Review (not distinct-author), then obtain Product Owner go/no-go for Phase P2 implementation, with separate merge/deploy gates.
 
 **Current release disposition:** This file is a **planning deliverable only**. No frontend changes, external dependencies, Apps Script deployment, migrated records or real AI calls have been made by preparing it.
