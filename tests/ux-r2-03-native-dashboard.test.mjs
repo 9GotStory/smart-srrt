@@ -46,3 +46,48 @@ test('R2-03 old One-Click files remain committed historical, not updated from na
   assert.ok(native.length>legacy.length);
   assert.ok(legacy.trimEnd().endsWith('</html>'));
 });
+
+test('R2-03 synthetic role switch clears private mobile cards and retains one table action path',()=>{
+  let onChange,selected=null,attached=null;
+  function element(tag='div'){
+    const classes=new Set(),callbacks={},attrs={};
+    return {tag,children:[],classList:{add:x=>classes.add(x),contains:x=>classes.has(x),toggle:(x,v)=>{if(v)classes.add(x);else classes.delete(x)}},
+      dataset:{},textContent:'',id:'',parentNode:null,cells:[],
+      setAttribute:(a,v)=>{attrs[a]=String(v)},getAttribute:a=>attrs[a],
+      append(...items){this.children.push(...items)},replaceChildren(){this.children=[]},
+      querySelectorAll(q){return q==='button[data-show-event-table]'?this.children.flatMap(card=>card.children.filter(x=>x.tag==='button')):[]},
+      addEventListener:(type,cb)=>{callbacks[type]=cb},click(){callbacks.click?.()},
+      focus(){selected=this}
+    };
+  }
+  const tr=element('tr');
+  tr.cells=['11 ต.ค. 2569','ไข้เลือดออก','บ้านตัวอย่าง','กำลังติดตาม','ผู้รับผิดชอบ','ตรวจสอบแล้ว','เข้าเกณฑ์','สูง','ไฟล์แนบ','ดำเนินการ'].map(s=>({textContent:s}));
+  const table=element('div');table.closest=()=>table;
+  const parent={insertBefore(cards){attached=cards}};
+  table.parentNode=parent;
+  const body=element('tbody');body.querySelectorAll=()=>[tr];body.closest=()=>table;
+  const panel=element('div');
+  const document={readyState:'complete',createElement:element,getElementById:id=>({eventBody:body,eventDetailPanel:panel,srrtDashboardCards:attached}[id]||null)};
+  class Observer{constructor(cb){onChange=cb}observe(){}}
+  const ctx={document,MutationObserver:Observer,currentUser:null,allData:[]};
+  vm.createContext(ctx);
+  const browserSource=html.split('<script>')[1].split('</script>')[0];
+  vm.runInContext(browserSource,ctx,{timeout:1000});
+  assert.equal(attached.children.length,0,'guest must not receive row cards');
+  ctx.currentUser={role:'Staff'};
+  ctx.allData=[{col24:'ลงสอบสวน',col26:'2569-10-11'}];
+  onChange();
+  assert.equal(attached.children.length,1);
+  const card=attached.children[0];
+  const action=card.children.find(x=>x.tag==='button');
+  assert.ok(action,'card must disclose existing authorized table');
+  assert.equal(card.children[0].textContent,'ไข้เลือดออก');
+  assert.equal(action.getAttribute('aria-expanded'),'false');
+  action.click();
+  assert.equal(table.classList.contains('srrt-mobile-table-expanded'),true);
+  assert.equal(action.getAttribute('aria-expanded'),'true');
+  assert.equal(selected,tr,'original authorized row should receive focus');
+  assert.ok(!card.children.some(x=>String(x.textContent).includes('สร้างรายงาน AI')),'mobile must not clone report action');
+  ctx.currentUser=null;ctx.allData=[];onChange();
+  assert.equal(attached.children.length,0,'logout must clear all private cards');
+});
