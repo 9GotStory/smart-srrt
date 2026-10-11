@@ -23,6 +23,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install pinned build dependencies (no install scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify generated Tailwind CSS (read-only)
+        run: npm run check:ui-assets
       - name: Verify deterministic One-Click build parity
         run: npm run build:check
       - name: Build and verify native Apps Script multi-file package (offline)
