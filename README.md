@@ -18,7 +18,7 @@ Smart SRRT เป็น Web App สำหรับหน่วยงานสา
 
 สรุปพฤติกรรมของปุ่มรายงาน: เมื่อยังไม่มีรายงานที่ยืนยันได้จะแสดง `สร้างรายงาน AI`; เมื่อมีหนึ่งฉบับจะแสดง `ดูรายงาน`; หลายฉบับจะแสดง `ดูรายงาน (N)` โดยเปิดหน้าต่าง **รายงานของเหตุการณ์** ซึ่งสามารถสั่ง **สร้างรายงานฉบับใหม่** พร้อมยืนยันก่อนดำเนินการได้ รายงานเก่ายังคงอยู่ใน `ReportRegistry`
 
-รายละเอียดการทำงานและข้อจำกัดทุกหมวดอยู่ใน **[doc/features.md](doc/features.md)**
+รายละเอียดการทำงานและข้อจำกัดทุกหมวดอยู่ใน **[docs/features.md](docs/features.md)**
 
 ## ผู้ใช้งานและสิทธิ์
 
@@ -56,7 +56,7 @@ tools/         build-one-click.mjs และเครื่องมือตร
 tests/         Node.js tests และ contract/integration tests
 docs/          architecture, baseline, deployment, governance,
                integration, migrations, roadmap, testing, ux, workflow
-doc/features.md  เอกสารความสามารถระบบปัจจุบัน (เอกสารชุดนี้)
+docs/features.md  เอกสารความสามารถระบบปัจจุบัน (เอกสารชุดนี้)
 AGENTS.md      กติกาและบริบทสำหรับ AI Coding Agents
 Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
 Index_Smart_SRRT_OneClick.html
@@ -64,7 +64,7 @@ Index_Smart_SRRT_OneClick.html
 README_ติดตั้ง_Smart_SRRT_OneClick.txt
 ```
 
-สองไฟล์ท้ายที่เป็น One-Click Artifacts ถูกประกอบตามลำดับที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
+ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
 
 สำหรับผู้พัฒนา:
 
@@ -103,10 +103,10 @@ npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร
 
 ## เวอร์ชันและสถานะหลักฐาน
 
-- **Code baseline ที่ใช้เขียนเอกสาร:** `main@60cda9da745e080122f104713bb0f0eb8ce0f110` (10 ตุลาคม 2026)
+- **Verified GitHub documentation baseline:** `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` (10 ตุลาคม 2026)
 - **ค่าใน CONFIG:** `VERSION = 2026.09.08.1`, `SCHEMA_VERSION = 7`, `REPORT_PROMPT_VERSION = 2026.10.06.1` — ไม่ใช่ค่าเดียวกันและไม่ควรใช้แทนกัน
-- **GitHub:** PR #64 และ #67 Merge แล้ว; CI ของ Merge ที่รายงานล่าสุดสำเร็จ; หลักฐานก่อน Merge #67 รายงาน 334/334 tests PASS
-- **Web App:** Product Owner รายงานว่า Deploy แล้วและ Basic UI Smoke 12/12 PASS รวมการดูเส้นทางปุ่มรายงานและประวัติ แต่ **ยังไม่ยืนยัน Deployed SHA/Artifact Parity อย่างอิสระ** และไม่ถือว่า End-to-End ผ่านครบทุกกรณี
+- **GitHub:** PR #64, #67 และ #70 (G-34) Merge แล้ว; workflow `tests` สำหรับ `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` สำเร็จ ([run #38061906543](https://github.com/9GotStory/smart-srrt/actions/runs/38061906543)). การตรวจแบบ CI/Mock/Offline ไม่ใช่การยืนยัน Apps Script Runtime
+- **Web App:** Product Owner เคยรายงานว่า Deploy เวอร์ชันของรอบ G-33 แล้วและ Basic UI Smoke 12/12 PASS; **ยังไม่ยืนยัน Deployed SHA/Artifact Parity อย่างอิสระ**. G-34 ที่ Merge ใน GitHub เป็นเพียง **Native Multi-file Deployment Candidate** ไม่ใช่หลักฐานว่าใช้ชุด 13 ไฟล์บน Apps Script จริง
 - **Migration:** Historical P4→v7 ยังเป็น **HOLD / ไม่ได้รับอนุญาต**; ห้ามถือว่าผลทดสอบ Synthetic หรือ Preflight เป็นการอนุญาตใช้ข้อมูลจริง
 - **Documentation Phase:** ไม่เพิ่ม Browser UAT, ไม่เรียก Gemini, ไม่ Deploy และไม่รัน Migration ในงานจัดทำเอกสารชุดนี้
 
@@ -114,13 +114,19 @@ npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร
 
 ## เริ่มอ่านที่นี่
 
-- [ความสามารถและสถานะฟีเจอร์ทั้งหมด — `doc/features.md`](doc/features.md)
+เอกสารอ้างอิง **`docs/features.md`** เป็น Feature Reference ฉบับปัจจุบันที่มี Traceability รายฟีเจอร์, ข้อจำกัด, Tests และสถานะหลักฐาน; เก็บ `doc/features.md` เป็นเอกสาร Legacy Snapshot ไม่ควรใช้แทนฉบับปัจจุบัน.
+
+- [ความสามารถและสถานะฟีเจอร์ทั้งหมด — `docs/features.md`](docs/features.md)
 - [แนวทางสำหรับ AI Agents — `AGENTS.md`](AGENTS.md)
 - [แหล่ง Source และวิธีสร้าง One-Click Artifacts](docs/architecture/g30-canonical-modular-release.md)
 - [Privacy & KPI](docs/architecture/p2-privacy-kpi-contract.md)
 - [ReportRegistry G-17](docs/governance/g17-report-registry.md), [Readiness G-26](docs/governance/g26-ai-report-readiness.md), [History G-27](docs/governance/g27-event-report-history.md)
 - [Report Jobs G-32](docs/deployment/g32-report-jobs.md) และ [Single Report Action G-33](docs/ux/g33-single-report-action.md)
 - [Migration Readiness P4→v7](docs/integration/p4-v7-migration-readiness-2026-10-09.md)
+
+## การสำรองข้อมูลและการดูแลรักษา
+
+ก่อนแก้ไข Google Apps Script/Schema หรือย้ายวิธี Deploy ต้องเก็บ Snapshot ของ Spreadsheet, โฟลเดอร์ Drive/Template, `appsscript.json`/OAuth scopes, Script source และเวอร์ชัน Deployment สำหรับการกู้คืน (ไม่ส่งข้อมูลจริงหรือรหัสเข้าถึงขึ้น GitHub). การสำรองข้อมูลเป็นขั้นตอนของผู้ดูแลที่ได้รับอนุญาต ไม่ใช่ผลของ `npm run build`. การย้าย Historical P4→v7 ยัง **HOLD** ตาม [Migration Policy](docs/governance/migration-version-release-policy.md). 
 
 ## การดูแลรักษาและการมีส่วนร่วม
 

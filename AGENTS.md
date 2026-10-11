@@ -2,7 +2,7 @@
 
 > ใช้กับ Codex, Claude Code, Antigravity, Multica และ AI Coding Agents ที่ทำงานใน Repository นี้  
 > Canonical Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt)  
-> เอกสารชุดนี้อ้างอิง `main@60cda9da745e080122f104713bb0f0eb8ce0f110` ณ 10 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
+> เอกสารชุดนี้อ้างอิง `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` ณ 11 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
 
 ## 1. Project Context
 
@@ -18,7 +18,7 @@ Smart SRRT เป็นระบบ **Event-based Epidemiological Surveillance**
 
 1. **`AGENTS.md`** — ข้อกำหนดการทำงานของ Agent (ไฟล์นี้)
 2. **[`README.md`](README.md)** — ขอบเขต ระบบ และวิธีพัฒนา/ปล่อย One-Click
-3. **[`doc/features.md`](doc/features.md)** — ความสามารถจริงและ Feature Status Matrix
+3. **[`docs/features.md`](docs/features.md)** — ความสามารถจริงและ Feature Status Matrix
 4. เอกสาร Architecture, Governance, Workflow, UX, Deployment, Integration/Migration ที่เกี่ยวข้องกับงานใน `docs/` โดยต้องพิจารณาวันที่และสถานะของเอกสาร
 5. Source Code และ Tests ที่เกี่ยวข้องกับ Issue จริง; ตรวจ HEAD, Diff, Branch Base และ Acceptance Criteria ก่อนตัดสินใจ
 
@@ -44,7 +44,7 @@ src/web/
 tools/                Build, Release Preflight, Offline Migration Assessment
 tests/                Node Tests, Integration/Contract and Mocked Tests
 docs/                 Architecture, Governance, Migration, Deployment, UX, Roadmap
-doc/features.md       Human + Agent System Feature Reference
+docs/features.md       Human + Agent System Feature Reference
 README.md             Project Overview
 AGENTS.md             Repository-wide Agent Rules
 Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
@@ -69,7 +69,7 @@ Index_Smart_SRRT_OneClick.html
 9. **Safe URLs/Logs:** ตรวจ Google Docs URL กับ DocumentID; ห้ามนำ Health Narrative, API Key, Token, Request Params หรือ Response Body ที่ระบุตัวบุคคลไปลง Logs/CI/GitHub. อย่าใช้ Production Data ใน Tests หรือ Fixture
 10. **Version Dimensions:** แยก `CONFIG.VERSION`, `SCHEMA_VERSION` และ `REPORT_PROMPT_VERSION`; เปลี่ยน Schema/Prompt Contract ได้เมื่อมี Spec, Migration/Rollback/Verification และการอนุมัติที่ชัดเจนเท่านั้น
 
-อ่าน [`doc/features.md`](doc/features.md) สำหรับนิยามทุก Feature แทนการอนุมานจากชื่อ Function หรือ Legacy Documents
+อ่าน [`docs/features.md`](docs/features.md) สำหรับนิยามทุก Feature แทนการอนุมานจากชื่อ Function หรือ Legacy Documents
 
 ## 5. Allowed Development and Review Workflow
 
@@ -106,19 +106,34 @@ Index_Smart_SRRT_OneClick.html
 
 ## 8. Documentation Maintenance
 
-เมื่อ Feature/Schema/UI ถูกเปลี่ยนภายใต้ PR ที่อนุมัติ ให้ปรับ `README.md` และ/หรือ `doc/features.md` ให้ตรง Source; ระบุสถานะ **Implemented in Source**, **Verified by Automated Tests**, **Observed in Deployed UI**, **Planned / Deferred**, **Not Supported** อย่างซื่อสัตย์และแยกหลักฐานให้ชัดเจน
+เมื่อ Feature/Schema/UI ถูกเปลี่ยนภายใต้ PR ที่อนุมัติ ให้ปรับ `README.md` และ/หรือ `docs/features.md` ให้ตรง Source; ระบุสถานะ **Implemented in Source**, **Verified by Automated Tests**, **Observed in Deployed UI**, **Planned / Deferred**, **Not Supported** อย่างซื่อสัตย์และแยกหลักฐานให้ชัดเจน
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. Current Documentation-Only Gate (10 Oct 2026)
+## 9. Current Documentation-Only Gate (11 Oct 2026)
 
-สำหรับงานจัดทำเอกสารตาม Handoff ล่าสุด **Scope เฉพาะ `README.md`, `doc/features.md` และ `AGENTS.md`**:
+สำหรับงานจัดทำเอกสารตาม Handoff ล่าสุด **Scope เฉพาะ `README.md`, `docs/features.md` และ `AGENTS.md`**:
 - ห้ามแก้ Application Source, Tests, Schema, Generated One-Click Artifacts หรือ Deployment
 - ห้ามรัน Migration, เรียก Gemini, เปิด Browser UAT หรือสร้าง Additional Test Tasks
 - อนุญาต Documentation Branch และ PR เพื่อ Product Owner ตรวจรับ; ไม่ Merge เอง
 - เป้าหมายคือเอกสารระบบที่คนอ่านเข้าใจและ AI Agent ใช้เริ่มงานต่อได้ โดยไม่อ้างสิ่งที่ยังไม่ตรวจว่า PASS
 
 เมื่อมีคำสั่งรอบใหม่ ให้ยืนยัน Scope/Approval ใหม่แทนการถือว่า Gate นี้ขยายเอง
+
+## 10. Pre-change Checklist (must be followed)
+
+- **Baseline/identity:** Record repository, exact `main` SHA, branch base SHA, accepted task/PR scope; inspect `git diff --name-status` and file list.
+- **Read in priority order:** `AGENTS.md` → `README.md` → `docs/features.md` → relevant `docs/**` → canonical `src/**` + matched `tests/**`. Historical `doc/features.md` is preserved but not the up-to-date feature authority.
+- **Frontend/RPC:** Verify visible Thai menu/button/error labels from `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-app.html`. Check `google.script.run` calls against public `src/server/*.gs` functions and server-side `requireAuth_`.
+- **Build commands (only when applicable):** `npm run build:check`, `npm run build:gas-multifile && npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test`. `npm run build` writes tracked One-Click artifacts and **must not** run in a documentation-only change.
+- **GAS deployment:** 7 script files + 5 HTML fragments + generated `Index.html` are a candidate; `dist/apps-script/` is generated and untracked. Keep target Apps Script manifest/project identifiers/OAuth permissions outside the bundle. V8 file evaluation order and actual Web App behavior require separate runtime verification.
+- **Data boundaries:** v7 MainData 39 columns (OwnerUserID at 39), EventAttachments 13, ReportRegistry 11, AuditLogs 10, VisitLogs 3. Treat P3/P4 conceptual contracts as historical unless reconciled to live source.
+- **Report guardrails:** Permission `report`; G-26 warnings advisory; G-17 registry append-only; G-32 one active job per project and unknown-state recovery; G-33 one primary action per Event; Gemini report path pinned to `models/gemini-3.8-flash` and bounded 503 retry only. Human must review generated drafts.
+- **Security/privacy:** Never commit real event/health data, Drive/Sheet URLs or IDs copied from production, secrets, access tokens, private configuration, or raw logs. Public aggregate is *not* guaranteed anonymous when groups are small.
+- **Independent Review:** Author may run deterministic checks but must not self-certify an independent approval. Distinct reviewer examines exact SHA, docs links/paths, UI claims, code drift, CI and privacy; Product Owner alone authorizes Merge. Deploy/Migration remain separate approvals.
+- **Context7:** Detect tools first. For version-dependent external APIs use Context7 library resolution and version-matched docs where available; fall back to official Google Apps Script/Sheets/Drive/Docs/Gemini or Node docs. External docs never supersede repository source, schema or approved baseline.
+
+**Documentation-only boundary of this PR:** Never modify `src/`, `tests/`, `tools/`, `.github/`, schema, generated One-Click files, existing `doc/features.md`, Workspace data, or production deployment. No Browser UAT or additional UAT task.
 
 ---
 **Agent reminder:** Read first → Inspect current code → Respect privacy/data integrity → Keep changes scoped → Separate implementation, review, merge, deploy and migration → Report evidence precisely.
