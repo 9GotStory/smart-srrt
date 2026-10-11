@@ -25,7 +25,7 @@ export function buildUiStyles() {
     }
     const css = fs.readFileSync(compiled, 'utf8').trim();
     if (!css || !css.includes('tw')) throw new Error('Tailwind output is empty or lacks prefixed utilities');
-    if (/<\\/style/i.test(css)) throw new Error('Unsafe HTML style terminator in CSS output');
+    if (css.toLowerCase().includes('</style')) throw new Error('Unsafe HTML style terminator in CSS output');
     const legacy = fs.readFileSync(LEGACY, 'utf8');
     return Buffer.from('<style>' + legacy + '\n/* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */\n' + css + '\n</style>', 'utf8');
   } finally {
