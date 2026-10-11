@@ -65,10 +65,19 @@ const fs = require('fs'), path = require('path'), root = process.argv[2];
 const manifest = JSON.parse(fs.readFileSync(path.join(root,'appsscript.json'), 'utf8'));
 if (manifest.runtimeVersion !== 'V8') throw new Error('Remote Apps Script runtimeVersion must be V8');
 const actual = fs.readdirSync(root).filter(x=>/\.(gs|html)$/.test(x)).sort();
-if (JSON.stringify(actual) !== JSON.stringify(['Code.gs','Index.html'])) {
-  throw new Error('Expected only legacy Code.gs and Index.html, found: '+JSON.stringify(actual));
+const layouts = [
+  ['Code.gs', 'Index.html'],
+  ['Index.html', 'รหัส.gs']
+];
+if (!layouts.some(layout => JSON.stringify(actual) === JSON.stringify(layout))) {
+  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; found: '+JSON.stringify(actual));
 }
-console.log('BACKED_UP_LEGACY_LAYOUT=PASS; REMOTE_MANIFEST_V8=PASS');
+const server = actual.find(x => x.endsWith('.gs'));
+const code = fs.readFileSync(path.join(root, server), 'utf8');
+if (!/\bfunction\s+doGet\s*\(/.test(code) || !/\bfunction\s+include\s*\(/.test(code)) {
+  throw new Error('Legacy server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
+}
+console.log('BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server+'; REMOTE_MANIFEST_V8=PASS');
 NODE
 (cd "$WORK/remote" && "$CLASP" list-deployments > "$WORK/deployments.before.txt") || fail 'Cannot list remote deployments.'
 (cd "$WORK/remote" && "$CLASP" list-versions > "$WORK/versions.before.txt") || fail 'Cannot list remote versions.'

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -39,4 +40,42 @@ test('G-34 script fails closed before any network operation without explicitly a
   const run = spawnSync('bash', [scriptPath, '--deploy'], {cwd:ROOT, env, encoding:'utf8'});
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /STOP: Set SMART_SRRT_APPROVED_SOURCE_SHA/);
+});
+
+
+const legacyBackupCheck = source.match(/node - "\$WORK\/remote" <<'NODE'\n([\s\S]*?)\nNODE/);
+test('G-34 legacy backup gate accepts exactly one Code.gs or Thai รหัส.gs and checks entrypoints', () => {
+  assert.ok(legacyBackupCheck, 'Missing inline backup-validation code');
+  function runFixture(serverName, code, options={}) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g34-clasp-layout-'));
+    try {
+      fs.writeFileSync(path.join(root, 'appsscript.json'),
+        JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
+      fs.writeFileSync(path.join(root, 'Index.html'), '<html></html>');
+      fs.writeFileSync(path.join(root, serverName), code);
+      if (options.extra) fs.writeFileSync(path.join(root, options.extra), 'function unrelated() {}');
+      return spawnSync(process.execPath, ['-', root], {input:legacyBackupCheck[1], encoding:'utf8'});
+    } finally {
+      fs.rmSync(root, {recursive:true, force:true});
+    }
+  }
+  const expectedCode = 'function doGet(e) {}\nfunction include(filename) {}\n';
+  for (const legacyName of ['Code.gs', 'รหัส.gs']) {
+    const run=runFixture(legacyName,expectedCode);
+    assert.equal(run.status,0,run.stderr);
+    assert.match(run.stdout, /BACKED_UP_LEGACY_LAYOUT=PASS/);
+    assert.ok(run.stdout.includes('LEGACY_SERVER_FILE='+legacyName));
+  }
+  const unknown=runFixture('main.gs',expectedCode);
+  assert.notEqual(unknown.status,0,'Unknown server name must fail');
+  assert.match(unknown.stderr,/Expected Index\.html with exactly one legacy/);
+  const duplicate=runFixture('รหัส.gs',expectedCode,{extra:'Code.gs'});
+  assert.notEqual(duplicate.status,0,'Duplicate server files must fail');
+  const unknownExtra=runFixture('Code.gs',expectedCode,{extra:'extra.html'});
+  assert.notEqual(unknownExtra.status,0,'Unknown HTML file must fail');
+  const wrongCode=runFixture('รหัส.gs','function unrelated() {}');
+  assert.notEqual(wrongCode.status,0,'Wrong source shape must fail');
+  assert.match(wrongCode.stderr,/expected doGet\/include entrypoints/);
+  const oldRuntime=runFixture('รหัส.gs',expectedCode,{v8:false});
+  assert.notEqual(oldRuntime.status,0,'Non-V8 runtime must fail');
 });
