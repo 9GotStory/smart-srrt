@@ -1,10 +1,11 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const server=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
-const html=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
+const server=nativeServer;
+const html=nativeHtml;
 const EVENT='11111111-1111-4111-8111-111111111111';
 const OTHER='22222222-2222-4222-8222-222222222222';
 const REPORT_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
