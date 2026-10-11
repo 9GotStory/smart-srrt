@@ -64,7 +64,7 @@ Index_Smart_SRRT_OneClick.html
 README_ติดตั้ง_Smart_SRRT_OneClick.txt
 ```
 
-สองไฟล์ท้ายที่เป็น One-Click Artifacts ถูกประกอบตามลำดับที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
+ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ต้องแก้ `src/server/` หรือ `src/web/` ก่อนเสมอ** แล้วจึงสร้าง Artifacts ใหม่; ห้ามแก้เฉพาะไฟล์ที่ Generate แล้วโดยปล่อย Source ต่างกัน
 
 สำหรับผู้พัฒนา:
 
