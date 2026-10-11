@@ -90,5 +90,5 @@ test('G-34 future clasp stage allowlist matches canonical Native manifest (14 + 
   assert.match(source,/REMOTE_MANIFEST_V8=PASS/);
   assert.match(source,/fs\.readFileSync\(oldManifest\)/);
   assert.match(source,/SMART_SRRT_CONFIRM_DEPLOY/);
-  assert.match(source,/"$CLASP" update-deployment "$DEPLOYMENT_ID"/);
+  assert.ok(source.includes('"$CLASP" update-deployment "$DEPLOYMENT_ID"'));
 });
