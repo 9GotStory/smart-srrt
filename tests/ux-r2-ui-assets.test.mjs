@@ -44,7 +44,7 @@ test('UX-R2 --check is read-only; generated CSS drift fails closed (synthetic ch
     assert.notEqual(run('--check').status,0,'changed generated CSS must be rejected');
     built=run('--write');assert.equal(built.status,0,built.stderr);
     assert.deepEqual(fs.readFileSync(path.join(tmp,target)),expected,'rebuild did not restore exact CSS bytes');
-    fs.appendFileSync(path.join(tmp,'src/styles/tailwind.css'),'\\n@source inline("tw:uppercase");\\n');
+    fs.appendFileSync(path.join(tmp,'src/styles/legacy.css'),'\n/* synthetic source drift */\n');
     assert.notEqual(run('--check').status,0,'authored stylesheet drift must be detected');
   } finally {
     fs.rmSync(tmp,{recursive:true,force:true});
