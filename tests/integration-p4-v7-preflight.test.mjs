@@ -1,3 +1,4 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -7,7 +8,7 @@ import {
 } from '../tools/p4-v7-schema-preflight.mjs';
 import fs from 'node:fs';
 
-const mainSource=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
+const mainSource=nativeServer;
 const normalPrefix=Array.from({length:38},(_,n)=>n<30?'legacy-business-'+n:'legacy-event-meta-'+n);
 const p4Archive=[
   'ArchiveKey','Timestamp','UserEmail','Role','Action','TargetSheet',
