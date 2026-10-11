@@ -73,7 +73,36 @@ The first command creates a **generated, untracked** `dist/apps-script/` directo
 
 **Important:** A successful build or GitHub merge does not propagate files to Google Apps Script. There is no connected Apps Script deployment/editing action in this workflow; project changes must be carried out through an independently authorized operator process.
 
-**Optional future `clasp` workflow:** Pin `filePushOrder` for the seven Script files and keep `.clasp.json` / authentication outside Git. A `clasp push` replaces **the entire remote project's editable content**, not one file at a time, so never use it to experiment on the current live project. This candidate is designed for approved manual staging; it does not configure or execute `clasp`. See [Google clasp guidance](https://developers.google.com/apps-script/guides/clasp) and [clasp project configuration](https://github.com/google/clasp#project-settings-file-claspjson).
+### Guarded clasp 3.x operator workflow (script committed, not executed)
+
+The repository includes [`tools/deploy-g34-clasp.sh`](../../tools/deploy-g34-clasp.sh) for a **separately approved operator action on Fedora**. This tool is **not** called by GitHub Actions, and merely committing or merging it does **not** authorize or perform any Apps Script deployment. Current G-34 runtime validation/cutover is still pending.
+
+Required inputs (set in the operator's terminal, **never commit values to GitHub**):
+
+- `SMART_SRRT_APPROVED_SOURCE_SHA` — exact 40-character `main` SHA, reviewed and approved **separately** for deployment; script rejects a moving/unreviewed `main`.
+- `SMART_SRRT_SCRIPT_ID` — target Apps Script project's Script ID (Project Settings).
+- `SMART_SRRT_DEPLOYMENT_ID` — **existing** Web App Deployment ID (not Script ID).
+- Optional: `SMART_SRRT_REPO` (default `~/dev/smart-srrt`), `SMART_SRRT_BACKUP_ROOT` (defaults outside Git), `SMART_SRRT_CLASP`.
+
+Run only after authenticating clasp 3.x on the operator's machine and collecting an explicit **deployment approval** (separate from approval to merge this script):
+
+```bash
+cd /home/thanakorn/dev/smart-srrt
+git fetch origin main
+git switch main
+git pull --ff-only origin main
+# Export the three target values above from separately verified records;
+# do not paste project IDs or tokens into GitHub, issues, or CI logs.
+bash tools/deploy-g34-clasp.sh --preflight
+```
+
+**Preflight does not push or update deployments.** It checks exact local/remote SHA, source parity, contracts and offline tests; pulls the current source/manifest into a private local backup; requires V8 and exactly `Code.gs` + `Index.html` in the existing editable project; validates the **existing** deployment ID; prepares precisely 7 ordered `.gs`, 5 HTML partials, one `Index.html`, plus the **unchanged pulled `appsscript.json`**. Extra remote script/HTML files stop the migration (no silent deletion). Inspect the backup and the proposed file-status report.
+
+Only after a separate explicit go/no-go decision, the operator may set `SMART_SRRT_CONFIRM_DEPLOY` to the same approved SHA and run `bash tools/deploy-g34-clasp.sh --deploy`. The script rechecks all gates, runs `clasp push` (replaces remote editable source), then `clasp update-deployment` against the existing ID (new immutable version / same Web App URL). The pushed editable HEAD and the deployed immutable version are **distinct**: a push success followed by update failure requires investigation, not an automatic retry.
+
+Preflight does **not** validate live Apps Script execution or verify real health data, Google Docs, Gemini, or the actual Web App. This script deliberately does **not** run Installer, Repair, Archive, Migration or Report generation. Keep all local backup output, `.clasp.json`, authorizations and manifest outside GitHub. The first actual cutover must also satisfy the staging/synthetic-data and human approval gates described above. See [clasp 3.x commands and filePushOrder](https://github.com/google/clasp#project-settings-file-claspjson).
+
+
 
 ## Why this approach
 
