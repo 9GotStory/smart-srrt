@@ -1,0 +1,33 @@
+name: UX-R2-02B temporary synthetic CSS compile
+on:
+  push:
+    branches:
+      - feat/ux-r2-02b-controls-forms-tables
+    paths:
+      - .github/workflows/ux-r2-02b-bootstrap.yml
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build deterministic CSS and verify 13 files using no production access
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm run check:ui-assets
+          npm run build:gas-multifile
+          npm run check:gas-multifile
+          node --test tests/ux-r2-controls-forms-tables.test.mjs tests/ux-r2-shared-ui.test.mjs tests/ux-r2-ui-assets.test.mjs
+          echo "CSS_BASE64_BEGIN"
+          base64 -w0 src/web/01-styles.html
+          echo
+          echo "CSS_BASE64_END"
+          echo "SHA256_EVIDENCE"
+          sha256sum src/web/01-styles.html Index_Smart_SRRT_OneClick.html
