@@ -24,10 +24,10 @@ test('G-34 clasp deployment is explicitly gated and keeps manifest and existing 
   assert.match(source, /--preflight/);
   assert.match(source, /--deploy/);
   assert.match(source, /clasp 3\.x/);
-  assert.match(source, /"\\$CLASP" pull/);
-  assert.match(source, /"\\$CLASP" push/);
-  assert.match(source, /"\\$CLASP" update-deployment "\$DEPLOYMENT_ID"/);
-  assert.doesNotMatch(source, /"\\$CLASP" create-deployment/);
+  assert.match(source, /"\$CLASP" pull/);
+  assert.match(source, /"\$CLASP" push/);
+  assert.match(source, /"\$CLASP" update-deployment "\$DEPLOYMENT_ID"/);
+  assert.doesNotMatch(source, /"\$CLASP" create-deployment/);
   assert.match(source, /fs\.readFileSync\(oldManifest\)/);
   assert.match(source, /filePushOrder/);
   assert.match(source, /BACKUP_ROOT/);
