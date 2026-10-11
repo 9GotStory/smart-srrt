@@ -1,10 +1,11 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const web=fs.readFileSync(new URL('../src/web/04-browser-app.html',import.meta.url),'utf8');
-const compiled=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
-const server=fs.readFileSync(new URL('../Code_Smart_SRRT_OneClick_v2026.09.08.1.gs',import.meta.url),'utf8');
+const compiled=nativeHtml;
+const server=nativeServer;
 function browserDashboard(rows, summary=null, loggedIn=true) {
   const start=web.indexOf('function updateDashboard(){');
   const end=web.indexOf('function makePublicInsight(',start);
