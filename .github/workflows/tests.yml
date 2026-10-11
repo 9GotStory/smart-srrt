@@ -27,12 +27,12 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify generated Tailwind CSS (read-only)
         run: npm run check:ui-assets
-      - name: Verify deterministic One-Click build parity
+      - name: Build canonical native Apps Script package (offline)
+        run: npm run build:gas-multifile
+      - name: Verify compiled CSS and native stage without writes
         run: npm run build:check
-      - name: Build and verify native Apps Script multi-file package (offline)
-        run: |
-          npm run build:gas-multifile
-          npm run check:gas-multifile
+      - name: Verify native staged byte parity (offline)
+        run: npm run check:gas-multifile
       - name: Verify syntax, RPC and duplicate declarations
         run: npm run check:contracts
       - name: Verify offline P6 release readiness without deployment
