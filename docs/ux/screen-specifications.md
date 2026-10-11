@@ -198,7 +198,90 @@ Proposed Thai-first labels to standardize in design review, while preserving off
 | Event status | `สถานะเหตุการณ์` | Mixing lifecycle and risk classification |
 | System closed | `ปิดการบันทึกและสร้างรายงานชั่วคราว` | "ระบบไม่พร้อมใช้งาน" when Dashboard is still readable |
 
-## 12. Design review checklist and boundaries
+## 12. Product-fit corrections: operational wireframes and safe interaction specs
+
+These directions supersede any **generic chart-first** or **forced wizard-stepper** interpretation of the initial wireframes. They are design proposals grounded in the current server/browser contract. Visual Figma QA remains NOT VERIFIED.
+
+### 12.1 Dashboard: two distinct experiences, one data contract
+
+**Public dashboard:**
+
+```text
+[Smart SRRT / ภาพรวมสถานการณ์ • ข้อมูลสถิติรวม]
+[พื้นที่: จังหวัด → อำเภอ → ตำบล → หมู่บ้าน] [ช่วงวันที่] [ค้นหา]
+[เหตุการณ์ทั้งหมด] [เข้าเกณฑ์สอบสวน] [ลงสอบสวนแล้ว] [อัตราตามเกณฑ์]
+[คำอธิบายนิยามตัวชี้วัด + ขอบเขต/ช่วงเวลาข้อมูล]
+[แนวโน้มรายเดือน] [จำนวนเหตุการณ์ตามพื้นที่]
+[กลุ่มโรค] [ระดับความเสี่ยง]   [ข้อควรระวังการตีความข้อมูลสรุป]
+[ประกาศ/แนวทาง]              (NO raw events/IDs/export)
+```
+
+**Authenticated officer dashboard:** same four KPI calculations and filters; add an **operational follow-up strip** derived only from authorized `allData` and current `col17/col26` semantics. Display explicit labels such as **เข้าเกณฑ์และยังไม่ระบุวันที่ลงสอบสวน** and scope of filter, rather than an invented algorithm that "predicts" risk. Put searchable/sortable (where implemented) event worklist **before the long chart gallery**. Use a compact top chart row, make remaining charts secondary and accessible by section anchors. Staff can view/export data but must never see create/edit/report action controls without permission.
+
+**Data caution:** a public `byVillage` bar is itself a potentially sparse aggregate. Do not infer patient identity or add tiny-group drill-down, direct links to individual event rows, or named patient-level alerts. Privacy/small-cell policy requires a separate backend decision, not a UI-only switch.
+
+**KPI copy:** `ลงสอบสวนโรคแล้ว` means qualifying records (`col17` == `เข้าเกณฑ์`) with investigation date `col26`, **not** signed-off investigations or completed AI reports. Display numerator/denominator near the rate. If no qualifying events, show a meaningful `0 / 0` explanation, not a fake 100% completion.
+
+### 12.2 Event form: one page, five anchored groups (not a new workflow engine)
+
+Actual current `fields[]` contains **26 declared fields**. Preserve their `colN` mapping, including unusual source order. Group them visually, without changing the stored schema:
+
+| Group | Existing source field IDs | Operator-oriented heading |
+| --- | --- | --- |
+| Receive & classify | `in2,in3,in4,in5,in6,in7` | รับแจ้งและจำแนกเหตุการณ์ |
+| Place & onset | `in9,in8,in13,in12,in11,in10,in29,in30` | เวลาและสถานที่เกิดเหตุ |
+| Verify & assess | `in14,in15,in16,in17,in19,in20,in23` | รายละเอียด การตรวจสอบ และความเสี่ยง |
+| Investigate & respond | `in18,in24,in26,in21,in22` | การสอบสวนและมาตรการ |
+| Final review | **No additional persisted fields** | ตรวจทาน / คำเตือน / บันทึกหรือยกเลิก |
+
+Avoid making the source-mapped `in*` keys user-facing. Keep users free to switch among sections and scroll, with sticky Save/Cancel region only where it does not obscure mobile inputs. The step indicator in the early Figma draft is **not a mandatory validation wizard**.
+
+Important current logic to preserve: area selects cascade; deprecated MasterData values may appear as disabled/inactive legacy options while editing existing records; closed events cannot be edited until reopened; expectedRevision mismatch must offer reload without silent overwrite; consistency warnings are advisory and must not be disguised as a server-imposed required field. Bind each label to its input and mark required only after checking actual server validation rules.
+
+### 12.3 Event statuses: do not collapse five different classifications
+
+| Dimension | Current source | Proposed UI presentation |
+| --- | --- | --- |
+| ตรวจสอบข้อเท็จจริง | `col15` + `col16` | Verification status, method/detail |
+| เข้าเกณฑ์สอบสวน | `col17` | Criterion decision, not same as investigation |
+| การลงสอบสวน | `col24`, `col26` | Investigation decision and date, not report approval |
+| ความเสี่ยง | `col19` | Risk label with textual level |
+| สถานะเหตุการณ์ | `recordStatus`, `eventLifecycle` | Lifecycle derived from data plus closed/void |
+| สถานะร่างรายงาน AI | ReportRegistry/G-32 job state | Separate report lifecycle, including unknown/cancel |
+
+Risk red/yellow/green must **never** be used as the sole cue for lifecycle or verification. Avoid converting any of these into one generic `status` badge.
+
+### 12.4 AI report: emphasize trustworthy action and job certainty
+
+The report page should use **event name/date/area** as context; show readiness reason and registry state in a compact summary and exactly one primary action. A successful job is not equivalent to a **human-reviewed clinical/epidemiological report**. Show draft warning near registered link.
+
+```text
+[สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI]
+[ค้นหาเหตุการณ์...] [ตัวกรองเฉพาะข้อมูลที่มีจริง]
+[เหตุการณ์] [ความพร้อม] [ประวัติรายงาน] [การดำเนินการหลัก]
+[ตัวอย่างเหตุการณ์] [มีข้อควรตรวจ] [2 ฉบับ] [ดูรายงาน (2)]
+                         (สร้างฉบับใหม่ทำผ่าน History + Confirm)
+[Job: รอเริ่ม / กำลังสร้าง / กำลังบันทึก / ยกเลิก / ยังไม่ทราบผล]
+[ข้อความเตือน: AI ทำร่างรายงาน ต้องตรวจทานก่อนนำไปใช้]
+```
+
+For `unknown` status do not use reassuring spinner alone; provide a meaningful **ตรวจสอบสถานะก่อนสร้างซ้ำ** action. Minimize/restore the job dialog without triggering another report, maintain the floating task indicator's keyboard reachability, and honor `reportSummaryState` fail-closed behavior.
+
+### 12.5 Admin: in-page workspaces and explicit dangerous-action boundaries
+
+Use a left subnav or segmented secondary tabs inside the existing Admin page. **Overview is not an action hub:** installation status is read-only; `repairSystem` must require a deliberate labeled action and confirmation. Separate archive and import from all navigation or background loads. Use explicit loading/error/permission states when switching subviews.
+
+On Mobile, avoid presenting all seven sections at once. Use a section picker while keeping the currently selected state obvious and readable. Users without `Manager`/`Super Admin` permission must not have access to Admin data regardless of display changes.
+
+### 12.6 Design mockup validity and review
+
+- Existing **Figma frames**: only Dashboard desktop + Events desktop (working draft); **no screenshot-based visual QA** due Starter-plan Figma MCP limit. Do not label them as approved high-fidelity UI.
+- Figma nodes currently use **Noto Sans Thai**; running site loads **Prompt**. Match Prompt or explicitly approve/test substitution (line breaks and card heights will shift).
+- Every Figma screen contains a visible **ข้อมูลตัวอย่างเพื่อการออกแบบ** marker; illustrative counts, locations and events are synthetic and not live SRRT evidence.
+- A real release design must add the other three primary screens, mobile/tablet states and the 13 existing dialogs, or document precise reusable component mappings.
+- No misleading illustration of automatic AI fact verification, report sign-off, notifications or clinical diagnosis, because those features are not supported.
+
+## 13. Design review checklist and boundaries
 
 - [ ] Confirm all 5 pages, 7 Admin workspaces, 13 modals and report indicator have mockups at desktop/tablet/mobile or a documented reuse pattern.
 - [ ] Confirm code-specific IDs, event flows and authorization match current `src/web/*` + `docs/features.md`.
