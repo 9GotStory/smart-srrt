@@ -1,9 +1,10 @@
+import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=fs.readFileSync(new URL('../Index_Smart_SRRT_OneClick.html',import.meta.url),'utf8');
+const html=nativeHtml;
 const EVENT='11111111-1111-4111-8111-111111111111';
 
 // The report/history module: shared state, the new-report confirmation, both
