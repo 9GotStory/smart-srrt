@@ -281,7 +281,47 @@ On Mobile, avoid presenting all seven sections at once. Use a section picker whi
 - A real release design must add the other three primary screens, mobile/tablet states and the 13 existing dialogs, or document precise reusable component mappings.
 - No misleading illustration of automatic AI fact verification, report sign-off, notifications or clinical diagnosis, because those features are not supported.
 
-## 13. Design review checklist and boundaries
+## 13. Responsive prototype refinement and design gate (UX-R1.1)
+
+**Source of observation:** offline UX prototype with *synthetic-only* incident rows and report states; screenshot inspection of the first mock mobile dashboard revealed horizontal scrolling of event/workflow tables that obscured high-value status labels and primary buttons.
+
+### 13.1 Design correction — mobile record cards
+
+At widths **360–640 CSS px**, replace the *visual presentation* of the Dashboard authorized follow-up table, Event Management table and AI Reporter table with vertically stacked semantic **incident cards**. At desktop/tablet widths above 640 CSS px, continue to use the existing information-dense tables unless a usability check suggests otherwise. This is a visual/DOM representation choice, not a separate dataset or backend API.
+
+| Surface | Card header and context | Required statuses | Primary action |
+| --- | --- | --- | --- |
+| Authenticated Dashboard worklist | Event title and receipt date | Area, verification, criteria and investigation/date indicator | View event details (role-gated) |
+| Event Management | Event and date/area | Verification, criteria, risk and lifecycle; owner/attachments if the source view currently includes them | View/edit according to server role and closed/revision state |
+| AI Reporter | Event and area/date context | Readiness, registered-report count and job status, including unknown/blocked | Exactly **one** state-driven G-33 report action |
+
+Do **not** hide missing data dimensions when converting rows to cards; if a field exists in the current table, the mobile representation must provide an equally accessible view. A desktop table may remain in the DOM as the **canonical semantic source**; prevent duplicate focusable actions or screen-reader duplicate content through carefully reviewed hidden/inert behavior, and ensure client-side filtering affects both presentations. Never clone stale buttons from previous-session rows.
+
+**Public guests must not receive these authenticated cards**; visitors receive aggregate-only KPIs and accessible aggregate chart summaries. Switching user/session mid-request must clear the cards exactly like authorized raw table rows.
+
+### 13.2 Prototype UX-R1.1 verification (not production UAT)
+
+A separate browser-openable, standalone mock was refined after reviewing the mobile screenshots. Changes made **only in the conversational prototype, not in GitHub production code**:
+
+- Dashboard, Events and AI Reporter receive mobile incident cards with status labels and accessible text/action buttons; desktop tables preserved.
+- Event search synchronizes with mock mobile cards.
+- Long Thai KPI labels receive additional room to wrap at narrow widths.
+- Used local Chromium + Playwright `set_content` with viewports **360, 390, 768, 1440 CSS px**.
+- All five top-level views were navigable; Events mock filter, seven Admin subsection navigation example (Audit selected), Library empty-search state, Public aggregate mode and report card visibility were checked.
+- Observed in this smoke run: **no uncaught page JavaScript exception** and **no document-level horizontal overflow** at those four widths.
+
+**Unverified:** pixel-by-pixel QA of every dialog, all 26 actual persisted form inputs, genuine Chart.js, actual Tailwind v4 compiled output, Apps Script IFRAME, server-side RBAC, keyboard/screen-reader accessibility conformance and real Google Workspace operations. The mock uses local sample charts, synthetic data and hand-authored CSS; it is **not** an approved production implementation.
+
+### 13.3 Required future implementation acceptance
+
+- Card/table parity for the same EventID, selected filters, active session and role.
+- `Tab` reaches **one** actionable report button per Event in either layout, never duplicate hidden buttons.
+- Date/criteria/investigation/risk/lifecycle remain semantically distinct with labelled statuses.
+- Filters, zero-result state, long disease names, long Thai village names, screen zoom and modal focus are verified by deterministic UI checks plus human visual review.
+- Preserve server permission, expectedRevision, one-active-report-job and unknown-state defenses independent of responsive mode.
+- Retest image/Excel export only after Chart.js is implemented, with clear public-private data scopes.
+
+## 14. Design review checklist and boundaries
 
 - [ ] Confirm all 5 pages, 7 Admin workspaces, 13 modals and report indicator have mockups at desktop/tablet/mobile or a documented reuse pattern.
 - [ ] Confirm code-specific IDs, event flows and authorization match current `src/web/*` + `docs/features.md`.
