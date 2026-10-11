@@ -548,7 +548,7 @@
       else if(f[2].startsWith('select_custom:')){const opts=f[2].split(':')[1].split('|');input=`<select id="${id}"><option value="">-- เลือก --</option>${opts.map(o=>`<option>${escapeHtml(o)}</option>`).join('')}</select>`}
       else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
       else input=`<input type="text" id="${id}">`;
-      return`<div class="fg${span}"><label>${escapeHtml(f[1])}</label>${input}</div>`
+      return`<div class="fg${span}"><label for="${id}">${escapeHtml(f[1])}</label>${input}</div>`
     }).join('');
     refreshRecordAreaOptions()
   }
