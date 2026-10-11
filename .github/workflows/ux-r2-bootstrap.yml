@@ -1,6 +1,7 @@
 name: UX-R2 bootstrap fixture generator (TEMPORARY)
 
 # Temporary, read-only, branch-scoped job. Remove before PR merge.
+# Rerun after fixture drift assertion correction.
 on:
   push:
     branches:
