@@ -1,5 +1,5 @@
 name: UX-R2-02 synthetic asset bootstrap (TEMPORARY)
-# Rerun after source-grounded synthetic test corrections.
+# Rerun after source-grounded synthetic test corrections (final CSS assertion).
 on:
   push:
     branches:
