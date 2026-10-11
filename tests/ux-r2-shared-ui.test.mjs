@@ -93,7 +93,7 @@ test('R2-02 preserves shared visual keyboard CSS and identical modular/One-Click
   assert.match(sharedCSS,/srrt-skip-link:focus-visible/);
   assert.match(sharedCSS,/nav button:focus-visible/);
   assert.ok(sharedCSS.includes('.table-wrap[role="region"]:focus-visible'));
-  assert.match(sharedCSS,/sidebar:not\\(\\.open\\)/);
+  assert.ok(sharedCSS.includes('.sidebar:not(.open)'));
   assert.match(sharedCSS,/prefers-reduced-motion:reduce/);
   assert.ok(buildHTML.includes(layout),'built One-Click must contain exact updated layout partial');
   assert.ok(buildHTML.includes('UX-R2 shared UI'),'compiled output must include shared scoped CSS');
