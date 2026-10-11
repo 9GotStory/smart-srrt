@@ -110,16 +110,16 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
-## 9. UX-R2-02 Shared UI Gate (11 Oct 2026)
+## 9. UX-R2-02B Controls, Forms and Tables Gate (11 Oct 2026)
 
-R2-01 Tailwind v4 Build Foundation was separately reviewed and merged as `main@055677fba61e8df95f93776661386957bdb902de`. The Product Owner subsequently authorized **UX-R2-02 incremental Shared UI work**, tracked in [Issue #80](https://github.com/9GotStory/smart-srrt/issues/80) on `feat/ux-r2-02-shared-ui`. This gate supersedes the narrower R2-01 authorization **only for that branch and task**.
+The Product Owner explicitly authorized continuation after `main@6105edbf47e8cdc00aaf08020b83af650f9359e3` (PR #81, merged), limited to [Issue #82](https://github.com/9GotStory/smart-srrt/issues/82) on `feat/ux-r2-02b-controls-forms-tables`. Earlier R2-02 navigation authorizations remain historical, not general deployment permission.
 
-- **Authorized:** improve existing five-page sidebar/navigation semantics, shared focus/button/form/table CSS, skip link, mobile drawer and labelled core table regions; replace an audited small subset of static nav/hamburger icons with pinned Lucide SVGs; add `src/styles/shared-ui.css`, deterministic generated CSS/One-Click outputs, synthetic tests/CI and directly related docs/license.
-- **Not authorized:** new business pages, full visual redesign of every modal, server `.gs` changes, schema/RPC/auth changes, dashboard KPI/Excel privacy changes, G-26/G-32/G-33 AI report/job behavior, Chart.js replacement, changing Gemini, real user records or deployment.
-- **Invariant:** preserve five `data-page` values, original `page-*`, all `google.script.run` and `EventID` semantics, role-aware menu visibility, original responsive route behavior. No component-only permission assumptions.
-- **Build:** 7 `.gs` + 5 HTML partials + `Index.html` (13 GAS files), exact One-Click parity, Preflight-disabled `tw:` Tailwind and no runtime Lucide CDN. Existing external Font Awesome remains required by icons outside the migrated navigation.
-- **Verification:** `npm ci --ignore-scripts`; `check:ui-assets`; `build:check`; `build:gas-multifile` and `check:gas-multifile`; `check:contracts`; `release:preflight`; full `npm test` and controlled synthetic shared-navigation tests.
-- **Gate separation:** ChatGPT Technical Review (author-assisted; not independent), then **Product Owner explicit PR Merge approval**, then later **separate** Apps Script runtime/deploy approval. Web App @10 must not be changed by repository build or this PR.
+- **Authorized:** semantic label associations for existing dynamic 26-field form, Dashboard date/area filters, 15 existing Admin setting/master controls, login/registration/owner inputs; named/focusable Admin tables (seven total with R2-02's three); scoped shared CSS for buttons/forms/responsive tables and action groups; new synthetic Node tests, deterministic generated CSS and One-Click HTML, documentation and CI.
+- **Not authorized:** new user-facing pages, modifying server `.gs`, record/schema/required-field semantics, permissions, auth/logout, AI report readiness/G-32/G-33/ReportRegistry, Chart.js or wider Lucide migrations, all-modals redesign, real Google Workspace data, `clasp push` or Apps Script deployment @10.
+- **Source invariants:** all 26 existing `fields[]` definitions/input IDs, 7 existing table bodies, five `data-page` values, server RPC/event revision/session guards, public aggregate PNG and private Excel boundaries remain intact.
+- **Build:** Tailwind v4 `tw:` prefixes with Preflight off; 7 server `.gs` + 5 HTML partials + expanded `Index.html` = 13 staged files. The check phase must be read-only, One-Click parity exact, and temporary asset bootstrap workflow deleted before PR.
+- **Verification:** `npm ci --ignore-scripts`, `check:ui-assets`, `build:check`, G-34 build/check, `check:contracts`, `release:preflight`, full `npm test`, plus R2-02B form/table source tests.
+- **Approval boundaries:** ChatGPT Technical Review (author-assisted, not independent), separate Product Owner Merge approval, separate approval for any actual GAS/Web App deployment. This branch cannot deploy production.
 
 ## 10. Pre-change Checklist (must be followed)
 
