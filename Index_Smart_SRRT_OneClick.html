@@ -58,29 +58,43 @@
     @media(max-width:980px){.sidebar{transform:translateX(-105%);transition:.25s}.sidebar.open{transform:none}.mobile-overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:15}.main{margin-left:0;width:100%;padding:16px}.hamb{display:block}.topbar{align-items:stretch}.banner{flex-direction:column;align-items:flex-start}.charts{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.span-3{grid-column:span 1}.chart{height:285px}}
     @media(max-width:560px){.kpis{grid-template-columns:1fr}.kpi .num{font-size:28px}.banner h2{font-size:21px}.modal{padding:10px}.filter .input,.filter .btn{width:100%}.panel-head{align-items:flex-start;flex-direction:column}}
   
+/* UX-R2 shared UI */
+/* UX-R2-02: shared shell/a11y layer; legacy selectors retained verbatim. */
+.srrt-skip-link{position:fixed;z-index:150;top:12px;left:12px;transform:translateY(-180%);padding:10px 16px;border-radius:12px;background:#fff;color:#0f172a;border:2px solid #0f766e;box-shadow:0 8px 24px rgba(15,23,42,.2);font-weight:700;text-decoration:none}
+.srrt-skip-link:focus,.srrt-skip-link:focus-visible{transform:translateY(0)}
+.srrt-icon{width:20px;height:20px;flex:0 0 20px;display:block;stroke:currentColor}
+.nav button{min-width:0}
+.nav button[aria-current="page"]{box-shadow:inset 3px 0 0 #99f6e4;background:rgba(255,255,255,.18)}
+.nav button:focus-visible,.hamb:focus-visible,.auth-card button:focus-visible,.btn:focus-visible,.input:focus-visible,.fg input:focus-visible,.fg select:focus-visible,.fg textarea:focus-visible,.table-wrap[role="region"]:focus-visible{outline:3px solid #0ea5e9;outline-offset:3px}
+.nav button:focus-visible{outline-color:#99f6e4}
+.table-wrap[role="region"]{scrollbar-gutter:stable}
+@media(max-width:980px){.sidebar:not(.open){visibility:hidden}.sidebar.open{visibility:visible}}
+@media(prefers-reduced-motion:reduce){.srrt-skip-link,.sidebar,.nav button{transition:none}}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}
 </style>
 </head>
 <body>
-<div class="mobile-overlay" id="overlay" onclick="toggleSidebar(false)"></div>
+<a href="#mainContent" class="srrt-skip-link">ข้ามไปยังเนื้อหาหลัก</a>
+<div class="mobile-overlay" id="overlay" aria-hidden="true" onclick="toggleSidebar(false)"></div>
 <div class="app">
   <aside class="sidebar" id="sidebar">
-    <div class="brand"><img id="logoImg" src="" alt="logo"><div><h1 id="sideTitle">Smart SRRT</h1><p id="sideOrg">District Edition</p></div></div>
-    <div class="nav">
-      <button class="active" data-page="dashboard" onclick="showPage('dashboard',this)"><i class="fa-solid fa-chart-line"></i>Dashboard</button>
-      <button class="auth-only" data-page="records" onclick="showPage('records',this)"><i class="fa-solid fa-pen-to-square"></i>บันทึก/แก้ไขข้อมูล</button>
-      <button class="auth-only" data-page="reporter" onclick="showPage('reporter',this)"><i class="fa-solid fa-file-medical"></i>สร้างรายงานสอบสวนโรค</button>
-      <button class="manager-only" data-page="admin" onclick="showPage('admin',this)"><i class="fa-solid fa-gears"></i>การจัดการระบบ</button>
-      <button data-page="library" onclick="showPage('library',this)"><i class="fa-solid fa-book-medical"></i>ประกาศ/แนวทาง/คู่มือ</button>
+    <div class="brand tw:flex tw:items-center tw:gap-4"><img id="logoImg" src="" alt="logo"><div><h1 id="sideTitle">Smart SRRT</h1><p id="sideOrg">District Edition</p></div></div>
+    <div class="nav" role="navigation" aria-label="เมนูหลัก">
+      <button type="button" class="active" data-page="dashboard" aria-current="page" onclick="showPage('dashboard',this)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="layout-dashboard"><rect width="7" height="9" x="3" y="3" rx="1" /> <rect width="7" height="5" x="14" y="3" rx="1" /> <rect width="7" height="9" x="14" y="12" rx="1" /> <rect width="7" height="5" x="3" y="16" rx="1" /></svg>Dashboard</button>
+      <button type="button" class="auth-only" data-page="records" onclick="showPage('records',this)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="clipboard-list"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /> <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /> <path d="M12 11h4" /> <path d="M12 16h4" /> <path d="M8 11h.01" /> <path d="M8 16h.01" /></svg>บันทึก/แก้ไขข้อมูล</button>
+      <button type="button" class="auth-only" data-page="reporter" onclick="showPage('reporter',this)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="file-text"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg>สร้างรายงานสอบสวนโรค</button>
+      <button type="button" class="manager-only" data-page="admin" onclick="showPage('admin',this)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="settings"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /> <circle cx="12" cy="12" r="3" /></svg>การจัดการระบบ</button>
+      <button type="button" data-page="library" onclick="showPage('library',this)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="book-open"><path d="M12 5v16" /> <path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" /></svg>ประกาศ/แนวทาง/คู่มือ</button>
     </div>
     <div class="auth-card" id="authBox"><b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard ได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button></div>
   </aside>
 
-  <main class="main">
+  <main class="main" id="mainContent" tabindex="-1">
     <div class="topbar">
-      <button class="hamb" onclick="toggleSidebar(true)"><i class="fa-solid fa-bars"></i></button>
+      <button type="button" id="openSidebarBtn" class="hamb" aria-label="เปิดเมนูหลัก" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(true)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="menu"><path d="M4 5h16" /> <path d="M4 12h16" /> <path d="M4 19h16" /></svg></button>
       <div class="banner" style="flex:1"><div><h2 id="appName">Smart SRRT Dashboard & AI Reporter</h2><p id="appSubtitle">ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่</p></div><div class="pill" id="bannerText"><i class="fa-solid fa-bullhorn"></i> ระบบพร้อมใช้งาน</div></div>
     </div>
     <div id="closedBox" class="closed" style="display:none"><i class="fa-solid fa-triangle-exclamation"></i> ระบบถูกปิดการบันทึกและสร้างรายงานชั่วคราว ขณะนี้ยังดู Dashboard ได้</div>
@@ -116,20 +130,20 @@
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
         <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
+        <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><table aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
 
     <section id="page-records" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
       <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
-      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+      <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์" style="margin-top:14px"><table aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
     </section>
 
     <section id="page-reporter" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
       <div class="help">ระบบสร้างโฟลเดอร์รายงานและ Google Docs Template ให้อัตโนมัติตั้งแต่ติดตั้งครั้งแรก เหลือเพียงใส่ Gemini API Key ผ่านหน้า Admin</div>
-      <div class="table-wrap" style="margin-top:16px"><table><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
+      <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น" style="margin-top:16px"><table aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
     </section>
 
     <section id="page-admin" class="section">
@@ -408,7 +422,21 @@
   function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
   function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
   function openModal(id){el(id).classList.add('open')} function closeModal(id){el(id).classList.remove('open')}
-  function toggleSidebar(show){el('sidebar').classList.toggle('open',show);el('overlay').classList.toggle('show',show)}
+  function toggleSidebar(show){
+    const sidebar=el('sidebar'), trigger=el('openSidebarBtn');
+    sidebar.classList.toggle('open',show);el('overlay').classList.toggle('show',show);
+    if(trigger)trigger.setAttribute('aria-expanded',show?'true':'false');
+    const mobile=typeof window!=='undefined' && typeof window.matchMedia==='function' && window.matchMedia('(max-width:980px)').matches;
+    if(mobile && show){
+      const active=sidebar.querySelector('.nav button.active');
+      if(active)active.focus();
+    }else if(mobile && !show && sidebar.contains(document.activeElement) && trigger){
+      trigger.focus();
+    }
+  }
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape' && el('sidebar').classList.contains('open'))toggleSidebar(false);
+  });
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
   function unique(arr){return [...new Set(arr.filter(v=>String(v||'').trim()!=='').map(v=>String(v).trim()))].sort((a,b)=>a.localeCompare(b,'th'))}
   function isInvestigationCriteriaMet(value){return String(value||'').trim()==='เข้าเกณฑ์'}
@@ -417,7 +445,11 @@
 
   function showPage(page,btn){
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
-    document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');toggleSidebar(false);
+    const navButtons=[...document.querySelectorAll('.nav button')];
+    navButtons.forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current')});
+    const selected=btn||navButtons.find(b=>b.dataset.page===page);
+    if(selected){selected.classList.add('active');selected.setAttribute('aria-current','page')}
+    toggleSidebar(false);
     if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
   }
 
