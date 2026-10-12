@@ -23,5 +23,8 @@ export const GAS_HTML_SOURCES = Object.freeze([
   'src/web/03f-client-event-controls.html',
   'src/web/03g-client-event-history.html',
   'src/web/03h-client-event-records.html',
+  'src/web/03i-client-report-actions.html',
+  'src/web/03j-client-report-job.html',
+  'src/web/03k-client-report-generation.html',
   'src/web/04-browser-app.html',
 ]);

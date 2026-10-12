@@ -1,0 +1,243 @@
+<script>
+  function reportJobTerminal(job){return !!job&&REPORT_TERMINAL_STATES.has(job.status)}
+  function reportStageLabel(job){
+    if(!job)return 'ไม่มีงานสร้างรายงาน';
+    if(job.status==='completed')return 'สร้างรายงานสำเร็จ';
+    if(job.status==='cancelled')return 'ยกเลิกการสร้างรายงานแล้ว';
+    if(job.status==='failed')return 'สร้างรายงานไม่สำเร็จ';
+    if(job.status==='unknown')return 'ไม่สามารถยืนยันผล กรุณาตรวจประวัติรายงาน';
+    if(job.status==='cancel_requested')return 'กำลังขอยกเลิก · รอให้ขั้นตอนปัจจุบันสิ้นสุด';
+    if(job.status==='finalizing')return 'กำลังบันทึก Google Docs และทะเบียนรายงาน';
+    const steps={
+      queued:'รอเริ่มสร้างรายงาน',
+      preparing:'กำลังเตรียมข้อมูลรายงาน',
+      gemini_1:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 1–3',
+      gemini_2:'กำลังเรียก Gemini 3.8 Flash · หัวข้อ 4–6',
+      post_gemini:'กำลังเตรียมบันทึกเอกสาร'
+    };
+    return steps[job.stage]||'กำลังสร้างรายงานด้วย Gemini 3.8 Flash';
+  }
+  function showReportGenerationStatus(message,url){
+    el('reportResultStatus').textContent=String(message||'');
+    const link=el('reportResultLink');
+    const target=String(url||'');
+    const valid=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(target);
+    if(valid)link.href=target;
+    else link.removeAttribute('href');
+    link.style.display=valid?'inline-flex':'none';
+    return valid;
+  }
+  function paintReportTask(job){
+    if(!job)return;
+    if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob))return;
+    if(activeReportJob&&activeReportJob.id===job.id){
+      if(reportJobTerminal(activeReportJob)&&!reportJobTerminal(job))return;
+      if(activeReportJob.status==='cancel_requested'&&job.status==='running')return;
+    }
+    const previousStatus=activeReportJob&&activeReportJob.id===job.id?activeReportJob.status:'';
+    activeReportJob=job;
+    if(job.status==='unknown')reportUnknownNeedsVerification=true;
+    if(job.status==='completed')reportUnknownNeedsVerification=false;
+    localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
+    if(job.status==='completed'&&previousStatus!=='completed'){
+      // A completed G-32 job is not equivalent to an already-refreshed registry view.
+      reportSummaryState={status:'loading',summaries:{}};
+      void refreshReportSummaries();
+    }
+    const label=reportStageLabel(job);
+    const detail=job.message ? ' · '+String(job.message) : '';
+    const possibleDoc=job.status==='completed'?job.documentUrl:null;
+    showReportGenerationStatus(label+detail,possibleDoc);
+    const indicator=el('reportTaskIndicator');
+    indicator.style.display='inline-flex';
+    el('reportTaskStatus').textContent=label;
+    const terminal=reportJobTerminal(job);
+    refreshReportActionButtons();
+    // The confirmation must never outlive the job's cancellable state.
+    if(reportCancelPendingJobId===job.id &&
+       (terminal||job.status==='cancel_requested'||job.status==='finalizing')){
+      hideReportCancelConfirm();
+    }
+    el('closeReportJobBtn').innerHTML=terminal?'<i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง':'<i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ';
+    const cancel=el('cancelReportJobBtn');
+    cancel.style.display=(!terminal&&job.status!=='finalizing')?'inline-flex':'none';
+    cancel.disabled=job.status==='cancel_requested';
+    const close=el('dismissReportJobBtn');
+    close.style.display=terminal?'inline-flex':'none';
+    if(terminal){
+      reportGenerationInFlight.clear();
+      stopReportPolling();
+      if(!el('reportResultModal').classList.contains('open'))toast(label);
+    }else{
+      reportGenerationInFlight.add(job.eventId);
+      startReportPolling();
+    }
+  }
+  function reopenReportTask(){
+    if(!activeReportJob)return;
+    openModal('reportResultModal');
+    showReportGenerationStatus(reportStageLabel(activeReportJob)+(activeReportJob.message?' · '+activeReportJob.message:''),activeReportJob.status==='completed'?activeReportJob.documentUrl:null);
+  }
+  function closeReportTaskModal(){
+    closeModal('reportResultModal');
+    if(activeReportJob&&!reportJobTerminal(activeReportJob))toast('ปิดหน้าต่างแล้ว งานยังดำเนินต่อขณะที่หน้าเว็บนี้เปิดอยู่');
+  }
+  function dismissReportTask(){
+    if(!reportJobTerminal(activeReportJob))return;
+    stopReportPolling();
+    const dismissId=activeReportJob.id;
+    const session=token;
+    activeReportJob=null;
+    localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+    refreshReportActionButtons();
+    void gs('dismissReportJob',session,dismissId).catch(()=>{});
+    el('reportTaskIndicator').style.display='none';
+    closeModal('reportResultModal');
+  }
+  function stopReportPolling(){if(reportPollTimer){clearInterval(reportPollTimer);reportPollTimer=null}}
+  function startReportPolling(){
+    if(reportPollTimer||!activeReportJob||reportJobTerminal(activeReportJob))return;
+    reportPollTimer=setInterval(()=>{void pollReportTask()},7000);
+  }
+  async function pollReportTask(){
+    if(reportPollBusy||!activeReportJob||reportJobTerminal(activeReportJob)||!currentUser)return;
+    reportPollBusy=true;
+    const id=activeReportJob.id,session=token;
+    try{
+      const state=await gs('getReportJobStatus',session,id);
+      if(token===session&&activeReportJob&&activeReportJob.id===id)paintReportTask(state);
+    }catch(error){
+      // A transient status-lookup failure is not proof that generation stopped.
+      // G-33/R1: a stale poll from an older session must not rewrite a newer
+      // session's task status even for the same server-side job id.
+      if(token===session&&activeReportJob&&activeReportJob.id===id){
+        el('reportTaskStatus').textContent='ตรวจสอบสถานะไม่ได้ · งานอาจยังทำอยู่';
+      }
+    }finally{reportPollBusy=false}
+  }
+  function hideReportCancelConfirm(){
+    reportCancelPendingJobId=null;
+    closeModal('reportCancelConfirmModal');
+    const returnFocus=el('cancelReportJobBtn');
+    if(returnFocus && returnFocus.style.display!=='none' && !returnFocus.disabled)returnFocus.focus();
+    else el('closeReportJobBtn').focus();
+  }
+  function closeReportCancelConfirm(){
+    if(reportCancelSubmitting)return;
+    hideReportCancelConfirm();
+  }
+  function cancelCurrentReportTask(){
+    if(reportCancelSubmitting||!currentUser||!activeReportJob||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status))return;
+    reportCancelPendingJobId=activeReportJob.id;
+    const warning=el('reportCancelConfirmError');
+    warning.textContent='';
+    warning.style.display='none';
+    openModal('reportCancelConfirmModal');
+    el('reportCancelKeepBtn').focus();
+  }
+  async function confirmReportCancelRequest(){
+    // Ignore duplicate clicks during a pending RPC without dismissing the dialog.
+    if(reportCancelSubmitting)return;
+    if(!currentUser||!activeReportJob||
+       activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
+       ['cancel_requested','finalizing'].includes(activeReportJob.status)){
+      hideReportCancelConfirm();
+      return;
+    }
+    const id=reportCancelPendingJobId,session=token;
+    reportCancelSubmitting=true;
+    const submit=el('reportCancelConfirmBtn'),keep=el('reportCancelKeepBtn');
+    const previous=submit.innerHTML;
+    const warning=el('reportCancelConfirmError');
+    submit.disabled=true;keep.disabled=true;
+    submit.textContent='กำลังส่งคำขอยกเลิก...';
+    warning.textContent='';warning.style.display='none';
+    try{
+      const state=await gs('cancelReportJob',session,id);
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        paintReportTask(state);
+        hideReportCancelConfirm();
+      }else{
+        // Do not apply a stale result to a later login or another job.
+        hideReportCancelConfirm();
+      }
+    }catch(error){
+      if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        warning.textContent='ยังยืนยันการรับคำขอยกเลิกไม่ได้ กรุณาตรวจสถานะงานก่อนส่งคำขอใหม่';
+        warning.style.display='block';
+      }else{
+        hideReportCancelConfirm();
+      }
+    }finally{
+      reportCancelSubmitting=false;
+      submit.disabled=false;keep.disabled=false;submit.innerHTML=previous;
+    }
+  }
+  document.addEventListener('keydown',event=>{
+    if(!el('reportCancelConfirmModal').classList.contains('open'))return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!reportCancelSubmitting)closeReportCancelConfirm();
+    }else if(event.key==='Tab'){
+      // Keep keyboard navigation in the two-action confirmation dialog.
+      const focusables=[el('reportCancelKeepBtn'),el('reportCancelConfirmBtn')].filter(b=>!b.disabled);
+      if(!focusables.length){event.preventDefault();return}
+      const first=focusables[0],last=focusables[focusables.length-1];
+      if(event.shiftKey && (document.activeElement===first||!focusables.includes(document.activeElement))){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey && (document.activeElement===last||!focusables.includes(document.activeElement))){
+        event.preventDefault();first.focus();
+      }
+    }
+  });
+  async function recoverReportJob(){
+    if(!currentUser||!token)return;
+    const session=token,request=++reportJobRecoveryRequest;
+    // A disconnected status lookup never proves that the old job stopped.
+    // Gate generation until a successful authenticated status lookup completes.
+    reportUnknownNeedsVerification=true;
+    refreshReportActionButtons();
+    try{
+      const state=await gs('getCurrentReportJob',session);
+      if(request!==reportJobRecoveryRequest||token!==session||!currentUser)return;
+      if(state){
+        reportUnknownNeedsVerification=state.status==='unknown';
+        paintReportTask(state);
+        if(state.status==='queued') void runReportJobClient(state.id,session);
+      }else{
+        reportUnknownNeedsVerification=false;
+        if(activeReportJob&&activeReportJob.status==='unknown'){
+          activeReportJob=null;
+          el('reportTaskIndicator').style.display='none';
+        }
+        localStorage.removeItem(REPORT_JOB_LOCAL_KEY);
+        refreshReportActionButtons();
+      }
+    }catch(error){
+      if(request===reportJobRecoveryRequest&&token===session&&currentUser){
+        reportUnknownNeedsVerification=true;
+        refreshReportActionButtons();
+        toast('ยังตรวจสอบงานรายงานเดิมไม่ได้ โปรดตรวจประวัติก่อนสร้างซ้ำ');
+      }
+    }
+  }
+  async function runReportJobClient(jobId,session){
+    // G-33/R1: never kick a run RPC once the session that queued it is gone.
+    if(token!==session||!currentUser)return;
+    try{
+      const state=await gs('runReportJob',session,jobId);
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId)paintReportTask(state);
+    }catch(e){
+      // The server may still be executing despite a disconnected client callback.
+      if(token===session&&activeReportJob&&activeReportJob.id===jobId){
+        await pollReportTask();
+        // G-33/R1: the recovery await may span logout and a newer login; the
+        // warning belongs only to the unchanged session and job that failed.
+        if(token===session&&activeReportJob&&activeReportJob.id===jobId){
+          toast('ตรวจสอบคำขอไม่สำเร็จ กรุณาเปิดสถานะรายงาน ห้ามสั่งสร้างซ้ำ');
+        }
+      }
+    }
+  }
+</script>

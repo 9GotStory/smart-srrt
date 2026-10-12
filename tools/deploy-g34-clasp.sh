@@ -96,14 +96,15 @@ const expected = [
   '03b-client-core.html','03c-client-auth.html','03d-client-dashboard.html',
   '03e-client-dashboard-export.html','03f-client-event-controls.html',
   '03g-client-event-history.html','03h-client-event-records.html',
-  '04-browser-app.html',
+  '03i-client-report-actions.html','03j-client-report-job.html',
+  '03k-client-report-generation.html','04-browser-app.html',
   'Index.html','appsscript.json'].sort();
 const actual = fs.readdirSync(stage).sort();
 if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Wrong stage file set: '+JSON.stringify(actual));
 if(!fs.readFileSync(path.join(stage,'appsscript.json')).equals(fs.readFileSync(oldManifest))) {
   throw new Error('Manifest was modified in the staged package');
 }
-console.log('STAGE=PASS (21 files + preserved manifest; ordered script files)');
+console.log('STAGE=PASS (24 files + preserved manifest; ordered script files)');
 NODE
 (cd "$WORK" && "$CLASP" show-file-status > "$WORK/files.before.txt") || fail 'Cannot inspect proposed clasp file push.'
 

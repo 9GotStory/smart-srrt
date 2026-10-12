@@ -47,8 +47,10 @@ test('M01-03 Native manifest preserves event-to-report ordering and final single
     [HISTORY,['openEventReportHistoryByIndex','requestNewReportFromHistory','confirmNewReportFromHistory']],
     [RECORDS,['renderTables','buildRecordForm','openRecordForm','saveRecord','deleteEvent','closeEventFlow','reopenEventFlow']]
   ])for(const fn of functions)assert.match(at(module),new RegExp('(?:async )?function '+fn+'\\('),module+': '+fn);
-  assert.match(at(FINAL),/function renderReportReadinessModal\(/);
-  assert.match(at(FINAL),/async function recoverReportJob\(/);
+  assert.match(at('src/web/03i-client-report-actions.html'),/function renderReportReadinessModal\(/);
+  assert.match(at('src/web/03j-client-report-job.html'),/async function recoverReportJob\(/);
+  assert.match(at('src/web/03k-client-report-generation.html'),/async function executeReport\(/);
+  assert.doesNotMatch(at(FINAL),/function (?:renderReportReadinessModal|recoverReportJob|executeReport)\(/);
   assert.doesNotMatch(at(FINAL),/function (?:renderTables|buildRecordForm|openEventReportHistoryByIndex)\(/);
   assert.equal((nativeClientSource.match(/^\s*function fileToBase64\(/gm)||[]).length,2,
     'the pre-existing duplicate is retained for later explicit treatment');

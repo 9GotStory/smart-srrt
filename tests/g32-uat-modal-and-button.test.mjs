@@ -1,10 +1,11 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=nativeHtml;
+// Run pure JS concatenated from ordered classic scripts, not markup with </script> seams.
+const html=nativeClientSource;
 const start=html.indexOf('  const reportReadinessInFlight = new Set();');
 const end=html.indexOf('  async function loadAdmin(){',start);
 assert.ok(start>=0&&end>start,'G-32 browser report module must be present in built HTML');
@@ -236,10 +237,10 @@ test('G-32 confirmation errors remain in themed modal and do not claim cancelled
 });
 
 test('G-32 compiled UI is accessible and has no native cancel confirmation',()=>{
-  assert.match(html,/id="reportCancelConfirmModal" role="alertdialog" aria-modal="true"/);
-  assert.match(html,/aria-labelledby="reportCancelConfirmTitle" aria-describedby="reportCancelConfirmDescription"/);
-  assert.match(html,/onclick="confirmReportCancelRequest\(\)"/);
-  assert.match(html,/id="reportCancelKeepBtn"/);
+  assert.match(nativeHtml,/id="reportCancelConfirmModal" role="alertdialog" aria-modal="true"/);
+  assert.match(nativeHtml,/aria-labelledby="reportCancelConfirmTitle" aria-describedby="reportCancelConfirmDescription"/);
+  assert.match(nativeHtml,/onclick="confirmReportCancelRequest\(\)"/);
+  assert.match(nativeHtml,/id="reportCancelKeepBtn"/);
   assert.match(html,/if\(reportCancelSubmitting\)return/);
   assert.doesNotMatch(reportSource,/if\(!confirm\(/);
 });

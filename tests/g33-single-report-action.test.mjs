@@ -1,11 +1,12 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
 const server=nativeServer;
-const html=nativeHtml;
+// Synthetic report harness spans several classic HTML scripts: use JS only.
+const html=nativeClientSource;
 const EVENT='11111111-1111-4111-8111-111111111111';
 const OTHER='22222222-2222-4222-8222-222222222222';
 const REPORT_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -98,8 +99,8 @@ test('G33 browser removes both duplicate history buttons while preserving the hi
   const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
   assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,2);
   assert.doesNotMatch(render,/ประวัติรายงาน<\/button>/);
-  assert.match(html,/id="reportHistoryNewBtn"/);
-  assert.match(html,/id="reportNewConfirmModal" role="alertdialog"/);
+  assert.match(nativeHtml,/id="reportHistoryNewBtn"/);
+  assert.match(nativeHtml,/id="reportNewConfirmModal" role="alertdialog"/);
   assert.match(html,/function confirmNewReportFromHistory\(\)/);
   assert.match(html,/gs\('listReportsForEvent',session,eventId\)/);
   assert.match(html,/ข้อมูลเหตุการณ์มีการปรับปรุงหลังสร้างรายงานล่าสุด/);
