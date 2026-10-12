@@ -76,16 +76,17 @@ test('GS-S2 UPDATE_USER without password preserves safe change summary and role 
 
 test('GS-S2 audit sink recursively redacts nested and serialized credential keys',()=>{
   const {run,written}=sandbox();
-  run("writeAudit_({email:'admin@example.org',role:'Admin'},'TEST','SystemSettings','test-id',JSON.stringify({apiKey:'CANARY_API_123',nested:{password:'CANARY_PASSWORD_456',sessionToken:'CANARY_SESSION_789',safe:'ok'},array:[{authorization:'Bearer CANARY_BEARER_012'}]}),JSON.stringify({operation:'updated',values:{private_key:'CANARY_PRIVATE_321',log:'password=CANARY_TEXT_654&note=ok'}}))");
+  run("writeAudit_({email:'admin@example.org',role:'Admin'},'TEST','SystemSettings','test-id',JSON.stringify({apiKey:'CANARY_API_123',nested:{password:'CANARY_PASSWORD_456',sessionToken:'CANARY_SESSION_789',passwordChanged:'CANARY_FORGED_BOOL_135',safe:'ok'},array:[{authorization:'Bearer CANARY_BEARER_012'}]}),JSON.stringify({operation:'updated',values:{private_key:'CANARY_PRIVATE_321',log:'password=CANARY_TEXT_654&note=ok'}}))");
   assert.equal(written.length,1);
   const text=JSON.stringify(written[0]);
   for(const v of ['CANARY_API_123','CANARY_PASSWORD_456','CANARY_SESSION_789',
-    'CANARY_BEARER_012','CANARY_PRIVATE_321','CANARY_TEXT_654'])
+    'CANARY_BEARER_012','CANARY_PRIVATE_321','CANARY_TEXT_654','CANARY_FORGED_BOOL_135'])
     assert.equal(text.includes(v),false,'structured secret leaked: '+v);
   const before=JSON.parse(written[0][6]),after=JSON.parse(written[0][7]);
   assert.equal(before.apiKey,'[REDACTED]');
   assert.equal(before.nested.safe,'ok');
   assert.equal(before.nested.password,'[REDACTED]');
+  assert.equal(before.nested.passwordChanged,'[REDACTED]');
   assert.equal(before.array[0].authorization,'[REDACTED]');
   assert.equal(after.values.private_key,'[REDACTED]');
   assert.match(after.values.log,/password=\[REDACTED\]/);

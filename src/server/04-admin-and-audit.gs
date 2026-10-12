@@ -491,6 +491,12 @@ function sanitizeAuditPayload_(value, targetSheet) {
     if (item && typeof item === 'object') {
       var result = {};
       Object.keys(item).forEach(function(key) {
+        // A typed boolean carries no credential; retain explicit safe audit evidence.
+        // A string or object using the same name must still be redacted.
+        if (key === 'passwordChanged' && typeof item[key] === 'boolean') {
+          result[key] = item[key];
+          return;
+        }
         result[key] = /password|passwd|pwd|passphrase|secret|token|credential|authorization|api[_-]?key|private[_-]?key|cookie/i.test(key)
           ? '[REDACTED]' : scrub(item[key], depth + 1);
       });
