@@ -287,11 +287,11 @@ test('G33 R2 Tab trap, duplicate-submit protection and explicit regeneration rem
   assert.equal(h.el('reportHistoryModal').classList.contains('open'),false);
 });
 
-test('G33 R1/R2 corrective markers are present in the canonical One-Click UI',()=>{
+test('G33 R1/R2 corrective markers remain in canonical Native JS and HTML',()=>{
   assert.ok(html.indexOf('const logoutToken=token')<html.indexOf("token='';localStorage.removeItem('SRRT_TOKEN')"),
     'local session invalidation is synchronous at logout entry');
   assert.match(html,/function restoreNewReportConfirmFocus\(\)/);
-  assert.match(html,/id="reportHistoryCloseBtn"/);
+  assert.match(nativeHtml,/id="reportHistoryCloseBtn"/);
   assert.match(html,/if\(!currentUser\|\|!token\)return;\n    if\(reportUnknownNeedsVerification/);
 });
 
