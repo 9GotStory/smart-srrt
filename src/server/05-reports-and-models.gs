@@ -397,7 +397,99 @@ function cleanupOldReportJobs_(props) {
     if (!props.getProperty(REPORT_JOB_PREFIX_ + all[key])) props.deleteProperty(key);
   });
 }
-function createReportJob(sessionToken, eventId) {
+// GS-S4: An explicit, server-issued, one-use regeneration capability.
+// Only an authenticated report operator can request it after selecting the
+// history confirmation flow. It binds the current registry snapshot to the
+// owner/Event and expires quickly; a browser-supplied boolean is never enough.
+var REPORT_REGEN_CONSENT_PREFIX_ = 'SRRT_GS4_REGEN_';
+var REPORT_REGEN_CONSENT_TTL_MS_ = 5 * 60 * 1000;
+
+function reportConsentRegistryState_(sessionToken, eventId) {
+  // G-27 is read-only and validates Event, current Revision and schema-v7
+  // ReportRegistry; do NOT call ensureReportRegistrySheet_ on a consent read.
+  var state = listReportsForEvent(sessionToken, eventId);
+  if (!state || String(state.eventId) !== String(eventId) ||
+      !Number.isSafeInteger(state.count) || state.count < 0 ||
+      !Number.isSafeInteger(state.invalidCount) || state.invalidCount !== 0 ||
+      !Number.isSafeInteger(state.currentRevision) || state.currentRevision < 1 ||
+      (state.recordStatus !== 'active' && state.recordStatus !== 'closed') ||
+      (state.count > 0 && (!state.latest || !isUuid_(String(state.latest.reportId || ''))))) {
+    throw new Error('ยังยืนยันทะเบียนรายงานและ Revision ไม่ได้ กรุณาตรวจประวัติก่อน');
+  }
+  return state;
+}
+
+function assertNoUnresolvedReportJob_(props, eventId) {
+  // G-32 expires an active pointer when a job becomes unknown. The durable
+  // job record remains for up to 24 hours; scanning it avoids a retry bypass
+  // after the active pointer has already been cleared by another request.
+  var all=props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(REPORT_JOB_PREFIX_)!==0) return;
+    var job;
+    try { job=JSON.parse(all[key]); }
+    catch(ignore) { throw new Error('ตรวจสอบสถานะงานรายงานเดิมไม่ได้ กรุณาตรวจสอบก่อนสร้างซ้ำ'); }
+    if (String(job.eventId||'')===String(eventId) && job.status==='unknown') {
+      throw new Error('ยังมีงานรายงานสถานะไม่แน่นอน กรุณาตรวจสอบทะเบียนและติดต่อผู้ดูแลก่อนสร้างซ้ำ');
+    }
+  });
+}
+
+function expireReportRegenerationConsents_(props) {
+  var now=Date.now(), all=props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(REPORT_REGEN_CONSENT_PREFIX_) !== 0) return;
+    try {
+      var proof=JSON.parse(all[key]);
+      if (!Number.isFinite(Number(proof.createdAt)) ||
+          now-Number(proof.createdAt)>REPORT_REGEN_CONSENT_TTL_MS_ ||
+          Number(proof.createdAt)>now) props.deleteProperty(key);
+    } catch(ignore) { props.deleteProperty(key); }
+  });
+}
+
+// Browser RPC: call only AFTER the authenticated user explicitly confirms a
+// new report from the G-27 history dialog. This does NOT create a report.
+function prepareReportRegeneration(sessionToken, eventId) {
+  var user=requireAuth_(sessionToken,'report');
+  var stableEventId=String(eventId||'').trim();
+  if (!isUuid_(stableEventId)) throw new Error('EventID ไม่ถูกต้อง');
+  return withReportJobLock_(function(props) {
+    expireReportRegenerationConsents_(props);
+    var state=reportConsentRegistryState_(sessionToken,stableEventId);
+    if (!state.count) throw new Error('ยังไม่มีรายงานเดิมที่ยืนยันได้ ไม่สามารถขอสร้างซ้ำ');
+    var consentId=Utilities.getUuid();
+    if (!isUuid_(consentId)) throw new Error('ไม่สามารถยืนยันรหัสคำขอได้');
+    props.setProperty(REPORT_REGEN_CONSENT_PREFIX_+consentId,JSON.stringify({
+      ownerId:String(user.userId),eventId:stableEventId,
+      count:state.count,latestReportId:String(state.latest.reportId),
+      sourceRevision:state.currentRevision,createdAt:Date.now()
+    }));
+    return {consentId:consentId,eventId:stableEventId};
+  });
+}
+
+function verifyReportRegenerationConsent_(props, consentId, user, eventId, state) {
+  if (!isUuid_(String(consentId||''))) throw new Error('กรุณายืนยันการสร้างรายงานใหม่จากประวัติรายงาน');
+  var key=REPORT_REGEN_CONSENT_PREFIX_+String(consentId);
+  var raw=props.getProperty(key);
+  if (!raw) throw new Error('คำยืนยันสร้างรายงานใหม่ไม่พร้อมใช้งาน กรุณายืนยันอีกครั้ง');
+  var proof;
+  try { proof=JSON.parse(raw); }
+  catch(ignore) { throw new Error('คำยืนยันสร้างรายงานใหม่ไม่ถูกต้อง'); }
+  var age=Date.now()-Number(proof.createdAt);
+  if (!Number.isFinite(age) || age<0 || age>REPORT_REGEN_CONSENT_TTL_MS_ ||
+      String(proof.ownerId)!==String(user.userId) ||
+      String(proof.eventId)!==String(eventId) ||
+      proof.count!==state.count ||
+      proof.latestReportId!==String(state.latest&&state.latest.reportId||'') ||
+      proof.sourceRevision!==state.currentRevision) {
+    throw new Error('คำยืนยันหมดอายุหรือทะเบียนรายงานเปลี่ยนแปลง กรุณาตรวจประวัติและยืนยันใหม่');
+  }
+  return key; // Deleted under the same script lock, only when a job is accepted.
+}
+
+function createReportJob(sessionToken, eventId, regenerationConsentId) {
   var user = requireAuth_(sessionToken, 'report');
   var sheet = getSheetByIdOrName_('MAIN_SHEET_ID', CONFIG.SHEETS.MAIN);
   findEventRowById_(sheet, eventId, false);
@@ -405,18 +497,36 @@ function createReportJob(sessionToken, eventId) {
   if (!isUuid_(stableEventId)) throw new Error('EventID ไม่ถูกต้อง');
   return withReportJobLock_(function(props) {
     cleanupOldReportJobs_(props);
+    assertNoUnresolvedReportJob_(props,stableEventId);
     var existingId = props.getProperty(REPORT_JOB_ACTIVE_KEY_);
     if (existingId) {
       var existing;
       try { existing = expireStaleReportJob_(props, readReportJob_(props, existingId)); }
       catch(ignore) { releaseReportJobSlot_(props, existingId); }
+      if (existing && existing.status === 'unknown') {
+        // Expired execution is not proof that no document was committed.
+        // Explicit consent cannot turn an unresolved unknown into a safe retry.
+        throw new Error('ยังไม่สามารถยืนยันผลคำขอรายงานก่อนหน้า กรุณาตรวจสถานะและทะเบียนรายงาน');
+      }
       if (existing && !reportJobTerminal_(existing.status)) {
-        if (existing.ownerId === String(user.userId)) {
-          return publicReportJob_(existing); // Idempotent same-owner retry; never start another.
+        if (existing.ownerId === String(user.userId) &&
+            existing.eventId === stableEventId) {
+          return publicReportJob_(existing); // Same owner + Event only.
         }
         throw new Error('มีการสร้างรายงานอื่นกำลังทำงานอยู่ กรุณารอจนเสร็จ');
       }
       releaseReportJobSlot_(props, existingId);
+    }
+
+    // Verify inside the same G-32 ScriptLock that claims the global job slot.
+    // This closes the frontend time-of-check / time-of-use gap.
+    var registryState=reportConsentRegistryState_(sessionToken, stableEventId);
+    var consentKey='';
+    if (registryState.count > 0) {
+      consentKey=verifyReportRegenerationConsent_(
+        props,regenerationConsentId,user,stableEventId,registryState);
+    } else if (regenerationConsentId) {
+      throw new Error('ทะเบียนรายงานเปลี่ยนแปลง กรุณารีเฟรชและยืนยันใหม่');
     }
     var job = {
       id:Utilities.getUuid(),eventId:stableEventId,
@@ -427,6 +537,7 @@ function createReportJob(sessionToken, eventId) {
     saveReportJob_(props, job);
     props.setProperty(REPORT_JOB_ACTIVE_KEY_, job.id);
     props.setProperty('SRRT_G32_USER_' + job.ownerId, job.id);
+    if (consentKey) props.deleteProperty(consentKey); // One-use capability.
     return publicReportJob_(job);
   });
 }

@@ -17,6 +17,7 @@
   const reportReadinessInFlight = new Set();
   const reportActionPreflightInFlight = new Set();
   let pendingReportExplicitRegeneration=false;
+  let pendingReportRegenerationConsentId='';
   let reportWarningContinueRequest=0,reportWarningContinueInFlight=false;
   const reportGenerationInFlight = new Set();
   const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
