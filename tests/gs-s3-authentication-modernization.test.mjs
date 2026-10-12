@@ -56,6 +56,10 @@ function harness(){
     writeAudit_(...args){audit.push(args)}
   });
   server.forEach(f=>new vm.Script(source(f),{filename:f}).runInContext(context,{timeout:2000}));
+  // Top-level GAS function declarations supersede preseeded VM stubs. Rebind
+  // the test-only sheet/settings boundaries AFTER evaluating all source parts.
+  context.getSheet_=name=>{if(name==='UserAccounts')return users;throw Error('Unexpected Sheet '+name)};
+  context.getSettingsMap_=()=>({ALLOW_SELF_REGISTER:'true'});
   const run=expr=>vm.runInContext(expr,context,{timeout:12000});
   run("PASSWORD_KDF_ROUNDS_=12000");
   rows[1][3]=run("legacyPasswordHash_('LegacyPassword2026!')");
