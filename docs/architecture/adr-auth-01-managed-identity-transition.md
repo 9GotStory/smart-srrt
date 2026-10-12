@@ -6,7 +6,7 @@
 **Owner:** Smart SRRT Product Owner, **decision pending**.  
 **Security review:** ChatGPT author-assisted desk review only, **not independent audit**.  
 **Boundary:** Docs-only ADR + decision/evidence matrix. No new credential service or web deployment, no Google Workspace project/actor read, no Production settings, no app code/test/manifest/schema changes, no Merge authorization.  
-**Release blockers:** R01–R08 remain **OPEN/HOLD**; this ADR does **not** close R03 (PBKDF2 feasibility), R04 (anti-abuse), or R05 (historical AuditLogs privacy).
+**Release blockers:** R01–R08 remain **OPEN/HOLD**; this ADR does **not** close R03 (PBKDF2 feasibility), R04 (anti-abuse), or R05 (historical AuditLogs privacy). **Explicit deployment boundary: `APPS_SCRIPT_DEPLOYMENT=HOLD`; GitHub document Merge alone cannot change it.**
 
 ## 1. Context — what the actual source does today
 
