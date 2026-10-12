@@ -1,0 +1,155 @@
+<script>
+  function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
+  function lifecycleBadge(r){
+    const code=String(r&&r.eventLifecycle||''),label=r&&r.eventLifecycleLabel?r.eventLifecycleLabel:'-';
+    let c='status ';
+    if(code==='investigated'||code==='closed')c+='st-low';
+    else if(code==='investigation_required'||code==='criteria_pending'||code==='verification_pending')c+='st-mid';
+    else if(code==='voided'||code==='verification_rejected')c+='st-high';
+    else c+='';
+    return`<span class="${c}">${escapeHtml(label)}</span>`
+  }
+  function consistencyWarningBadge(r){
+    const warnings=Array.isArray(r&&r.eventConsistencyWarnings)?r.eventConsistencyWarnings:[];
+    if(!warnings.length)return'';
+    const title=warnings.map(w=>w&&w.message?w.message:String(w&&w.code||'ตรวจสอบความสอดคล้อง')).join('\n');
+    return` <span class="status st-mid" title="${escapeHtml(title)}"><i class="fa-solid fa-triangle-exclamation"></i> ${warnings.length}</span>`
+  }
+  function ownerLabel(r){
+    if(!r||!r.ownerUserId)return'<span class="mini">ยังไม่กำหนด</span>';
+    if(r.ownerMissing)return'<span class="status st-high">ไม่พบบัญชีผู้ใช้</span>';
+    const name=r.ownerName||r.ownerEmail||r.ownerUserId;
+    const detail=r.ownerOrg?`<div class="mini">${escapeHtml(r.ownerOrg)}</div>`:'';
+    return`<b>${escapeHtml(name)}</b>${detail}`
+  }
+  async function openOwnerModal(i){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับกำหนดผู้รับผิดชอบ');return}
+    const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
+    if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return}
+    try{
+      assignableOwnerCache=await gs('listAssignableEventOwners',token);
+      el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
+      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+assignableOwnerCache.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)}`:''}</option>`).join('');
+      el('ownerUserId').value=r.ownerUserId||'';
+      openModal('ownerModal')
+    }catch(e){toast(e.message||e)}
+  }
+  async function saveEventOwner(){
+    const btn=el('saveOwnerBtn');
+    try{
+      btn.disabled=true;
+      const msg=await gs('assignEventOwner',token,el('ownerEventId').value,el('ownerUserId').value,Number(el('ownerRevision').value||0));
+      closeModal('ownerModal');toast(msg);await loadDashboard()
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false}
+  }
+
+  function formatFileSize(bytes){
+    const n=Number(bytes||0);
+    if(n<1024)return n+' B';
+    if(n<1024*1024)return (n/1024).toFixed(1)+' KB';
+    return (n/(1024*1024)).toFixed(1)+' MB'
+  }
+  function attachmentButton(r,i){
+    const count=Number(r&&r.attachmentCount||0);
+    return`<button class="btn light" onclick="openAttachmentModal(${i})"><i class="fa-solid fa-paperclip"></i> ${count}</button>`
+  }
+  async function openAttachmentModal(i){
+    if(!currentUser){openLogin();return}
+    const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
+    const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
+    el('attachmentEventId').value=r.eventId;
+    el('attachmentRevision').value=String(r.revision||1);
+    el('attachmentClosed').value=closed?'1':'0';
+    el('attachmentFile').value='';
+    el('attachmentDescription').value='';
+    el('attachmentUploadPanel').style.display=roleCanRecord()&&!closed?'block':'none';
+    el('attachmentReadOnlyNotice').style.display=closed?'block':'none';
+    openModal('attachmentModal');
+    await loadAttachmentList()
+  }
+  async function loadAttachmentList(){
+    const eventId=el('attachmentEventId').value;
+    if(!eventId)return;
+    try{
+      const items=await gs('listEventAttachments',token,eventId);
+      const closed=el('attachmentClosed').value==='1';
+      el('attachmentList').innerHTML=items.map(a=>{
+        const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark"></i> นำออก</button>`:'';
+        return`<div class="content-item"><h4><i class="fa-solid fa-file"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-download"></i> ดาวน์โหลด</button>${remove}</div></div>`
+      }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>'
+    }catch(e){el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>'}
+  }
+  function attachmentMimeForFile(file){
+    if(file&&file.type)return file.type;
+    const name=String(file&&file.name||'').toLowerCase();
+    if(name.endsWith('.pdf'))return'application/pdf';
+    if(name.endsWith('.jpg')||name.endsWith('.jpeg'))return'image/jpeg';
+    if(name.endsWith('.png'))return'image/png';
+    if(name.endsWith('.webp'))return'image/webp';
+    if(name.endsWith('.docx'))return'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if(name.endsWith('.xlsx'))return'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return''
+  }
+  function fileToBase64(file){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+      reader.onerror=()=>reject(new Error('ไม่สามารถอ่านไฟล์ได้'));
+      reader.readAsDataURL(file)
+    })
+  }
+  async function uploadAttachment(){
+    if(!roleCanRecord()){toast('สิทธิ์ไม่เพียงพอสำหรับแนบไฟล์');return}
+    if(el('attachmentClosed').value==='1'){toast('เหตุการณ์นี้ถูกปิดแล้ว');return}
+    const file=el('attachmentFile').files&&el('attachmentFile').files[0];
+    if(!file){toast('กรุณาเลือกไฟล์แนบ');return}
+    if(file.size>5*1024*1024){toast('ไฟล์แนบต้องมีขนาดไม่เกิน 5 MB');return}
+    const btn=el('uploadAttachmentBtn');
+    try{
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังอัปโหลด';
+      const base64=await fileToBase64(file);
+      const result=await gs('uploadEventAttachment',token,el('attachmentEventId').value,{
+        name:file.name,mimeType:attachmentMimeForFile(file),base64:base64,description:el('attachmentDescription').value
+      },Number(el('attachmentRevision').value||0));
+      el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
+      toast(result.message||'แนบไฟล์เรียบร้อยแล้ว');
+      el('attachmentFile').value='';el('attachmentDescription').value='';
+      await loadDashboard();
+      const refreshed=allData.find(x=>x.eventId===el('attachmentEventId').value);
+      if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
+      await loadAttachmentList()
+    }catch(e){toast(e.message||e)}
+    finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-upload"></i> แนบไฟล์'}
+  }
+  async function downloadAttachment(attachmentId){
+    try{
+      const result=await gs('downloadEventAttachment',token,attachmentId);
+      const binary=atob(result.base64||'');
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+      const blob=new Blob([bytes],{type:result.mimeType||'application/octet-stream'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=result.fileName||'attachment';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000)
+    }catch(e){toast(e.message||e)}
+  }
+  async function removeAttachment(attachmentId){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับนำเอกสารแนบออก');return}
+    if(el('attachmentClosed').value==='1'){toast('เหตุการณ์นี้ถูกปิดแล้ว');return}
+    const reason=prompt('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');
+    if(reason===null)return;
+    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');return}
+    try{
+      const result=await gs('removeEventAttachment',token,attachmentId,String(reason).trim(),Number(el('attachmentRevision').value||0));
+      el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
+      toast(result.message||'นำเอกสารแนบออกแล้ว');
+      await loadDashboard();
+      const refreshed=allData.find(x=>x.eventId===el('attachmentEventId').value);
+      if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
+      await loadAttachmentList()
+    }catch(e){toast(e.message||e)}
+  }
+
+
+</script>

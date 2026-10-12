@@ -43,9 +43,11 @@ function fixture(){
 test('M01-02 dashboard and exports load in the manifest order before the final single boot',()=>{
   const paths=GAS_HTML_SOURCES;
   const start=paths.indexOf('src/web/03c-client-auth.html');
-  assert.deepEqual(paths.slice(start,start+4),[
-    'src/web/03c-client-auth.html',DASH,EXPORT,FINAL
+  assert.deepEqual(paths.slice(start,start+3),[
+    'src/web/03c-client-auth.html',DASH,EXPORT
   ]);
+  assert.ok(paths.indexOf(EXPORT)<paths.indexOf(FINAL),
+    'later Event partials may appear between Dashboard exports and final bootstrap');
   const scripts=readOrderedClientScripts();
   assert.ok(scripts.find(s=>s.path===DASH).code.includes('function drawCharts()'));
   assert.ok(scripts.find(s=>s.path===EXPORT).code.includes('function exportClientExcel()'));

@@ -1,0 +1,138 @@
+<script>
+  // G-27: Report history is fetched on demand, never from public aggregates.
+  let reportHistoryRequest = 0;
+  let reportHistoryEventId = '';
+  let reportNewConfirmSubmitting=false;
+  let reportNewConfirmReturnFocus=null;
+  async function openEventReportHistoryByIndex(index){
+    const event=allData[index];
+    if(!currentUser||!roleCanRecord()||!event||!event.eventId){
+      toast('ไม่มีสิทธิ์ดูประวัติรายงาน หรือไม่พบ EventID');
+      return;
+    }
+    const eventId=event.eventId, request=++reportHistoryRequest, authToken=token;
+    reportHistoryEventId=eventId;
+    el('reportHistoryNewBtn').style.display='none';
+    el('reportHistoryWarning').textContent='';
+    el('reportHistorySummary').textContent='กำลังโหลดประวัติรายงาน...';
+    el('reportHistoryList').innerHTML='';
+    openModal('reportHistoryModal');
+    try {
+      const result=await gs('listReportsForEvent',authToken,eventId);
+      if(request!==reportHistoryRequest||token!==authToken||!currentUser)return;
+      const entries=Array.isArray(result&&result.reports)?result.reports:[];
+      const latest=result&&result.latest?result.latest:null;
+      const when=value=>{
+        if(!value)return'-';
+        const d=new Date(value);
+        return isNaN(d.getTime())?String(value):d.toLocaleString('th-TH');
+      };
+      el('reportHistorySummary').textContent='จำนวนรายงาน '+Number(result.count||0)+' รายการ · Revision ปัจจุบัน '+Number(result.currentRevision||1)+
+        (latest?' · รายงานล่าสุด '+when(latest.generatedAt):' · ยังไม่มีรายงานในทะเบียน')+
+        (Number(result.invalidCount||0)?' · พบแถวทะเบียนที่ไม่สมบูรณ์ '+Number(result.invalidCount)+' รายการ':'');
+      el('reportHistoryWarning').textContent=latest&&Number(result.currentRevision)>Number(latest.sourceRevision)
+        ?'ข้อมูลเหตุการณ์มีการปรับปรุงหลังสร้างรายงานล่าสุด คุณยังเปิดอ่านรายงานเดิมได้':'';
+      el('reportHistoryNewBtn').style.display=entries.length&&!Number(result.invalidCount||0)&&!reportUnknownNeedsVerification&&
+        !(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))?'inline-flex':'none';
+      el('reportHistoryList').innerHTML=entries.length?entries.map((r,i)=>{
+        const url=String(r.documentURL||'');
+        const link=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url)
+          ?'<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิด Google Doc</a>'
+          :'<span class="help">ลิงก์เอกสารไม่พร้อมใช้งาน</span>';
+        return '<div class="content-item"><b><i class="fa-solid fa-file-medical"></i> รายงาน '+(i+1)+'</b>'+
+          '<p>สร้างเมื่อ: '+escapeHtml(when(r.generatedAt))+' · ผู้สร้าง: '+escapeHtml(r.generatedBy||'-')+
+          ' · SourceRevision: '+Number(r.sourceRevision||0)+'</p>'+
+          '<p>ReportID: '+escapeHtml(r.reportId||'-')+'</p>'+
+          '<p>Gemini: '+escapeHtml(r.geminiModels||'-')+' · API: '+escapeHtml(r.geminiApiVersions||'-')+
+          ' · Prompt: '+escapeHtml(r.promptVersion||'-')+'</p>'+link+'</div>';
+      }).join(''):'<div class="help">ยังไม่มีรายงานที่ลงทะเบียนสำหรับเหตุการณ์นี้</div>';
+    }catch(e){
+      if(request!==reportHistoryRequest||token!==authToken)return;
+      el('reportHistorySummary').textContent='ไม่สามารถโหลดประวัติรายงานได้';
+      el('reportHistoryWarning').textContent='';
+      el('reportHistoryNewBtn').style.display='none';
+      el('reportHistoryList').textContent=String(e.message||e);
+    }
+  }
+
+  function requestNewReportFromHistory(){
+    if(reportNewConfirmSubmitting||!currentUser||!roleCanRecord()||!reportHistoryEventId)return;
+    if(reportUnknownNeedsVerification||activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
+      toast('กรุณาตรวจสอบสถานะงานรายงานเดิมก่อน');return;
+    }
+    if(reportSummaryState.status!=='ready'||!reportSummaryState.summaries[reportHistoryEventId]||
+       reportSummaryState.summaries[reportHistoryEventId].count<1){
+      toast('ยังยืนยันประวัติรายงานไม่ได้ กรุณารีเฟรชข้อมูล');return;
+    }
+    el('reportNewConfirmSummary').textContent='ระบบจะสร้าง Google Doc และ ReportID ใหม่สำหรับเหตุการณ์นี้ โดยคงเอกสารและประวัติรายงานเดิมทั้งหมดไว้';
+    if(!el('reportNewConfirmModal').classList.contains('open')){
+      // G-33/R2: remember where keyboard focus came from so Back/Escape can
+      // return it to the history view; keep the first opener on re-open.
+      const opener=document.activeElement;
+      reportNewConfirmReturnFocus=opener&&typeof opener.focus==='function'?opener:null;
+    }
+    openModal('reportNewConfirmModal');
+    el('reportNewConfirmBackBtn').focus();
+  }
+  function restoreNewReportConfirmFocus(){
+    // G-33/R2: Back/Escape returns the keyboard to the still-visible history
+    // view — never into a dismissed, hidden, disabled or logged-out one.
+    const opener=reportNewConfirmReturnFocus;
+    reportNewConfirmReturnFocus=null;
+    if(!currentUser||!token)return;
+    if(!el('reportHistoryModal').classList.contains('open'))return;
+    const usable=node=>node&&node.style&&node.style.display!=='none'&&!node.disabled&&typeof node.focus==='function'?node:null;
+    const target=usable(opener)||usable(el('reportHistoryNewBtn'))||usable(el('reportHistoryCloseBtn'));
+    if(target)target.focus();
+  }
+  function cancelNewReportFromHistory(){
+    if(reportNewConfirmSubmitting)return;
+    closeModal('reportNewConfirmModal');
+    restoreNewReportConfirmFocus();
+  }
+  async function confirmNewReportFromHistory(){
+    const eventId=reportHistoryEventId,session=token,button=el('reportHistoryNewBtn');
+    if(reportNewConfirmSubmitting||!eventId||!roleCanRecord()||!currentUser)return;
+    reportNewConfirmSubmitting=true;
+    const confirmButton=el('reportNewConfirmBtn'),backButton=el('reportNewConfirmBackBtn');
+    confirmButton.disabled=true;backButton.disabled=true;
+    try {
+      // Recheck the authoritative registry immediately before deliberate regeneration.
+      const verified=await gs('listReportsForEvent',session,eventId);
+      if(token!==session||!currentUser||reportHistoryEventId!==eventId)return;
+      if(!verified||verified.invalidCount||!verified.count)throw new Error('ไม่สามารถยืนยันประวัติรายงานเดิมได้');
+      if(reportUnknownNeedsVerification||activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
+        throw new Error('ยังมีงานรายงานที่ต้องตรวจสอบสถานะก่อน');
+      }
+      closeModal('reportNewConfirmModal');
+      reportNewConfirmReturnFocus=null;
+      closeModal('reportHistoryModal');
+      await makeReport(eventId,button,true);
+    }catch(e){if(token===session&&currentUser)toast(String(e.message||e))}
+    finally{
+      // G-33/R1: the same session always reopens a usable dialog, but a stale
+      // callback from before logout must not reset a newer session's submit lock.
+      if(session===token){
+        reportNewConfirmSubmitting=false;
+        confirmButton.disabled=false;backButton.disabled=false;
+      }
+    }
+  }
+
+  document.addEventListener('keydown',event=>{
+    if(!el('reportNewConfirmModal').classList.contains('open'))return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      if(!reportNewConfirmSubmitting)cancelNewReportFromHistory();
+    }else if(event.key==='Tab'){
+      const first=el('reportNewConfirmBackBtn'),last=el('reportNewConfirmBtn');
+      if(reportNewConfirmSubmitting){event.preventDefault();return}
+      if(event.shiftKey&&(document.activeElement===first||![first,last].includes(document.activeElement))){
+        event.preventDefault();last.focus();
+      }else if(!event.shiftKey&&(document.activeElement===last||![first,last].includes(document.activeElement))){
+        event.preventDefault();first.focus();
+      }
+    }
+  });
+
+</script>

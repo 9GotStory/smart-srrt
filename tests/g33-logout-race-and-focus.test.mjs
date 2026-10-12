@@ -1,10 +1,12 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=nativeHtml;
+// Cross-partial G-27 history + G-32 job source must be evaluated as classic JS,
+// not sliced through literal </script><script> tags in the rendered Native HTML.
+const html=nativeClientSource;
 const EVENT='11111111-1111-4111-8111-111111111111';
 
 // The report/history module: shared state, the new-report confirmation, both
@@ -285,11 +287,11 @@ test('G33 R2 Tab trap, duplicate-submit protection and explicit regeneration rem
   assert.equal(h.el('reportHistoryModal').classList.contains('open'),false);
 });
 
-test('G33 R1/R2 corrective markers are present in the canonical One-Click UI',()=>{
+test('G33 R1/R2 corrective markers remain in canonical Native JS and HTML',()=>{
   assert.ok(html.indexOf('const logoutToken=token')<html.indexOf("token='';localStorage.removeItem('SRRT_TOKEN')"),
     'local session invalidation is synchronous at logout entry');
   assert.match(html,/function restoreNewReportConfirmFocus\(\)/);
-  assert.match(html,/id="reportHistoryCloseBtn"/);
+  assert.match(nativeHtml,/id="reportHistoryCloseBtn"/);
   assert.match(html,/if\(!currentUser\|\|!token\)return;\n    if\(reportUnknownNeedsVerification/);
 });
 
