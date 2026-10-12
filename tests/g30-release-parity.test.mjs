@@ -81,7 +81,7 @@ test('G-30 has no duplicate top-level server functions',()=>{
   assert.ok(names.length>=150,'unexpected loss of server functions');
   assert.deepEqual(duplicates,[]);
   assert.equal(names.filter(n=>n==='forceGeminiModelAuto').length,1);
-  assert.match(server,/function forceGeminiModelStable\(\)\s*\{\s*return forceGeminiModelAuto\(\);/);
+  assert.match(server,/function forceGeminiModelStable\(\)\s*\{\s*requireTrustedOperator_\('forceGeminiModelStable'\);\s*return forceGeminiModelAuto\(\);/);
   assert.match(server,/function forceGeminiModelAuto\(\)[\s\S]*?sheet\.getRange\(i \+ 1, 3\)\.setValue/);
 });
 

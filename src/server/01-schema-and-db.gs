@@ -281,6 +281,7 @@ function ensureEventOwnerSchema_(ss) {
 }
 
 function migrateG05EventOwner() {
+  requireTrustedOperator_('migrateG05EventOwner');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -311,6 +312,7 @@ function migrateG05EventOwner() {
 }
 
 function migrateG11EventAttachments() {
+  requireTrustedOperator_('migrateG11EventAttachments');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -345,6 +347,7 @@ function migrateG11EventAttachments() {
 
 
 function migrateG21AuditRetention() {
+  requireTrustedOperator_('migrateG21AuditRetention');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -384,6 +387,7 @@ function migrateG21AuditRetention() {
 
 
 function migrateG29VisitLogs() {
+  requireTrustedOperator_('migrateG29VisitLogs');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -418,6 +422,7 @@ function migrateG29VisitLogs() {
 
 
 function migrateG17ReportRegistry() {
+  requireTrustedOperator_('migrateG17ReportRegistry');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -521,6 +526,7 @@ function ensureEventIdentityData_(sheet) {
 }
 
 function migrateP1EventIdentity() {
+  requireTrustedOperator_('migrateP1EventIdentity');
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
