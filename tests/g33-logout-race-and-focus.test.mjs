@@ -10,7 +10,7 @@ const EVENT='11111111-1111-4111-8111-111111111111';
 // The report/history module: shared state, the new-report confirmation, both
 // keydown listeners and the G-32 job machinery (same markers as the G-32/G-33 suites).
 const moduleStart=html.indexOf('  // G-27: Report history is fetched on demand, never from public aggregates.');
-const moduleEnd=html.indexOf('  function exportClientExcel(){',moduleStart);
+const moduleEnd=html.indexOf('  async function loadAdmin(){',moduleStart);
 assert.ok(moduleStart>0&&moduleEnd>moduleStart,'G-33 browser report module must be present in built HTML');
 const reportSource=html.slice(moduleStart,moduleEnd);
 

@@ -18,5 +18,7 @@ export const GAS_HTML_SOURCES = Object.freeze([
   'src/web/03a-dashboard-mobile.html',
   'src/web/03b-client-core.html',
   'src/web/03c-client-auth.html',
+  'src/web/03d-client-dashboard.html',
+  'src/web/03e-client-dashboard-export.html',
   'src/web/04-browser-app.html',
 ]);

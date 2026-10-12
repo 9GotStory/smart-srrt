@@ -108,7 +108,9 @@ test('M01-01 splits core and authentication before feature scripts without chang
   const core=files.indexOf('src/web/03b-client-core.html');
   const auth=files.indexOf('src/web/03c-client-auth.html');
   const browser=files.indexOf('src/web/04-browser-app.html');
-  assert.ok(mobile>=0&&mobile<core&&core<auth&&auth<browser,'Native include ordering changed');
+  const dashboard=files.indexOf('src/web/03d-client-dashboard.html');
+  const exporter=files.indexOf('src/web/03e-client-dashboard-export.html');
+  assert.ok(mobile>=0&&mobile<core&&core<auth&&auth<dashboard&&dashboard<exporter&&exporter<browser,'Native include ordering changed');
   const coreCode=scripts[core].code,authCode=scripts[auth].code,browserCode=scripts[browser].code;
   assert.match(coreCode,/let token=localStorage\.getItem\('SRRT_TOKEN'\)/);
   assert.match(coreCode,/function gs\(fn,\.\.\.args\)/);
@@ -118,7 +120,13 @@ test('M01-01 splits core and authentication before feature scripts without chang
   assert.match(authCode,/async function boot\(\)/);
   assert.match(authCode,/async function doLogout\(\)/);
   assert.match(authCode,/async function register\(\)/);
-  assert.match(browserCode,/function setupDashboardFilters\(\)/);
+  const dashboardCode=scripts[files.indexOf('src/web/03d-client-dashboard.html')].code;
+  const exportCode=scripts[files.indexOf('src/web/03e-client-dashboard-export.html')].code;
+  assert.match(dashboardCode,/function setupDashboardFilters\(\)/);
+  assert.match(dashboardCode,/function drawCharts\(\)/);
+  assert.match(exportCode,/function exportClientExcel\(\)/);
+  assert.match(exportCode,/function captureDashboard\(\)/);
+  assert.doesNotMatch(browserCode,/function setupDashboardFilters\(\)|function exportClientExcel\(\)/);
   assert.match(browserCode,/^\s*boot\(\);\s*$/m);
   assert.doesNotMatch(coreCode+authCode,/\b(?:createReportJob|runReportJob|generateReportFromWeb)\s*\(/);
   assert.doesNotMatch(browserCode,/\blet token\s*=/);

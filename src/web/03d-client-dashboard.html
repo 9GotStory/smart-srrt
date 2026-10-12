@@ -1,0 +1,89 @@
+<script>
+  function setupDashboardFilters(){
+    const source=areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}));
+    fillSelect(el('filterProvince'),unique(source.map(x=>x.province)),'ทุกจังหวัด',el('filterProvince').value);
+    updateDashboardAreaFilters('province')
+  }
+  function fillSelect(select,values,placeholder,current){
+    select.innerHTML=`<option value="">${placeholder}</option>`+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(values.includes(current))select.value=current
+  }
+  function updateDashboardAreaFilters(level){
+    const p=el('filterProvince').value,a=level==='province'?'':el('filterAmphoe').value,t=level==='tambon'?el('filterTambon').value:'';
+    const source=(areas.length?areas:allData.map(r=>({province:r.col13,amphoe:r.col12,tambon:r.col11,moo:r.col10,village:r.col29}))).filter(x=>(!p||x.province===p)&&(!a||x.amphoe===a)&&(!t||x.tambon===t));
+    if(level==='province')fillSelect(el('filterAmphoe'),unique(source.map(x=>x.amphoe)),'ทุกอำเภอ','');
+    const amph=el('filterAmphoe').value;
+    const source2=source.filter(x=>!amph||x.amphoe===amph);
+    if(level==='province'||level==='amphoe')fillSelect(el('filterTambon'),unique(source2.map(x=>x.tambon)),'ทุกตำบล','');
+    const tamb=el('filterTambon').value;
+    const source3=source2.filter(x=>!tamb||x.tambon===tamb);
+    fillSelect(el('filterVillage'),unique(source3.map(x=>x.village||('หมู่ '+x.moo))),'ทุกหมู่บ้าน','')
+  }
+
+  let dashboardLoadRequest=0;
+  async function loadDashboard(){
+    const request=++dashboardLoadRequest,session=token,hasUser=!!currentUser;
+    ++reportSummaryRequest;
+    reportSummaryState={status:'loading',summaries:{}};
+    try{
+      const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
+      // Ignore old requests after filters, login/logout, or auth mode change.
+      const response=hasUser
+        ?await gs('getDashboardData',session,filter)
+        :await gs('getPublicDashboardData',filter);
+      if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+      if(hasUser){allData=response;dashboardSummary=null}
+      else{allData=[];dashboardSummary=response}
+      updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters();
+      if(currentUser&&roleCanRecord())void refreshReportSummaries();
+    }catch(e){
+      if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser)toast(e.message||e)
+    }
+  }
+  function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
+  function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}
+  function locationLabel(r){return `${villageLabel(r)} ต.${r.col11||'-'} อ.${r.col12||'-'} จ.${r.col13||'-'}`}
+  function updateDashboard(){
+    if(!currentUser){
+      const s=dashboardSummary||{kpi:{}},k=s.kpi||{};
+      el('kpiTotal').textContent=k.events||0;el('kpiCriteria').textContent=k.criteria||0;el('kpiInvestigated').textContent=k.investigated||0;el('kpiRate').textContent=(k.investigationRate||0)+'%';
+      el('smartInsight').innerHTML=makePublicInsight(s);drawCharts();return
+    }
+    const total=allData.length;
+    const qualifying=allData.filter(r=>isInvestigationCriteriaMet(r.col17));
+    const criteria=qualifying.length;
+    const investigated=qualifying.filter(r=>String(r.col26||'').trim()!=='').length;
+    const rate=criteria?Math.round(investigated/criteria*100):0;
+    el('kpiTotal').textContent=total;el('kpiCriteria').textContent=criteria;el('kpiInvestigated').textContent=investigated;el('kpiRate').textContent=rate+'%';
+    el('smartInsight').innerHTML=makeInsight(total);drawCharts()
+  }
+  function makePublicInsight(s){
+    const k=s&&s.kpi?s.kpi:{};
+    if(!k.events)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    const pending=Number(k.pendingCriteria||0);
+    return`พบเหตุการณ์ <b>${Number(k.events||0)}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(s.topDisease||'ไม่ระบุ')}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(s.topVillage||'ไม่ระบุ')}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function makeInsight(total){
+    if(!total)return'ไม่มีข้อมูลในช่วงเวลาหรือพื้นที่ที่เลือก';
+    const topDisease=topBy(r=>r.col6),topVillage=topBy(r=>villageLabel(r)),pending=allData.filter(r=>isInvestigationCriteriaMet(r.col17)&&String(r.col26||'').trim()==='').length;
+    return`พบเหตุการณ์ <b>${total}</b> รายการ โรค/เหตุการณ์ที่พบมากที่สุดคือ <b>${escapeHtml(topDisease)}</b> พื้นที่ที่ควรติดตามคือ <b>${escapeHtml(topVillage)}</b><br>${pending?`<span style="color:#dc2626;font-weight:700">มีเหตุการณ์เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน ${pending} รายการ</span>`:`<span style="color:#16a34a;font-weight:700">เหตุการณ์เข้าเกณฑ์มีการบันทึกการสอบสวนครบถ้วนตามข้อมูลปัจจุบัน</span>`}`
+  }
+  function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
+  function countMap(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.entries(m)}
+  function drawCharts(){
+    if(!google.visualization)return;
+    if(!currentUser){
+      const s=dashboardSummary||{};
+      draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...(s.byVillage||[])],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+      draw('lineChart','LineChart',[['เดือน','จำนวน'],...(s.byMonth||[])],{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+      draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...(s.byDiseaseGroup||[])],{pieHole:.42});
+      draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...(s.byRisk||[])],{pieHole:.42});return
+    }
+    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
+    draw('lineChart','LineChart',monthRows(),{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
+    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
+    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
+  }
+  function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
+  function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
+</script>

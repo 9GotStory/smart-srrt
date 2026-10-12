@@ -13,7 +13,7 @@ export const nativeHtml=GAS_HTML_SOURCES.map(read).join('');
 // Compatibility source for existing VM/regex harnesses; derived from the ordered
 // Native browser partials, never from frozen One-Click or from a single old file.
 export const nativeBrowser='<script>'+readOrderedClientScripts()
-  .filter(part=>['src/web/03b-client-core.html','src/web/03c-client-auth.html','src/web/04-browser-app.html'].includes(part.path))
+  .filter(part=>GAS_HTML_SOURCES.indexOf(part.path)>=GAS_HTML_SOURCES.indexOf('src/web/03b-client-core.html'))
   .map(part=>part.code).join('\n')+'</script>\n</body>\n</html>';
 
 // New canonical ordered client view; preserve nativeBrowser for existing tests.
