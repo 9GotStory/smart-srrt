@@ -199,7 +199,7 @@ test('RR-01 paused rollback source accepts migrated PBKDF2 and remaining legacy 
   const initial=forward.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
   assert.equal(initial.ok,true);
   const migrated=forward.rows[1][3];
-  assert.match(migrated,/^pbkdf2-sha256\\$12000\\$/);
+  assert.match(migrated,/^pbkdf2-sha256\$12000\$/);
 
   // Separate source execution with the SAME synthetic account data, simulating
   // a new Apps Script version after the first version upgraded one user.
@@ -224,7 +224,7 @@ test('RR-01 paused rollback source accepts migrated PBKDF2 and remaining legacy 
 
   // Password creation remains modern even while automatic LEGACY upgrades pause.
   rollback.run("registerUser({name:'New Staff',email:'new@example.org',password:'NewRegistration2026!'})");
-  assert.match(rollback.rows[4][3],/^pbkdf2-sha256\\$12000\\$/);
+  assert.match(rollback.rows[4][3],/^pbkdf2-sha256\$12000\$/);
   assert.equal(rollback.rows[4][5],'pending');
 });
 
@@ -238,7 +238,7 @@ test('RR-01 resuming auto mode migrates once and invalidates pre-migration sessi
   s.run("AUTH_LEGACY_UPGRADE_MODE_='auto'");
   const resumed=s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
   assert.equal(resumed.ok,true);
-  assert.match(s.rows[1][3],/^pbkdf2-sha256\\$12000\\$/);
+  assert.match(s.rows[1][3],/^pbkdf2-sha256\$12000\$/);
   assert.equal(s.run("getUserByToken_("+JSON.stringify(paused.token)+")"),null,
     'old sessions must not survive verifier migration');
   const migratedHash=s.rows[1][3];
