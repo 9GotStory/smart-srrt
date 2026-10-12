@@ -55,7 +55,8 @@ test('R2-02B shared control CSS keeps explicit focus, adaptive action group and 
   assert.ok(layout.includes('class="srrt-action-group"'));
   assert.ok(built.includes(layout),'One-Click HTML must contain exact layout');
   assert.ok(built.includes(dialogs),'One-Click HTML must contain exact modal markup');
-  for(const file of ['03b-client-core.html','03c-client-auth.html','03d-client-dashboard.html','03e-client-dashboard-export.html','04-browser-app.html']){
+  for(const file of ['03b-client-core.html','03c-client-auth.html','03d-client-dashboard.html','03e-client-dashboard-export.html','03f-client-event-controls.html',
+    '03g-client-event-history.html','03h-client-event-records.html','04-browser-app.html']){
     assert.ok(built.includes(read('src/web/'+file)),'Native HTML must include '+file);
   }
   assert.ok(built.includes('UX-R2-02B'),'One-Click HTML must contain compiled shared CSS');

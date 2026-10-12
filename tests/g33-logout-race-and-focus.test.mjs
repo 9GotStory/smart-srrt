@@ -1,10 +1,12 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=nativeHtml;
+// Cross-partial G-27 history + G-32 job source must be evaluated as classic JS,
+// not sliced through literal </script><script> tags in the rendered Native HTML.
+const html=nativeClientSource;
 const EVENT='11111111-1111-4111-8111-111111111111';
 
 // The report/history module: shared state, the new-report confirmation, both

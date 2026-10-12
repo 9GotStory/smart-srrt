@@ -54,7 +54,10 @@ export function inspectNativeRelease(root) {
     template.indexOf("include('03b-client-core')") < template.indexOf("include('03c-client-auth')") &&
     template.indexOf("include('03c-client-auth')") < template.indexOf("include('03d-client-dashboard')") &&
     template.indexOf("include('03d-client-dashboard')") < template.indexOf("include('03e-client-dashboard-export')") &&
-    template.indexOf("include('03e-client-dashboard-export')") < template.indexOf("include('04-browser-app')"),
+    template.indexOf("include('03e-client-dashboard-export')") < template.indexOf("include('03f-client-event-controls')") &&
+    template.indexOf("include('03f-client-event-controls')") < template.indexOf("include('03g-client-event-history')") &&
+    template.indexOf("include('03g-client-event-history')") < template.indexOf("include('03h-client-event-records')") &&
+    template.indexOf("include('03h-client-event-records')") < template.indexOf("include('04-browser-app')"),
     'Native Index must reflect ordered trusted HTML manifest');
   add('native-template-trust',GAS_HTML_SOURCES.every(p=>!sources.get(path.basename(p))?.includes(Buffer.from('<?'))),
     'Native HTML partials must not contain untrusted Apps Script template execution');
