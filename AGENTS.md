@@ -1,3 +1,5 @@
+> **Current source authority (2026-10-12):** `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` includes GS-S1…GS-S5 merged (PRs #95–#99), verified 60 contract/419 full regression tests and **24 Native staged files**. The older 11 October 2026 14-file/one-click notes in this file are historical and must not be treated as the current Native topology. **DEPLOYMENT=HOLD**. See [Security Release Readiness Review](docs/release/security-release-readiness-review-2026-10-12.md) and [Project Handoff](docs/handoff/smart-srrt-security-release-2026-10-12.md). Source review does not authorize Apps Script writes, live account migration or Merge without explicit owner approval.
+
 # AGENTS.md — Smart SRRT AI Coding Agent Instructions
 
 > ใช้กับ Codex, Claude Code, Antigravity, Multica และ AI Coding Agents ที่ทำงานใน Repository นี้  
