@@ -14,6 +14,8 @@ H0-A uses the committed `src/server/`, `src/web/`, `tools/`, tests and the merge
 
 ## 2. Frozen non-underscore server declaration inventory
 
+Local login uses the **`UserAccounts`** Google Sheet as the account/role/status authority; its actual production population and hash distribution were not read.
+
 At the exact source baseline, there are **70 top-level function names not ending in underscore** (checked against `tests/gs-s1-operator-rpc-boundary.test.mjs` explicit name inventory). This is a **source-level callable-surface inventory**; Apps Script special entrypoints `doGet` and `onOpen` have context-specific behavior. Do not infer every function is an authenticated browser RPC or automatically safe because a button is hidden. Google's HTML Service guidance confirms that ordinary public top-level functions are generally callable via `google.script.run`; only functions suffixed with underscore are excluded.
 
 | Canonical source | Non-underscore names | H0 grouping |
