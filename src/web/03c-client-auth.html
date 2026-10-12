@@ -1,0 +1,71 @@
+<script>
+  function showPage(page,btn){
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
+    const navButtons=[...document.querySelectorAll('.nav button')];
+    navButtons.forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current')});
+    const selected=btn||navButtons.find(b=>b.dataset.page===page);
+    if(selected){selected.classList.add('active');selected.setAttribute('aria-current','page')}
+    toggleSidebar(false);
+    if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()
+  }
+
+  function applyTheme(){
+    document.documentElement.style.setProperty('--primary',settings.PRIMARY_COLOR||'#0f766e');
+    document.documentElement.style.setProperty('--secondary',settings.SECONDARY_COLOR||'#2563eb');
+    const logo=settings.LOGO_URL||'https://lh3.googleusercontent.com/d/1ANG8ALHZASMzdI4MFLtZHwbWcwS0vMWQ';
+    el('logoImg').src=logo;el('adminLogoPreview').src=logo;
+    el('appName').textContent=settings.APP_NAME||'Smart SRRT Dashboard & AI Reporter';
+    el('appSubtitle').textContent=settings.APP_SUBTITLE||'ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่';
+    el('sideTitle').textContent=settings.APP_NAME||'Smart SRRT';
+    el('sideOrg').textContent=settings.ORG_NAME||'District Edition';
+    el('bannerText').innerHTML='<i class="fa-solid fa-bullhorn"></i> '+escapeHtml(settings.BANNER_TEXT||'ระบบพร้อมใช้งาน');
+    el('closedBox').style.display=String(settings.SYSTEM_STATUS||'open')==='closed'?'block':'none'
+  }
+
+  async function boot(){
+    try{
+      const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
+      applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      if(currentUser)void recoverReportJob();
+      google.charts.setOnLoadCallback(loadDashboard)
+    }catch(e){toast(e.message||e)}
+  }
+
+  function updateAuthBox(){
+    const box=el('authBox');
+    document.querySelectorAll('.auth-only').forEach(x=>x.style.display=roleCanRecord()?'flex':'none');
+    document.querySelectorAll('.manager-only').forEach(x=>x.style.display=roleCanManage()?'flex':'none');
+    if(currentUser){
+      box.innerHTML=`<b>${escapeHtml(currentUser.name)}</b><span>${escapeHtml(currentUser.role)} | ${escapeHtml(currentUser.email)}</span><button onclick="doLogout()">ออกจากระบบ</button>`
+    }else{
+      box.innerHTML='<b>ยังไม่ได้เข้าสู่ระบบ</b><span>ผู้ใช้ทั่วไปดู Dashboard สรุปได้</span><button onclick="openLogin()">เข้าสู่ระบบ</button>'
+    }
+    if(el('eventDetailPanel'))el('eventDetailPanel').style.display=currentUser?'block':'none';
+    if(el('publicAggregateNotice'))el('publicAggregateNotice').style.display=currentUser?'none':'block';
+  }
+
+  function openLogin(){openModal('loginModal')}
+  async function doLogin(){
+    try{
+      const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
+      if(!r.ok){toast(r.message);return}
+      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
+    }catch(e){toast(e.message||e)}
+  }
+  async function doLogout(){
+    // G-33/R1: invalidate the local session synchronously at logout entry so no
+    // in-flight readiness, create, warning-continuation or recovery callback can
+    // still pass its session guard after the user chose logout. The previous
+    // token survives only inside the server-side logout RPC below.
+    const logoutToken=token;
+    ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
+    token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;
+    updateAuthBox();toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));
+    try{await gs('logout',logoutToken)}catch(e){}
+    // A newer login may have started while the logout RPC was in flight; never clobber it.
+    if(token)return;
+    await loadDashboard()
+  }
+  async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
+
+</script>

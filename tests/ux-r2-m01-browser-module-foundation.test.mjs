@@ -100,3 +100,37 @@ test('M01-00 baseline has no top-level function name collision between Native cl
     }
   }
 });
+
+test('M01-01 splits core and authentication before feature scripts without changing their globals',()=>{
+  const scripts=readOrderedClientScripts();
+  const files=scripts.map(script=>script.path);
+  const mobile=files.indexOf('src/web/03a-dashboard-mobile.html');
+  const core=files.indexOf('src/web/03b-client-core.html');
+  const auth=files.indexOf('src/web/03c-client-auth.html');
+  const browser=files.indexOf('src/web/04-browser-app.html');
+  assert.ok(mobile>=0&&mobile<core&&core<auth&&auth<browser,'Native include ordering changed');
+  const coreCode=scripts[core].code,authCode=scripts[auth].code,browserCode=scripts[browser].code;
+  assert.match(coreCode,/let token=localStorage\.getItem\('SRRT_TOKEN'\)/);
+  assert.match(coreCode,/function gs\(fn,\.\.\.args\)/);
+  assert.match(coreCode,/function roleCanRecord\(\)/);
+  assert.match(coreCode,/const fields=\[/);
+  assert.match(authCode,/function showPage\(page,btn\)/);
+  assert.match(authCode,/async function boot\(\)/);
+  assert.match(authCode,/async function doLogout\(\)/);
+  assert.match(authCode,/async function register\(\)/);
+  assert.match(browserCode,/function setupDashboardFilters\(\)/);
+  assert.match(browserCode,/^\s*boot\(\);\s*$/m);
+  assert.doesNotMatch(coreCode+authCode,/\b(?:createReportJob|runReportJob|generateReportFromWeb)\s*\(/);
+  assert.doesNotMatch(browserCode,/\blet token\s*=/);
+  assert.equal((nativeClientSource.match(/^\s*function fileToBase64\(/gm)||[]).length,2);
+  // A browser-style shared lexical environment across separate script tags:
+  const ctx=vm.createContext({document:{readyState:'loading',addEventListener(){}},
+    google:{charts:{load(){}}},localStorage:{getItem(){return null}}});
+  for(const script of scripts){
+    const code=script.path===files[browser]?script.code.replace(/^\s*boot\(\);\s*$/m,''):script.code;
+    new vm.Script(code,{filename:script.path}).runInContext(ctx,{timeout:2000});
+  }
+  assert.equal(vm.runInContext('typeof token',ctx),'string');
+  assert.equal(vm.runInContext('typeof doLogout',ctx),'function');
+  assert.equal(vm.runInContext('roleCanRecord()',ctx),null);
+});

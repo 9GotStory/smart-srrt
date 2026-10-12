@@ -1,3 +1,5 @@
+> **UX-R2-M01-01 (12 ต.ค. 2569; Source Candidate ไม่ใช่ Deploy):** แยก Shared Core + Auth/Session ออกจาก `04-browser-app.html` เป็น `03b-client-core.html` และ `03c-client-auth.html` ตาม Native Manifest; เปลี่ยน Candidate Stage เป็น **16 ไฟล์** (7 server + 8 HTML + Index). คง Google Apps Script HTML Service, `google.script.run`, RBAC, AI Reporter Job Guards และ `boot()` ที่จุดสุดท้าย. One-Click ไม่เปลี่ยน และ Apps Script @10 ยังไม่ Deploy. ดู [M01-01](docs/implementation/ux-r2-m01-01-shared-core.md).
+
 > **UX-R2-M01-00 (12 ต.ค. 2569):** เตรียม Test Foundation สำหรับแยก Client JavaScript เป็น Native HTML Partials ตามลำดับ Manifest โดยยังไม่แก้ Runtime Source, ยังคง 14 ไฟล์ และยังไม่ Deploy; ดู [M01-00 Test Foundation](docs/implementation/ux-r2-m01-00-browser-module-foundation.md). งานแยก Module จริงต้องรับอนุมัติและเปิด PR แยกต่างหาก.
 
 # Smart SRRT

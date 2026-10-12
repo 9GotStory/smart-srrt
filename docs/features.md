@@ -1,3 +1,5 @@
+> **UX-R2-M01-01 Native Client Split (source candidate, not deployed):** Client JS ใน `src/web/04-browser-app.html` ถูกแยกเฉพาะ Shared Core และ Auth/Session ลงใน `03b-client-core.html` และ `03c-client-auth.html` ตาม `tools/native-sources.mjs` (7 GS + 8 HTML + generated Index = 16). ฟีเจอร์และ RPC เดิมยังไม่เปลี่ยน. โปรดดู [M01-01](implementation/ux-r2-m01-01-shared-core.md); ห้ามสรุปว่ามีการ Deploy @10 แล้ว.
+
 # Smart SRRT — Feature Reference ฉบับสมบูรณ์ (Current Source)
 
 > **เอกสารอ้างอิง Current Implementation** ณ 11 ตุลาคม 2026  

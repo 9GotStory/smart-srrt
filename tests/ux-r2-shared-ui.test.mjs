@@ -1,11 +1,11 @@
-import {nativeHtml} from './helpers/native-current.mjs';
+import {nativeHtml,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
 const layout=fs.readFileSync(new URL('../src/web/02-app-layout.html',import.meta.url),'utf8');
-const script=fs.readFileSync(new URL('../src/web/04-browser-app.html',import.meta.url),'utf8');
+const script=nativeClientSource;
 const sharedCSS=fs.readFileSync(new URL('../src/styles/shared-ui.css',import.meta.url),'utf8');
 const buildHTML=nativeHtml;
 

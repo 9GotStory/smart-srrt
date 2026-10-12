@@ -49,7 +49,10 @@ export function inspectNativeRelease(root) {
   const server=GAS_SERVER_SOURCES.map(p=>sources.get(path.basename(p))?.toString('utf8')||'').join('');
   const html=GAS_HTML_SOURCES.map(p=>sources.get(path.basename(p))?.toString('utf8')||'').join('');
   const template=sources.get('Index.html').toString('utf8');
-  add('native-index-template',template===expectedNativeIndex()&&template.includes("include('03a-dashboard-mobile')"),
+  add('native-index-template',template===expectedNativeIndex()&&template.includes("include('03a-dashboard-mobile')") &&
+    template.indexOf("include('03a-dashboard-mobile')") < template.indexOf("include('03b-client-core')") &&
+    template.indexOf("include('03b-client-core')") < template.indexOf("include('03c-client-auth')") &&
+    template.indexOf("include('03c-client-auth')") < template.indexOf("include('04-browser-app')"),
     'Native Index must reflect ordered trusted HTML manifest');
   add('native-template-trust',GAS_HTML_SOURCES.every(p=>!sources.get(path.basename(p))?.includes(Buffer.from('<?'))),
     'Native HTML partials must not contain untrusted Apps Script template execution');

@@ -1,9 +1,8 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import vm from 'node:vm';
-const web=fs.readFileSync(new URL('../src/web/04-browser-app.html',import.meta.url),'utf8');
+const web=nativeClientSource;
 const compiled=nativeHtml;
 const server=nativeServer;
 function browserDashboard(rows, summary=null, loggedIn=true) {
@@ -57,7 +56,7 @@ test('anonymous browser consumes only public aggregates',()=>{
   assert.match(load,/if\(hasUser\)\{allData=response;dashboardSummary=null\}/);
   assert.match(load,/else\{allData=\[\];dashboardSummary=response\}/);
 });
-test('compiled One-Click preserves correct KPI expression',()=>{
+test('compiled Native HTML preserves correct KPI expression',()=>{
   const declaration="const investigated=qualifying.filter(r=>String(r.col26||'').trim()!=='').length;";
   assert.equal(web.includes(declaration),true);
   assert.equal(compiled.includes(declaration),true);
