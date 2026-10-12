@@ -459,8 +459,53 @@ function listAuditLogs(sessionToken, limit) {
   });
 }
 
+/**
+ * GS-S2: Defense-in-depth protection against structured credentials in AuditLogs.
+ * All values are passed through this helper before writing. Arbitrary unlabelled
+ * natural-language secrets are not reliably detectable; callers must NEVER
+ * pass password-bearing rows or unredacted objects to begin with.
+ */
+function redactAuditText_(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\b(password|passwd|pwd|api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|authorization|secret)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s&,;}\]]+)/gi, '$1=[REDACTED]');
+}
+
+function sanitizeAuditPayload_(value, targetSheet) {
+  var source = typeof value === 'string' ? value :
+    (value === undefined || value === null ? '' : JSON.stringify(value));
+  if (!source) return '';
+  var parsed;
+  try { parsed = JSON.parse(source); }
+  catch(ignore) { return redactAuditText_(source); }
+  if (!parsed || typeof parsed !== 'object') return redactAuditText_(source);
+
+  // The old UserAccounts full-row audit form stores PasswordHash at index 3.
+  // Mask that slot even if a future caller accidentally passes the old row again.
+  if (String(targetSheet) === String(CONFIG.SHEETS.USERS) &&
+      Array.isArray(parsed) && parsed.length >= 4) parsed[3] = '[REDACTED]';
+
+  function scrub(item, depth) {
+    if (depth > 12) return '[REDACTED]';
+    if (Array.isArray(item)) return item.map(function(v){ return scrub(v, depth + 1); });
+    if (item && typeof item === 'object') {
+      var result = {};
+      Object.keys(item).forEach(function(key) {
+        result[key] = /password|passwd|pwd|passphrase|secret|token|credential|authorization|api[_-]?key|private[_-]?key|cookie/i.test(key)
+          ? '[REDACTED]' : scrub(item[key], depth + 1);
+      });
+      return result;
+    }
+    return typeof item === 'string' ? redactAuditText_(item) : item;
+  }
+  return JSON.stringify(scrub(parsed, 0));
+}
+
 function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValue) {
   try {
+    // Sanitize before touching the sheet; never fall back to writing unsafe raw input.
+    var beforeSafe = sanitizeAuditPayload_(beforeValue, targetSheet);
+    var afterSafe = sanitizeAuditPayload_(afterValue, targetSheet);
     getSheet_(CONFIG.SHEETS.AUDIT).appendRow([
       new Date(),
       user.email || '',
@@ -468,8 +513,8 @@ function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValu
       action,
       targetSheet,
       targetId,
-      beforeValue,
-      afterValue,
+      beforeSafe,
+      afterSafe,
       '',
       Utilities.getUuid()
     ]);
