@@ -184,3 +184,12 @@ test('GS-S3 empty/oversize login input cannot create sessions or scan users',()=
   assert.equal(s.run("login({email:'user@example.org',password:'x'.repeat(129)}).ok"),false);
   assert.equal(s.cache.size,0);
 });
+
+test('GS-S3 PBKDF2-HMAC-SHA256 matches independently computed RFC-style test vector',()=>{
+  const s=harness();
+  const password='Utf8-Thailand-2026-ก';
+  const salt='0123456789abcdef'.repeat(4);
+  const expected=crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),12000,32,'sha256').toString('hex');
+  const actual=s.run("passwordKdf_("+JSON.stringify(password)+","+JSON.stringify(salt)+",12000)");
+  assert.equal(actual,expected,'GAS Utilities-based KDF must agree with native PBKDF2-SHA256');
+});
