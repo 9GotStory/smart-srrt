@@ -33,7 +33,7 @@ test('P6 Native offline preflight is PASS for code, but release authorization st
   assert.equal(report.codeGate,'PASS',JSON.stringify(report.checks.filter(x=>x.status!=='PASS')));
   assert.equal(report.releaseDecision,'HOLD');
   assert.equal(report.schemaVersion,7);
-  assert.equal(report.artifacts.length,14);
+  assert.equal(report.artifacts.length,expectedNativeFiles().length);
   assert.equal(report.migrationOrder.length,6);
   assert.deepEqual(report.migrationOrder.map(x=>x.schemaFloor),[2,3,4,5,6,7]);
   assert.ok(report.migrationOrder.every(x=>x.execution==='NOT_RUN'&&x.dryRun===false));
@@ -50,7 +50,7 @@ test('P6 CLI prints machine-readable Native evidence without credentials and rej
   const parsed=JSON.parse(command.stdout);
   assert.equal(parsed.codeGate,'PASS');
   assert.equal(parsed.releaseDecision,'HOLD');
-  assert.equal(parsed.artifacts.length,14);
+  assert.equal(parsed.artifacts.length,expectedNativeFiles().length);
   assert.doesNotMatch(command.stdout,/GEMINI_API_KEY\s*[:=]\s*['"][^'"]+/);
   const invalid=spawnSync(process.execPath,['tools/p6-release-preflight.mjs','--write'],{cwd:root,encoding:'utf8'});
   assert.equal(invalid.status,2);
