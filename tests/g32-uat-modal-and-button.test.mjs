@@ -1,10 +1,11 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const html=nativeHtml;
+// Run pure JS concatenated from ordered classic scripts, not markup with </script> seams.
+const html=nativeClientSource;
 const start=html.indexOf('  const reportReadinessInFlight = new Set();');
 const end=html.indexOf('  async function loadAdmin(){',start);
 assert.ok(start>=0&&end>start,'G-32 browser report module must be present in built HTML');

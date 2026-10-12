@@ -120,7 +120,10 @@ test('M01-01 splits core and authentication before feature scripts without chang
   const controls=files.indexOf('src/web/03f-client-event-controls.html');
   const history=files.indexOf('src/web/03g-client-event-history.html');
   const records=files.indexOf('src/web/03h-client-event-records.html');
-  assert.ok(mobile>=0&&mobile<core&&core<auth&&auth<dashboard&&dashboard<exporter&&exporter<controls&&controls<history&&history<records&&records<browser,'Native include ordering changed');
+  const actions=files.indexOf('src/web/03i-client-report-actions.html');
+  const job=files.indexOf('src/web/03j-client-report-job.html');
+  const generation=files.indexOf('src/web/03k-client-report-generation.html');
+  assert.ok(mobile>=0&&mobile<core&&core<auth&&auth<dashboard&&dashboard<exporter&&exporter<controls&&controls<history&&history<records&&records<actions&&actions<job&&job<generation&&generation<browser,'Native include ordering changed');
   const coreCode=scripts[core].code,authCode=scripts[auth].code,browserCode=scripts[browser].code;
   assert.match(coreCode,/let token=localStorage\.getItem\('SRRT_TOKEN'\)/);
   assert.match(coreCode,/function gs\(fn,\.\.\.args\)/);

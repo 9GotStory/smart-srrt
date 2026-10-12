@@ -1,0 +1,199 @@
+<script>
+  function renderReportReadinessModal(readiness,eventId){
+    el('pendingReportEventId').value=eventId||'';
+    const level=String(readiness&&readiness.level||'review');
+    const count=Number(readiness&&readiness.warningCount||0);
+    const headline=level==='limited'
+      ?'ข้อมูลหลักยังไม่ครบ รายงานที่สร้างอาจมีจุดไข่ปลาหรือข้อจำกัดหลายส่วน'
+      :'พบข้อมูลที่ควรตรวจสอบก่อนสร้างรายงาน';
+    el('reportReadinessSummary').innerHTML=`<b>${escapeHtml(readiness&&readiness.label||headline)}</b><br>${escapeHtml(headline)} · คำเตือน ${count} รายการ`;
+    const warnings=Array.isArray(readiness&&readiness.warnings)?readiness.warnings:[];
+    el('reportReadinessWarnings').innerHTML=warnings.map(w=>{
+      const prefix=w.severity==='core'?'ข้อมูลหลัก':(w.severity==='consistency'?'ความสอดคล้อง':'ควรเพิ่มเติม');
+      return`<div class="content-item"><b>${escapeHtml(prefix)}</b><p>${escapeHtml(w.message||w.code||'ควรตรวจสอบข้อมูล')}</p></div>`
+    }).join('')||'<div class="help">ไม่พบคำเตือน</div>';
+    openModal('reportReadinessModal')
+  }
+  const reportReadinessInFlight = new Set();
+  const reportActionPreflightInFlight = new Set();
+  let pendingReportExplicitRegeneration=false;
+  let reportWarningContinueRequest=0,reportWarningContinueInFlight=false;
+  const reportGenerationInFlight = new Set();
+  const REPORT_JOB_LOCAL_KEY='SRRT_G32_REPORT_JOB_ID';
+  const REPORT_TERMINAL_STATES=new Set(['completed','cancelled','failed','unknown']);
+  let reportSummaryRequest=0,reportSummaryState={status:'idle',summaries:{}};
+  let reportUnknownNeedsVerification=false,reportJobRecoveryRequest=0;
+  let reportJobCreateInFlight=false,reportJobCreateRequest=0;
+  async function refreshReportSummaries(){
+    const request=++reportSummaryRequest,session=token;
+    reportSummaryState={status:'loading',summaries:{}};
+    refreshReportActionButtons();
+    if(!currentUser||!roleCanRecord()){
+      reportSummaryState={status:'idle',summaries:{}};return;
+    }
+    const ids=[...new Set(allData.map(e=>String(e.eventId||'').trim()).filter(Boolean))];
+    if(!ids.length){reportSummaryState={status:'ready',summaries:{}};refreshReportActionButtons();return}
+    try {
+      // The server limits a single request to 500 IDs. One bounded request per batch,
+      // not an N+1 history RPC per Event. Publish only after ALL batches succeeded.
+      const summaries=Object.create(null);
+      for(let offset=0;offset<ids.length;offset+=500){
+        const batch=ids.slice(offset,offset+500);
+        const response=await gs('getReportSummariesForEvents',session,batch);
+        if(request!==reportSummaryRequest||session!==token||!currentUser)return;
+        if(!response||!response.summaries||typeof response.summaries!=='object')
+          throw new Error('ผลสรุปทะเบียนรายงานไม่ถูกต้อง');
+        if(batch.some(id=>!Object.prototype.hasOwnProperty.call(response.summaries,id)))
+          throw new Error('สรุปรายงานไม่ครบทุกเหตุการณ์');
+        batch.forEach(id=>{summaries[id]=response.summaries[id]});
+      }
+      reportSummaryState={status:'ready',summaries:summaries};
+    }catch(e){
+      if(request!==reportSummaryRequest||session!==token||!currentUser)return;
+      reportSummaryState={status:'error',summaries:{}};
+      toast('ยังตรวจสอบประวัติรายงานไม่ได้ กรุณาลองรีเฟรชก่อนสร้างรายงาน');
+    }finally{if(request===reportSummaryRequest&&session===token&&currentUser)refreshReportActionButtons()}
+  }
+  let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
+  let reportCancelPendingJobId=null, reportCancelSubmitting=false;
+  function reportActionState(eventId,compact){
+    const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
+    const matching=!!job&&String(job.eventId)===String(eventId);
+    // An unknown server execution cannot be treated as a cancelled or failed job.
+    if(reportUnknownNeedsVerification || (activeReportJob&&activeReportJob.status==='unknown')){
+      // A historical registered document remains readable even when a later job is unknown.
+      // Never allow implicit regeneration in this state.
+      const old=reportSummaryState.summaries&&reportSummaryState.summaries[eventId];
+      if(reportSummaryState.status==='ready'&&old&&old.count>0&&!old.invalidCount){
+        return {disabled:false,busy:false,active:false,mode:'history',
+          html:'<i class="fa-solid fa-file-lines" aria-hidden="true"></i> ดูรายงาน ('+old.count+') · ตรวจสอบงานค้าง'};
+      }
+      return {disabled:false,busy:false,active:false,mode:'verify',
+        html:'<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ตรวจสอบสถานะรายงาน'};
+    }
+    if(reportJobCreateInFlight){
+      return {disabled:true,busy:true,active:true,mode:'blocked',
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> กำลังส่งคำขอรายงาน'};
+    }
+    if(matching){
+      let label='กำลังสร้างรายงาน · ดูสถานะ';
+      let icon='fa-spinner fa-spin';
+      if(job.status==='cancel_requested'){label='กำลังขอยกเลิก · ดูสถานะ';icon='fa-hourglass-half'}
+      else if(job.status==='finalizing'){label='กำลังบันทึก · ดูสถานะ';icon='fa-floppy-disk'}
+      else if(job.status==='queued'){label='รอเริ่มรายงาน · ดูสถานะ';icon='fa-clock'}
+      return {disabled:false,busy:true,active:true,mode:'job',
+        html:'<i class="fa-solid '+icon+'" aria-hidden="true"></i> '+label};
+    }
+    if(job)return {disabled:true,busy:true,active:false,mode:'blocked',
+      html:'<i class="fa-solid fa-lock" aria-hidden="true"></i> มีงานรายงานอื่นอยู่'};
+    if(reportActionPreflightInFlight.size>0){
+      const checking=reportActionPreflightInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,mode:'blocked',
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจทะเบียนรายงาน':'กำลังตรวจรายงานอื่น')};
+    }
+    if(reportReadinessInFlight.size>0){
+      const checking=reportReadinessInFlight.has(eventId);
+      return {disabled:true,busy:true,active:checking,mode:'blocked',
+        html:'<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> '+(checking?'กำลังตรวจข้อมูล':'กำลังตรวจรายงานอื่น')};
+    }
+    const state=reportSummaryState;
+    const summary=state.summaries&&state.summaries[eventId];
+    if(state.status!=='ready'||!summary){
+      return {disabled:false,busy:state.status==='loading',active:false,mode:'verify',
+        html:'<i class="fa-solid fa-rotate" aria-hidden="true"></i> ตรวจสอบสถานะรายงาน'};
+    }
+    if(summary.invalidCount||!Number.isSafeInteger(Number(summary.count))||Number(summary.count)<0){
+      return {disabled:false,busy:false,active:false,mode:'verify',
+        html:'<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ตรวจสอบทะเบียนรายงาน'};
+    }
+    if(summary.count>0){
+      return {disabled:false,busy:false,active:false,mode:'history',
+        html:'<i class="fa-solid fa-file-lines" aria-hidden="true"></i> '+(summary.count===1?'ดูรายงาน':'ดูรายงาน ('+summary.count+')')};
+    }
+    return {disabled:false,busy:false,active:false,mode:'generate',html:'สร้างรายงาน AI'};
+  }
+  function reportActionButton(eventId,compact){
+    const state=reportActionState(eventId,compact);
+    return '<button class="btn green report-action-btn'+(state.active?' report-action-active':'')+'"'+
+      ' data-report-event-id="'+escapeHtml(eventId||'')+'"'+
+      ' data-report-compact="'+(compact?'1':'0')+'"'+
+      ' aria-busy="'+String(state.busy)+'"'+
+      (state.disabled?' disabled':'')+
+      ' onclick="handleReportAction(this.dataset.reportEventId,this)">'+
+      state.html+'</button>';
+  }
+  async function preflightFirstReportGeneration(eventId,btn){
+    if(reportActionPreflightInFlight.size||!currentUser||!roleCanRecord()||!token)return;
+    const session=token,user=currentUser,version=reportSummaryRequest;
+    reportActionPreflightInFlight.add(eventId);
+    refreshReportActionButtons();
+    let canGenerate=false;
+    try{
+      // Summary state may be stale if another user generated this Event's first
+      // registered report since the dashboard loaded. Re-read before a first draft.
+      const result=await gs('getReportSummariesForEvents',session,[eventId]);
+      if(session!==token||user!==currentUser||version!==reportSummaryRequest)return;
+      const summary=result&&result.summaries&&result.summaries[eventId];
+      if(!summary||!Number.isSafeInteger(summary.count)||summary.count<0||
+         !Number.isSafeInteger(summary.invalidCount)||summary.invalidCount!==0)
+        throw new Error('ยังยืนยันทะเบียนรายงานไม่ได้');
+      if(reportSummaryState.status!=='ready'||!reportSummaryState.summaries[eventId])
+        throw new Error('ข้อมูลหน้าเว็บเปลี่ยนระหว่างตรวจทะเบียน กรุณารีเฟรช');
+      // Do not overwrite newer summaries or report execution status.
+      reportSummaryState.summaries[eventId]=summary;
+      if(summary.count>0){
+        toast('มีรายงานที่ลงทะเบียนแล้ว กรุณากดดูรายงาน หากต้องการสร้างฉบับใหม่ให้เลือกในหน้ารายงาน');
+      }else if(!reportUnknownNeedsVerification&&
+        !(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))){
+        canGenerate=true;
+      }
+    }catch(error){
+      if(session===token&&user===currentUser&&version===reportSummaryRequest){
+        reportSummaryState={status:'error',summaries:{}};
+        toast('ยังยืนยันทะเบียนรายงานไม่ได้ กรุณาตรวจสอบสถานะก่อนสร้าง: '+String(error.message||error));
+      }
+    }finally{
+      // G-33/R1: a stale preflight must not drop the in-flight marker of a newer session.
+      if(session===token&&user===currentUser){
+        reportActionPreflightInFlight.delete(eventId);
+        refreshReportActionButtons();
+      }
+    }
+    if(canGenerate&&session===token&&user===currentUser&&version===reportSummaryRequest){
+      await makeReport(eventId,btn);
+    }
+  }
+  function handleReportAction(eventId,btn){
+    if(!currentUser||!roleCanRecord()){toast('ไม่มีสิทธิ์ใช้งานรายงาน');return}
+    const state=reportActionState(eventId,false);
+    if(state.mode==='job'){reopenReportTask();return}
+    if(state.mode==='history'){
+      const index=allData.findIndex(x=>String(x.eventId||'')===String(eventId));
+      if(index<0){toast('ไม่พบเหตุการณ์ กรุณารีเฟรช');return}
+      void openEventReportHistoryByIndex(index);return;
+    }
+    if(state.mode==='generate'){void preflightFirstReportGeneration(eventId,btn);return}
+    if(state.mode==='verify'){
+      if(activeReportJob&&activeReportJob.status==='unknown')reopenReportTask();
+      toast('ยังไม่สามารถยืนยันสถานะรายงานได้ กรุณาตรวจสอบก่อนสร้างซ้ำ');
+      if(reportUnknownNeedsVerification||activeReportJob&&activeReportJob.status==='unknown')
+        void recoverReportJob();
+      void refreshReportSummaries();
+      return;
+    }
+    if(activeReportJob)reopenReportTask();
+  }
+  function refreshReportActionButtons(){
+    if(typeof document.querySelectorAll!=='function')return;
+    document.querySelectorAll('button[data-report-event-id]').forEach(btn=>{
+      const id=btn.getAttribute('data-report-event-id')||'';
+      const compact=btn.getAttribute('data-report-compact')==='1';
+      const state=reportActionState(id,compact);
+      btn.disabled=state.disabled;
+      btn.innerHTML=state.html;
+      btn.setAttribute('aria-busy',String(state.busy));
+      btn.classList.toggle('report-action-active',state.active);
+    });
+  }
+
+</script>

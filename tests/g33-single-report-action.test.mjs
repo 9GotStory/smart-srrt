@@ -1,11 +1,12 @@
-import {nativeServer,nativeHtml,nativeBrowser} from './helpers/native-current.mjs';
+import {nativeServer,nativeHtml,nativeBrowser,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
 const server=nativeServer;
-const html=nativeHtml;
+// Synthetic report harness spans several classic HTML scripts: use JS only.
+const html=nativeClientSource;
 const EVENT='11111111-1111-4111-8111-111111111111';
 const OTHER='22222222-2222-4222-8222-222222222222';
 const REPORT_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
