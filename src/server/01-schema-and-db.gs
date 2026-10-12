@@ -764,52 +764,64 @@ function keyValueMap_(values, keyIndex, valueIndex) {
   return map;
 }
 
-// GS-S3: versioned credential format. Native GAS has no built-in password KDF.
-// PBKDF2-HMAC-SHA256 uses Google Utilities byte-array HMAC, RFC 8018 block 1.
-// Work factor needs non-production Apps Script latency benchmarking before deployment.
+// GS-S3: versioned salted password hashing, encoded with an explicit KDF scheme.
+// Before deploying, benchmark real Apps Script HMAC latency and execution limits.
 var PASSWORD_KDF_ROUNDS_ = 12000;
 var PASSWORD_HASH_PREFIX_ = 'pbkdf2-sha256';
-
 function passwordBytesToHex_(bytes) {
-  return bytes.map(function(b) {
-    var v = (b < 0 ? b + 256 : b).toString(16);
-    return v.length === 1 ? '0' + v : v;
-  }).join('');
+  return bytes.map(function(b) {var h=(b<0?b+256:b).toString(16);return h.length===1?'0'+h:h;}).join('');
 }
 function passwordHexToBytes_(hex) {
-  var out = [];
-  for (var i = 0; i < hex.length; i += 2) {
-    var n = parseInt(hex.substring(i, i+2), 16);
-    out.push(n > 127 ? n - 256 : n);
-  }
+  var out=[];
+  for(var i=0;i<hex.length;i+=2){var b=parseInt(hex.slice(i,i+2),16);out.push(b>127?b-256:b);}
   return out;
 }
 function passwordConstantEqual_(a,b) {
   a=String(a||'');b=String(b||'');
-  var diff=a.length ^ b.length;
-  for (var i=0; i<Math.max(a.length,b.length); i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  }
-  return diff === 0;
+  var delta=a.length^b.length;
+  for(var i=0;i<Math.max(a.length,b.length);i++) delta|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
+  return delta===0;
 }
 function legacyPasswordHash_(plain) {
-  return passwordBytesToHex_(Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256, String(plain), Utilities.Charset.UTF_8));
+  return passwordBytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    String(plain),Utilities.Charset.UTF_8));
 }
 function passwordKdf_(plain,saltHex,rounds) {
-  var key = Utilities.newBlob(String(plain), 'text/plain').getBytes();
-  var block = passwordHexToBytes_(saltHex).concat([0,0,0,1]);
-  var u = Utilities.computeHmacSha256Signature(block,key);
-  var derived = u.map(function(b){return b & 255;});
-  for (var round = 1; round < rounds; round++) {
-    u = Utilities.computeHmacSha256Signature(u,key);
-    for (var j=0;j<derived.length;j++) derived[j] ^= u[j] & 255;
+  var key=Utilities.newBlob(String(plain),'text/plain').getBytes();
+  var input=passwordHexToBytes_(saltHex).concat([0,0,0,1]);
+  var u=Utilities.computeHmacSha256Signature(input,key);
+  var derived=u.map(function(b){return b&255;});
+  for(var n=1;n<rounds;n++){
+    u=Utilities.computeHmacSha256Signature(u,key);
+    for(var j=0;j<derived.length;j++)derived[j]^=u[j]&255;
   }
   return passwordBytesToHex_(derived);
 }
 function hashPassword_(plain) {
-  var salt = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g,'').toLowerCase();
-  return PASSWORD_HASH_PREFIX_ + '
+  var salt=(Utilities.getUuid()+Utilities.getUuid()).replace(/-/g,'').toLowerCase();
+  return PASSWORD_HASH_PREFIX_+'$'+PASSWORD_KDF_ROUNDS_+'$'+salt+'$'+
+    passwordKdf_(plain,salt,PASSWORD_KDF_ROUNDS_);
+}
+function verifyPassword_(plain,stored) {
+  stored=String(stored||'');
+  if(/^[0-9a-f]{64}$/.test(stored)){
+    return {ok:passwordConstantEqual_(stored,legacyPasswordHash_(plain)),legacy:true};
+  }
+  var match=/^pbkdf2-sha256\$(\d{4,6})\$([0-9a-f]{64})\$([0-9a-f]{64})$/.exec(stored);
+  if(!match)return {ok:false,legacy:false};
+  var rounds=Number(match[1]);
+  if(!Number.isSafeInteger(rounds)||rounds<10000||rounds>120000)return {ok:false,legacy:false};
+  return {ok:passwordConstantEqual_(match[3],passwordKdf_(plain,match[2],rounds)),legacy:false};
+}
+function validateNewPassword_(value) {
+  if(typeof value!=='string'||value.length<12||value.length>128){
+    throw new Error('รหัสผ่านใหม่ต้องมีความยาว 12-128 ตัวอักษร');
+  }
+}
+function sessionCredentialTag_(hash) {
+  return passwordBytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    String(hash||''),Utilities.Charset.UTF_8));
+}
 
 function getCurrentUserHint_() {
   return Session.getActiveUser().getEmail() || 'anonymous';
@@ -837,134 +849,11 @@ function requireAuth_(sessionToken, action) {
 }
 
 function makeSessionToken_(user) {
-  // GS-S3: opaque token; cached principal bound to account ID and verifier state.
-  // Password reset or role/status change is checked on every protected request.
-  if (!user || !user.userId || !user.passwordHash) throw new Error('ไม่สามารถสร้างเซสชันได้');
-  var token = Utilities.getUuid() + '.' + Utilities.getUuid();
-  var entry = JSON.stringify({v:2,id:String(user.userId),tag:sessionCredentialTag_(user.passwordHash)});
-  CacheService.getScriptCache().put('srrt_session_' + token,entry,21600);
-  return token;
-}
-
- + PASSWORD_KDF_ROUNDS_ + '
-
-function getCurrentUserHint_() {
-  return Session.getActiveUser().getEmail() || 'anonymous';
-}
-
-function hasPermission_(role, action) {
-  var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Admin': ['view','create','edit','report','export'],
-    'Staff': ['view','export']
-  };
-  return (permissions[role] || []).indexOf(action) >= 0;
-}
-
-function requireAuth_(sessionToken, action) {
-  var user = getUserByToken_(sessionToken);
-  if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
-  if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report','assign','close_event'].indexOf(action) >= 0) {
-    var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
-    if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
-  }
-  return user;
-}
-
-function makeSessionToken_(email) {
-  var token = Utilities.getUuid() + '.' + Utilities.getUuid();
-  CacheService.getScriptCache().put('srrt_session_' + token, email, 21600);
-  return token;
-}
-
- + salt + '
-
-function getCurrentUserHint_() {
-  return Session.getActiveUser().getEmail() || 'anonymous';
-}
-
-function hasPermission_(role, action) {
-  var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Admin': ['view','create','edit','report','export'],
-    'Staff': ['view','export']
-  };
-  return (permissions[role] || []).indexOf(action) >= 0;
-}
-
-function requireAuth_(sessionToken, action) {
-  var user = getUserByToken_(sessionToken);
-  if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
-  if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report','assign','close_event'].indexOf(action) >= 0) {
-    var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
-    if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
-  }
-  return user;
-}
-
-function makeSessionToken_(email) {
-  var token = Utilities.getUuid() + '.' + Utilities.getUuid();
-  CacheService.getScriptCache().put('srrt_session_' + token, email, 21600);
-  return token;
-}
-
- +
-    passwordKdf_(plain,salt,PASSWORD_KDF_ROUNDS_);
-}
-function verifyPassword_(plain,stored) {
-  stored=String(stored||'');
-  if (/^[0-9a-f]{64}$/.test(stored)) {
-    return {ok:passwordConstantEqual_(stored,legacyPasswordHash_(plain)),legacy:true};
-  }
-  var match=/^pbkdf2-sha256\$(\d{4,6})\$([0-9a-f]{64})\$([0-9a-f]{64})$/.exec(stored);
-  if (!match) return {ok:false,legacy:false};
-  var rounds=Number(match[1]);
-  // Never allow a corrupted database row to force unbounded HMAC work.
-  if (!Number.isSafeInteger(rounds) || rounds<10000 || rounds>120000) return {ok:false,legacy:false};
-  return {ok:passwordConstantEqual_(match[3],passwordKdf_(plain,match[2],rounds)),legacy:false};
-}
-function validateNewPassword_(password) {
-  if (typeof password !== 'string' || password.length<12 || password.length>128) {
-    throw new Error('รหัสผ่านใหม่ต้องมีความยาว 12-128 ตัวอักษร');
-  }
-}
-function sessionCredentialTag_(passwordHash) {
-  return passwordBytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
-    String(passwordHash || ''), Utilities.Charset.UTF_8));
-}
-
-function getCurrentUserHint_() {
-  return Session.getActiveUser().getEmail() || 'anonymous';
-}
-
-function hasPermission_(role, action) {
-  var permissions = {
-    'Super Admin': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Manager': ['view','create','edit','delete','report','assign','close_event','users','settings','master','audit','export','approve'],
-    'Admin': ['view','create','edit','report','export'],
-    'Staff': ['view','export']
-  };
-  return (permissions[role] || []).indexOf(action) >= 0;
-}
-
-function requireAuth_(sessionToken, action) {
-  var user = getUserByToken_(sessionToken);
-  if (!user || user.status !== 'active') throw new Error('กรุณาเข้าสู่ระบบ หรือบัญชียังไม่ผ่านการอนุมัติ');
-  if (action && !hasPermission_(user.role, action)) throw new Error('สิทธิ์ไม่เพียงพอสำหรับการทำรายการนี้');
-  if (['create','edit','delete','report','assign','close_event'].indexOf(action) >= 0) {
-    var systemStatus = String(getSettingsMap_().SYSTEM_STATUS || 'open').toLowerCase();
-    if (systemStatus === 'closed') throw new Error('ระบบถูกปิดการบันทึก/แก้ไขชั่วคราวโดยผู้ดูแลระบบ');
-  }
-  return user;
-}
-
-function makeSessionToken_(email) {
-  var token = Utilities.getUuid() + '.' + Utilities.getUuid();
-  CacheService.getScriptCache().put('srrt_session_' + token, email, 21600);
+  // Opaque token with a server-side verifier tag for reset-based revocation.
+  if(!user||!user.userId||!user.passwordHash)throw new Error('ไม่สามารถสร้างเซสชันได้');
+  var token=Utilities.getUuid()+'.'+Utilities.getUuid();
+  var session=JSON.stringify({v:2,id:String(user.userId),tag:sessionCredentialTag_(user.passwordHash)});
+  CacheService.getScriptCache().put('srrt_session_'+token,session,21600);
   return token;
 }
 
