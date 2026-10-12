@@ -11,7 +11,7 @@ const OTHER='22222222-2222-4222-8222-222222222222';
 const REPORT_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const REPORT_B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const reportStart=html.indexOf('  const reportReadinessInFlight = new Set();');
-const reportEnd=html.indexOf('  function exportClientExcel(){',reportStart);
+const reportEnd=html.indexOf('  async function loadAdmin(){',reportStart);
 
 function makeRow(id,eventId,revision,date,docId='doc-a') {
   return [id,eventId,revision,docId,'https://docs.google.com/document/d/'+docId+'/edit',

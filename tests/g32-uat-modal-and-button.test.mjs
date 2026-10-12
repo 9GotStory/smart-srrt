@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const html=nativeHtml;
 const start=html.indexOf('  const reportReadinessInFlight = new Set();');
-const end=html.indexOf('  function exportClientExcel(){',start);
+const end=html.indexOf('  async function loadAdmin(){',start);
 assert.ok(start>=0&&end>start,'G-32 browser report module must be present in built HTML');
 const reportSource=html.slice(start,end);
 
