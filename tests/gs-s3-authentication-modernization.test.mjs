@@ -53,7 +53,11 @@ function harness(){
     },
     getSheet_(name){if(name==='UserAccounts')return users;throw Error('Unexpected Sheet '+name)},
     getSettingsMap_:()=>({ALLOW_SELF_REGISTER:'true'}),
-    writeAudit_(...args){audit.push(args)}
+    // Match the actual GS-S2 writeAudit_ sink: actor email and role only.
+    // Caller user objects contain PasswordHash but are never serialized in AuditLogs.
+    writeAudit_(actor,action,sheet,id,before,after){
+      audit.push({actorEmail:actor.email,actorRole:actor.role,action,sheet,id,before,after});
+    }
   });
   server.forEach(f=>new vm.Script(source(f),{filename:f}).runInContext(context,{timeout:2000}));
   // Top-level GAS function declarations supersede preseeded VM stubs. Rebind
