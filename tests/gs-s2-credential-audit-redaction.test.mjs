@@ -33,6 +33,7 @@ function sandbox(){
     requireAuth_(_token,action){assert.equal(action,'users');return {email:'admin@example.org',role:'Super Admin'};},
     getSheet_(name){if(name==='UserAccounts')return userSheet;if(name==='AuditLogs')return auditSheet;throw Error('Unexpected sheet: '+name);},
     hashPassword_(secret){return 'HASH:'+secret;},
+    validateNewPassword_(value){if(typeof value!=='string'||value.length<12||value.length>128)throw Error('invalid password policy')},
     Utilities:{getUuid(){return 'audit-id-1';}}
   });
   new vm.Script(events,{filename:'03-events-and-dashboard.gs'}).runInContext(state);

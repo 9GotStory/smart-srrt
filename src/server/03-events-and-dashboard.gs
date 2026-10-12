@@ -567,6 +567,12 @@ function updateUser(sessionToken, userId, patch) {
   var values = sheet.getDataRange().getValues();
   for (var i=1; i<values.length; i++) {
     if (values[i][0] === userId) {
+      // GS-S3: Validate/derive credentials before the first profile mutation.
+      var pendingPasswordHash = '';
+      if (patch.newPassword !== undefined && patch.newPassword !== '') {
+        validateNewPassword_(patch.newPassword);
+        pendingPasswordHash = hashPassword_(patch.newPassword);
+      }
       // GS-S2: Never serialize the UserAccounts row into audit: index 3 is PasswordHash.
       // Preserve only minimal operational before-state needed for accountability.
       var auditBefore = {
@@ -584,7 +590,7 @@ function updateUser(sessionToken, userId, patch) {
         sheet.getRange(i+1,12).setValue(admin.email);
         sheet.getRange(i+1,13).setValue(new Date());
       }
-      if (patch.newPassword) sheet.getRange(i+1,4).setValue(hashPassword_(patch.newPassword));
+      if (pendingPasswordHash) sheet.getRange(i+1,4).setValue(pendingPasswordHash);
       // GS-S2: An allowlisted change summary, NEVER raw patch/newPassword or row hash.
       var safeChangedFields = ['name','role','status','org','tambon','amphoe','province']
         .filter(function(key){ return Object.prototype.hasOwnProperty.call(patch, key); });

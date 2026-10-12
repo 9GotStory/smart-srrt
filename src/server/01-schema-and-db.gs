@@ -671,7 +671,7 @@ function seedMasterData_(ss) {
 function seedSuperAdmin_(ss) {
   var sheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
   var defaultEmail = String(Session.getEffectiveUser().getEmail() || 'superadmin@ddc.local').trim().toLowerCase();
-  var defaultPassword = 'SRRT-' + Utilities.getUuid().replace(/-/g,'').substring(0,8);
+  var defaultPassword = 'SRRT-' + (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g,'').substring(0,24);
   if (sheet.getLastRow() <= 1) {
     sheet.appendRow([
       Utilities.getUuid(),
@@ -764,9 +764,63 @@ function keyValueMap_(values, keyIndex, valueIndex) {
   return map;
 }
 
+// GS-S3: versioned salted password hashing, encoded with an explicit KDF scheme.
+// Before deploying, benchmark real Apps Script HMAC latency and execution limits.
+var PASSWORD_KDF_ROUNDS_ = 12000;
+var PASSWORD_HASH_PREFIX_ = 'pbkdf2-sha256';
+function passwordBytesToHex_(bytes) {
+  return bytes.map(function(b) {var h=(b<0?b+256:b).toString(16);return h.length===1?'0'+h:h;}).join('');
+}
+function passwordHexToBytes_(hex) {
+  var out=[];
+  for(var i=0;i<hex.length;i+=2){var b=parseInt(hex.slice(i,i+2),16);out.push(b>127?b-256:b);}
+  return out;
+}
+function passwordConstantEqual_(a,b) {
+  a=String(a||'');b=String(b||'');
+  var delta=a.length^b.length;
+  for(var i=0;i<Math.max(a.length,b.length);i++) delta|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
+  return delta===0;
+}
+function legacyPasswordHash_(plain) {
+  return passwordBytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    String(plain),Utilities.Charset.UTF_8));
+}
+function passwordKdf_(plain,saltHex,rounds) {
+  var key=Utilities.newBlob(String(plain),'text/plain').getBytes();
+  var input=passwordHexToBytes_(saltHex).concat([0,0,0,1]);
+  var u=Utilities.computeHmacSha256Signature(input,key);
+  var derived=u.map(function(b){return b&255;});
+  for(var n=1;n<rounds;n++){
+    u=Utilities.computeHmacSha256Signature(u,key);
+    for(var j=0;j<derived.length;j++)derived[j]^=u[j]&255;
+  }
+  return passwordBytesToHex_(derived);
+}
 function hashPassword_(plain) {
-  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(plain), Utilities.Charset.UTF_8);
-  return raw.map(function(b){ var v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? '0' + v : v; }).join('');
+  var salt=(Utilities.getUuid()+Utilities.getUuid()).replace(/-/g,'').toLowerCase();
+  return PASSWORD_HASH_PREFIX_+'$'+PASSWORD_KDF_ROUNDS_+'$'+salt+'$'+
+    passwordKdf_(plain,salt,PASSWORD_KDF_ROUNDS_);
+}
+function verifyPassword_(plain,stored) {
+  stored=String(stored||'');
+  if(/^[0-9a-f]{64}$/.test(stored)){
+    return {ok:passwordConstantEqual_(stored,legacyPasswordHash_(plain)),legacy:true};
+  }
+  var match=/^pbkdf2-sha256\$(\d{4,6})\$([0-9a-f]{64})\$([0-9a-f]{64})$/.exec(stored);
+  if(!match)return {ok:false,legacy:false};
+  var rounds=Number(match[1]);
+  if(!Number.isSafeInteger(rounds)||rounds<10000||rounds>120000)return {ok:false,legacy:false};
+  return {ok:passwordConstantEqual_(match[3],passwordKdf_(plain,match[2],rounds)),legacy:false};
+}
+function validateNewPassword_(value) {
+  if(typeof value!=='string'||value.length<12||value.length>128){
+    throw new Error('รหัสผ่านใหม่ต้องมีความยาว 12-128 ตัวอักษร');
+  }
+}
+function sessionCredentialTag_(hash) {
+  return passwordBytesToHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    String(hash||''),Utilities.Charset.UTF_8));
 }
 
 function getCurrentUserHint_() {
@@ -794,9 +848,12 @@ function requireAuth_(sessionToken, action) {
   return user;
 }
 
-function makeSessionToken_(email) {
-  var token = Utilities.getUuid() + '.' + Utilities.getUuid();
-  CacheService.getScriptCache().put('srrt_session_' + token, email, 21600);
+function makeSessionToken_(user) {
+  // Opaque token with a server-side verifier tag for reset-based revocation.
+  if(!user||!user.userId||!user.passwordHash)throw new Error('ไม่สามารถสร้างเซสชันได้');
+  var token=Utilities.getUuid()+'.'+Utilities.getUuid();
+  var session=JSON.stringify({v:2,id:String(user.userId),tag:sessionCredentialTag_(user.passwordHash)});
+  CacheService.getScriptCache().put('srrt_session_'+token,session,21600);
   return token;
 }
 

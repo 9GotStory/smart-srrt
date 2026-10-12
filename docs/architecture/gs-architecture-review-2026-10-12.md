@@ -97,3 +97,7 @@ The current **seven Native Google Apps Script `.gs` files are structurally suffi
 ### GS-S2 Follow-up — Credential audit payloads (candidate, 2026-10-12)
 
 The source remediation in `docs/implementation/gs-s2-credential-audit-redaction.md` addresses source-confirmed F-02: user updates must not log raw new passwords or previous PasswordHash. This is a new-write change only with synthetic VM tests and defense-in-depth structured audit payload redaction. This section does **not** close historical exposure: existing AuditLogs, archived audit spreadsheets, exports, backups and credentials have **not** been inspected or changed. Historical remediation must be an explicitly approved restricted operation. Do not deploy until GS-S2 source gates and separate rollout authority pass.
+
+### GS-S3 Follow-up — Password and session protection (source candidate, 2026-10-12)
+
+GS-S3 `docs/implementation/gs-s3-authentication-modernization.md` is the source-only implementation for F-03, adding versioned salted PBKDF2-HMAC-SHA256 verifier, successful legacy-login migration, stronger new password policy, best-effort per-account throttling and password-bound sessions. Non-production GAS performance and external abuse-control requirements remain release blockers. This candidate is **not deployed**; no actual user accounts or stored sessions were modified by this source review.

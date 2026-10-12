@@ -1,8 +1,15 @@
 function getUserByToken_(token) {
-  if (!token) return null;
-  var email = CacheService.getScriptCache().get('srrt_session_' + token);
-  if (!email) return null;
-  return findUserByEmail_(email);
+  if (typeof token !== 'string' || !/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/i.test(token)) return null;
+  var encoded = CacheService.getScriptCache().get('srrt_session_' + token);
+  if (!encoded) return null;
+  var session;
+  try { session = JSON.parse(encoded); } catch(ignore) { return null; }
+  // Legacy email-only cached sessions deliberately require re-login on upgrade.
+  if (!session || session.v !== 2 || !session.id || !/^[0-9a-f]{64}$/.test(String(session.tag||''))) return null;
+  var user = findUserById_(session.id);
+  if (!user || user.status !== 'active' ||
+      !passwordConstantEqual_(session.tag,sessionCredentialTag_(user.passwordHash))) return null;
+  return user;
 }
 
 function findUserByEmail_(email) {
@@ -482,16 +489,72 @@ function assignEventOwner(sessionToken, eventId, ownerUserId, expectedRevision) 
   }
 }
 
+// GS-S3: best-effort per-account throttling. Cache entries may be evicted early;
+// a stronger perimeter-level abuse control remains a future deployment prerequisite.
+var AUTH_FAIL_PREFIX_ = 'SRRT_AUTH_FAIL_';
+var AUTH_FAIL_LIMIT_ = 5;
+var AUTH_FAIL_WINDOW_SECONDS_ = 900;
+function authFailureKey_(email) {
+  return AUTH_FAIL_PREFIX_ + passwordBytesToHex_(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, String(email), Utilities.Charset.UTF_8));
+}
+function authFailureCount_(email) {
+  var raw=CacheService.getScriptCache().get(authFailureKey_(email));
+  var count=Number(raw||0);
+  return Number.isSafeInteger(count)&&count>=0?count:AUTH_FAIL_LIMIT_;
+}
+function markAuthFailure_(email) {
+  var lock=LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('ระบบยืนยันตัวตนไม่พร้อมใช้งาน กรุณาลองใหม่');
+  try {
+    var cache=CacheService.getScriptCache();
+    var count=authFailureCount_(email);
+    cache.put(authFailureKey_(email),String(Math.min(count+1,AUTH_FAIL_LIMIT_)),AUTH_FAIL_WINDOW_SECONDS_);
+  } finally { lock.releaseLock(); }
+}
+function clearAuthFailures_(email) {
+  CacheService.getScriptCache().remove(authFailureKey_(email));
+}
+function upgradeLegacyPassword_(user,plain) {
+  // Compute expensive KDF outside lock, then compare-and-swap against the
+  // exact verifier initially authenticated. Never overwrite a concurrent reset.
+  var stronger=hashPassword_(plain);
+  var lock=LockService.getScriptLock();
+  if (!lock.tryLock(5000)) throw new Error('ระบบยืนยันตัวตนไม่พร้อมใช้งาน กรุณาลองใหม่');
+  try {
+    var sheet=getSheet_(CONFIG.SHEETS.USERS);
+    var latest=String(sheet.getRange(user.rowNumber,4).getValue()||'');
+    if (!passwordConstantEqual_(latest,user.passwordHash)) return false;
+    sheet.getRange(user.rowNumber,4).setValue(stronger);
+    user.passwordHash=stronger;
+    return true;
+  } finally { lock.releaseLock(); }
+}
 function login(payload) {
-  var email = String(payload.email || '').trim().toLowerCase();
-  var password = String(payload.password || '');
-  var user = findUserByEmail_(email);
-  if (!user || user.passwordHash !== hashPassword_(password)) return {ok:false, message:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'};
-  if (user.status !== 'active') return {ok:false, message:'บัญชียังไม่พร้อมใช้งาน สถานะ: ' + user.status};
-  var token = makeSessionToken_(email);
-  getSheet_(CONFIG.SHEETS.USERS).getRange(user.rowNumber, 14).setValue(new Date());
-  writeAudit_(user, 'LOGIN', CONFIG.SHEETS.USERS, user.userId, '', 'เข้าสู่ระบบ');
-  return {ok:true, token:token, user: publicUser_(user)};
+  payload=payload||{};
+  var email=String(payload.email||'').trim().toLowerCase();
+  var password=String(payload.password||'');
+  if (!email || email.length>254 || password.length>128) {
+    return {ok:false,message:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'};
+  }
+  if (authFailureCount_(email)>=AUTH_FAIL_LIMIT_) {
+    return {ok:false,message:'ลองเข้าสู่ระบบหลายครั้งเกินไป กรุณาลองใหม่ภายหลัง'};
+  }
+  var user=findUserByEmail_(email);
+  var verification=user?verifyPassword_(password,user.passwordHash):{ok:false,legacy:false};
+  if (!verification.ok) {
+    markAuthFailure_(email);
+    return {ok:false,message:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'};
+  }
+  if (user.status!=='active') return {ok:false,message:'บัญชียังไม่พร้อมใช้งาน สถานะ: '+user.status};
+  if (verification.legacy && !upgradeLegacyPassword_(user,password)) {
+    return {ok:false,message:'ข้อมูลบัญชีเปลี่ยนแปลงแล้ว กรุณาลองเข้าสู่ระบบใหม่'};
+  }
+  clearAuthFailures_(email);
+  var token=makeSessionToken_(user);
+  getSheet_(CONFIG.SHEETS.USERS).getRange(user.rowNumber,14).setValue(new Date());
+  writeAudit_(user,'LOGIN',CONFIG.SHEETS.USERS,user.userId,'','เข้าสู่ระบบ');
+  return {ok:true,token:token,user:publicUser_(user)};
 }
 
 function logout(sessionToken) {
@@ -504,7 +567,7 @@ function registerUser(payload) {
   if (String(settings.ALLOW_SELF_REGISTER).toLowerCase() !== 'true') throw new Error('ระบบปิดการสมัครผู้ใช้ใหม่');
   var email = String(payload.email || '').trim().toLowerCase();
   if (!email || !payload.password || !payload.name) throw new Error('กรุณากรอกชื่อ อีเมล และรหัสผ่าน');
-  if (String(payload.password).length < 4) throw new Error('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร');
+  validateNewPassword_(payload.password);
   if (findUserByEmail_(email)) throw new Error('อีเมลนี้มีในระบบแล้ว');
   getSheet_(CONFIG.SHEETS.USERS).appendRow([
     Utilities.getUuid(), payload.name, email, hashPassword_(payload.password), CONFIG.ROLES.STAFF, 'pending', payload.org || '', payload.tambon || '', payload.amphoe || '', payload.province || '', new Date(), '', '', ''
