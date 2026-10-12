@@ -93,3 +93,7 @@ The current **seven Native Google Apps Script `.gs` files are structurally suffi
 5. **GS-S5 — Observability and maintainability.** Audit outcomes, RPC contract matrix, optional ownership regrouping and targeted performance checks.
 
 **Decision gate:** Complete at least GS-S1/GS-S2 source remediation review before authorizing deployment of this Native code or extending public-facing capabilities. GS-S3/GS-S4 may require product decisions and a separately staged rollout. Existing actual production safety remains **unverified**. No in-production Google Apps Script calls, user credentials, patient records, migration, clasp push, or service configuration changes were performed in this review.
+
+### GS-S2 Follow-up — Credential audit payloads (candidate, 2026-10-12)
+
+The source remediation in `docs/implementation/gs-s2-credential-audit-redaction.md` addresses source-confirmed F-02: user updates must not log raw new passwords or previous PasswordHash. This is a new-write change only with synthetic VM tests and defense-in-depth structured audit payload redaction. This section does **not** close historical exposure: existing AuditLogs, archived audit spreadsheets, exports, backups and credentials have **not** been inspected or changed. Historical remediation must be an explicitly approved restricted operation. Do not deploy until GS-S2 source gates and separate rollout authority pass.

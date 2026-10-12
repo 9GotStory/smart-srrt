@@ -567,7 +567,12 @@ function updateUser(sessionToken, userId, patch) {
   var values = sheet.getDataRange().getValues();
   for (var i=1; i<values.length; i++) {
     if (values[i][0] === userId) {
-      var before = JSON.stringify(values[i]);
+      // GS-S2: Never serialize the UserAccounts row into audit: index 3 is PasswordHash.
+      // Preserve only minimal operational before-state needed for accountability.
+      var auditBefore = {
+        role:String(values[i][4] || ''),
+        status:String(values[i][5] || '')
+      };
       if (patch.name !== undefined) sheet.getRange(i+1,2).setValue(patch.name);
       if (patch.role !== undefined) sheet.getRange(i+1,5).setValue(patch.role);
       if (patch.status !== undefined) sheet.getRange(i+1,6).setValue(patch.status);
@@ -580,7 +585,17 @@ function updateUser(sessionToken, userId, patch) {
         sheet.getRange(i+1,13).setValue(new Date());
       }
       if (patch.newPassword) sheet.getRange(i+1,4).setValue(hashPassword_(patch.newPassword));
-      writeAudit_(admin, 'UPDATE_USER', CONFIG.SHEETS.USERS, userId, before, JSON.stringify(patch));
+      // GS-S2: An allowlisted change summary, NEVER raw patch/newPassword or row hash.
+      var safeChangedFields = ['name','role','status','org','tambon','amphoe','province']
+        .filter(function(key){ return Object.prototype.hasOwnProperty.call(patch, key); });
+      var auditAfter = {
+        changedFields:safeChangedFields,
+        role:patch.role !== undefined ? String(patch.role) : auditBefore.role,
+        status:patch.status !== undefined ? String(patch.status) : auditBefore.status,
+        passwordChanged:!!patch.newPassword
+      };
+      writeAudit_(admin, 'UPDATE_USER', CONFIG.SHEETS.USERS, userId,
+        JSON.stringify(auditBefore), JSON.stringify(auditAfter));
       return 'บันทึกข้อมูลผู้ใช้เรียบร้อยแล้ว';
     }
   }
