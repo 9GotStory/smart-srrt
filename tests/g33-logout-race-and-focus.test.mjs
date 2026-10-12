@@ -272,6 +272,10 @@ test('G33 R2 Tab trap, duplicate-submit protection and explicit regeneration rem
 
   let resolveVerify;
   h.on('listReportsForEvent',()=>new Promise(resolve=>{resolveVerify=resolve}));
+  // GS-S4: explicit confirmation receives a server-issued one-use capability.
+  h.on('prepareReportRegeneration',(_session,eventId)=>({
+    consentId:'55555555-5555-4555-8555-555555555555',eventId
+  }));
   const confirm=h.ctx.confirmNewReportFromHistory();
   h.ctx.confirmNewReportFromHistory();
   assert.equal(h.calls.filter(call=>call[0]==='listReportsForEvent').length,1,

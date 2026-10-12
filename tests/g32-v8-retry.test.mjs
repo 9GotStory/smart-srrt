@@ -46,6 +46,11 @@ function make({codes=[200,200],durations=[],onFetch,onSleep}={}){
   ctx.getSheetByIdOrName_=()=>({getRange(num,col){return col===ctx.EVENT_META_COL.REVISION
     ? {getValue:()=>1}:{getDisplayValues:()=>[row]}}});
   ctx.findEventRowById_=(sheet,id,includeVoid)=>{assert.equal(id,eventId);assert.equal(includeVoid,false);return 2};
+  // GS-S4: keep G-32 retry fixtures pointed at a healthy empty ReportRegistry.
+  ctx.listReportsForEvent=(_session,id)=>({
+    eventId:id,currentRevision:1,recordStatus:'active',count:0,
+    invalidCount:0,latest:null,reports:[]
+  });
   ctx.getSettingsMap_=()=>({TEMPLATE_DOC_ID:'mock-template',REPORT_FOLDER_ID:'mock-folder',
     GEMINI_API_KEY:'mock-secret',GEMINI_MODEL:'models/gemini-3.8-flash'});
   ctx.findGeminiModelInList_=()=>({modelName:'models/gemini-3.8-flash',apiVersion:'v1'});
