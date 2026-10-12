@@ -515,6 +515,16 @@ function markAuthFailure_(email) {
 function clearAuthFailures_(email) {
   CacheService.getScriptCache().remove(authFailureKey_(email));
 }
+// RR-01: source-pinned emergency migration pause for a compatible rollback build.
+// 'pause' stops legacy SHA-256 -> PBKDF2 rewrites; BOTH verifier formats and
+// GS-S3 session/revocation protections remain active. Never read this mode from
+// caller input or mutable Script Properties. Any mode change needs source review.
+var AUTH_LEGACY_UPGRADE_MODE_ = 'auto';
+function legacyPasswordUpgradePermitted_() {
+  if (AUTH_LEGACY_UPGRADE_MODE_ === 'auto') return true;
+  if (AUTH_LEGACY_UPGRADE_MODE_ === 'pause') return false;
+  throw new Error('ระบบยืนยันตัวตนไม่พร้อมใช้งาน กรุณาลองใหม่');
+}
 function upgradeLegacyPassword_(user,plain) {
   // Compute expensive KDF outside lock, then compare-and-swap against the
   // exact verifier initially authenticated. Never overwrite a concurrent reset.
@@ -547,7 +557,8 @@ function login(payload) {
     return {ok:false,message:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'};
   }
   if (user.status!=='active') return {ok:false,message:'บัญชียังไม่พร้อมใช้งาน สถานะ: '+user.status};
-  if (verification.legacy && !upgradeLegacyPassword_(user,password)) {
+  var upgradePermitted=legacyPasswordUpgradePermitted_();
+  if (verification.legacy && upgradePermitted && !upgradeLegacyPassword_(user,password)) {
     return {ok:false,message:'ข้อมูลบัญชีเปลี่ยนแปลงแล้ว กรุณาลองเข้าสู่ระบบใหม่'};
   }
   clearAuthFailures_(email);
