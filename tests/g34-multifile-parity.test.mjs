@@ -90,7 +90,7 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
     let done=run('--write');
     assert.equal(done.status,0,done.stderr);
     const output=path.join(fixture,'dist','apps-script');
-    assert.equal(fs.readdirSync(output).length,14);
+    assert.equal(fs.readdirSync(output).length,1+GAS_SERVER_SOURCES.length+GAS_HTML_SOURCES.length);
     const before=fs.statSync(path.join(output,'Index.html')).mtimeMs;
     assert.equal(run('--check').status,0,'new package should verify');
     assert.equal(fs.statSync(path.join(output,'Index.html')).mtimeMs,before,'check must not write');
