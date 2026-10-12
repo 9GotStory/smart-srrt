@@ -86,7 +86,7 @@ if (!isLegacy && !isNative13) {
 const server = isNative13 ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
 const code = fs.readFileSync(path.join(root, server), 'utf8');
 if (!/\bfunction\s+doGet\s*\(/.test(code) || !/\bfunction\s+include\s*\(/.test(code)) {
-  throw new Error('Expected doGet/include entrypoints in known server source; inspect private backup before proceeding');
+  throw new Error('Known server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
 }
 if (isNative13) {
   const index = fs.readFileSync(path.join(root, 'Index.html'), 'utf8');
@@ -99,7 +99,7 @@ if (isNative13) {
     throw new Error('Native 13-file Index template missing a known partial include');
   }
 }
-console.log((isNative13 ? 'BACKED_UP_NATIVE_13_LAYOUT=PASS' : 'BACKED_UP_LEGACY_LAYOUT=PASS')+
+console.log((isNative13 ? 'BACKED_UP_NATIVE_13_LAYOUT=PASS' : 'BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server)+
             '; SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS');
 NODE
 (cd "$WORK/remote" && "$CLASP" list-deployments > "$WORK/deployments.before.txt") || fail 'Cannot list remote deployments.'
