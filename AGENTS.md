@@ -4,6 +4,14 @@
 > Canonical Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt)  
 > เอกสารชุดนี้อ้างอิง `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` ณ 11 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
 
+## Current release/security authority (2026-10-12)
+
+The **current GitHub main is `7a8e2efeab239bac9bf708ed1e86f28b710f6726`** at this review. GS-S1 through GS-S5 have all been **squash-merged**, and the latest exact-main CI is **60 contract tests PASS / 419 regression tests PASS / 24 native files PASS**. **Do not claim they remain unmerged simply because an original implementation document says “candidate.”** Their changes are **not deployed**; the existing Apps Script deployment remains independent and on HOLD. The release decision evidence and unresolved blockers are at [Security Release Readiness Review](docs/release/gs-security-release-readiness-2026-10-12.md), especially R-03 PBKDF2 real GAS cost and R-07 raw settings-secret read-back. **No new code or deployment is authorized by a documentation PR.**
+
+Correct canonical stage = **7 GS + 16 HTML partials + generated Index (24 files)**; remote `appsscript.json` is preserved in addition. Historic 14/16/18/21 counts in earlier architecture notes are historical, not authoritative. Prefer the updated [G-34 deployment document](docs/deployment/g34-native-multifile-apps-script.md). Reconfirm HEAD, CI and deployment authority each time; do not freeze `7a8e2efeab239bac9bf708ed1e86f28b710f6726` as a future current SHA.
+
+Only ChatGPT author-assisted implementation/review using GitHub tools is authorized in the active Smart SRRT workflow; **do not run Codex, Claude, Multica or other agent handoff** without the Product Owner independently changing the workflow. Existing generic agent references below are historical guidance, not authority to delegate.
+
 ## 1. Project Context
 
 Smart SRRT เป็นระบบ **Event-based Epidemiological Surveillance** สำหรับพื้นที่สาธารณสุข ครอบคลุม Public Aggregate Dashboard, Authentication/RBAC, การบันทึกและติดตาม Event, ผู้รับผิดชอบ, เอกสารแนบ, Audit, การดูประวัติและสร้างร่างรายงานสอบสวนโรคเบื้องต้นด้วย Gemini

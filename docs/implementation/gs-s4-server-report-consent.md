@@ -1,6 +1,6 @@
 # GS-S4 — Server-side Report Regeneration Consent
 
-**Status:** source-only candidate (not merged, not deployed), 12 October 2026.  
+**Current verified status (2026-10-12):** **MERGED** to `main` by PR [#98](https://github.com/9GotStory/smart-srrt/pull/98) at `64f4cc3ae319319bac3ceb0818aad26d149d3200`; [Post-Merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/38204650763) PASS. **NOT DEPLOYED** to Apps Script; [release readiness](../release/gs-security-release-readiness-2026-10-12.md) remains HOLD. Historical merge/candidate gates later in this document describe its original pre-merge authoring stage, not current GitHub state.  
 **Base:** `main@4cb18cee7db1e814b6d4c85fc395d5a363b19c06` (GS-S3 Post-Merge PASS).  
 **Review:** ChatGPT (author-assisted, not independent).
 

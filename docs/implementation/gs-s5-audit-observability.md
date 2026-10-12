@@ -1,6 +1,6 @@
 # GS-S5 — Audit Observability & Maintainability
 
-**Status:** source-only candidate — **NOT merged / NOT deployed** (12 October 2026).  
+**Current verified status (2026-10-12):** **MERGED** to `main` by PR [#99](https://github.com/9GotStory/smart-srrt/pull/99) at `7a8e2efeab239bac9bf708ed1e86f28b710f6726`; [Post-Merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/38205839537) PASS. **NOT DEPLOYED** to Apps Script; [release readiness](../release/gs-security-release-readiness-2026-10-12.md) remains HOLD. Historical merge/candidate gates later in this document describe its original pre-merge authoring stage, not current GitHub state.  
 **Base authority:** `main@64f4cc3ae319319bac3ceb0818aad26d149d3200` (GS-S4 post-merge GitHub Actions PASS).  
 **Review boundary:** author-assisted ChatGPT Technical Review; not an independent security audit, live GAS smoke test or proof of full audit completeness.
 

@@ -1,6 +1,6 @@
 # GS-S3 — Authentication Modernization
 
-**Status:** Source-only candidate, not merged or deployed (2026-10-12).  
+**Current verified status (2026-10-12):** **MERGED** to `main` by PR [#97](https://github.com/9GotStory/smart-srrt/pull/97) at `4cb18cee7db1e814b6d4c85fc395d5a363b19c06`; [Post-Merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/38203217176) PASS. **NOT DEPLOYED** to Apps Script; [release readiness](../release/gs-security-release-readiness-2026-10-12.md) remains HOLD. Historical merge/candidate gates later in this document describe its original pre-merge authoring stage, not current GitHub state.  
 **Base:** `main@22ee59e10d1dc79b72c0846413d6793cb2eb8f10`, GS-S2 Post-Merge CI PASS.  
 **Review:** ChatGPT, author-assisted; no independent security review or live environment benchmarking.
 

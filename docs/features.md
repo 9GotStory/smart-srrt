@@ -1,27 +1,13 @@
-> **GS-S5 Audit Observability (Source Candidate — ยังไม่ได้ Merge/Deploy):** แสดงสถานะการบันทึก AuditLogs ในหน้า Admin สำหรับผู้มีสิทธิ์ `audit` โดยไม่บันทึกข้อมูลผู้ป่วย/รหัสผ่าน/ข้อความ Error ลง Health Telemetry เพิ่ม Tests ความล้มเหลวและการกลับมาบันทึกได้ ทั้งนี้ `writeAudit_` ยังไม่เปลี่ยนผลธุรกิจที่ Commit สำเร็จ และสถานะ `unobserved` ไม่ได้หมายความว่ามี Audit ครบทุกงาน. [GS-S5](implementation/gs-s5-audit-observability.md).
-
-> **GS-S4 (Source Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่มการยืนยันสร้างรายงาน AI ซ้ำจากฝั่ง Server ผ่าน Consent Token ใช้ครั้งเดียว อายุ 5 นาที ผูกกับผู้ใช้ EventID ประวัติ Report Registry และ Revision ตรวจใน G-32 Lock ก่อนสร้าง Job ใหม่ พร้อม Tests กรณีไม่มีรายงาน, มีรายงานซ้ำ, Token ปลอม/หมดอายุ/ใช้งานแล้ว, Registry เปลี่ยน และงานสถานะ Unknown. [อ่าน GS-S4](implementation/gs-s4-server-report-consent.md).
-
-> **GS-S3 (Candidate Source — ยังไม่ได้ Merge หรือ Deploy):** รองรับรหัสผ่านบัญชีเดิม SHA-256 ด้วยการ Migration เป็น PBKDF2-HMAC-SHA256 + Salt หลัง Login สำเร็จเท่านั้น, เพิ่ม Password Policy, Login Failure Throttling และ Session Revocation เมื่อรหัสผ่านเปลี่ยน พร้อม Security Tests. ต้องวัดเวลาการคำนวณจริงบน Apps Script ทดสอบก่อน Deploy. [เอกสาร GS-S3](implementation/gs-s3-authentication-modernization.md).
-
-> **GS-S2 (Source Candidate — ยังไม่ได้ Merge/Deploy):** แก้ AuditLogs สำหรับการแก้ไขผู้ใช้ไม่ให้บันทึก PasswordHash และ `newPassword` พร้อมเพิ่ม Redaction ที่จุดเขียน Audit และ Security Contract Tests. ไม่แก้ข้อมูล AuditLogs เดิมหรือ Schema v7; ต้องได้รับอนุมัติแยกหากจะตรวจ/จัดการ Logs ย้อนหลัง. [รายละเอียด GS-S2](implementation/gs-s2-credential-audit-redaction.md).
-
-> **GS-S1 (Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่ม Server Guard สำหรับ 15 ฟังก์ชันระดับผู้ดูแลระบบ/การย้ายข้อมูล/การจัดการ Gemini โดยต้องกำหนด Google Script Property `GS_TRUSTED_OPERATOR_EMAIL` และต้องตรงทั้ง Active + Effective Google Identity มิฉะนั้นปฏิเสธก่อนทำงานทุกครั้ง รวมทั้งจำกัด `include()` เฉพาะ 16 HTML Partials ใน Manifest และเพิ่ม Security Contract Tests. ระบบทั่วไปไม่เปลี่ยน; ต้องมีแผนกำหนด Property ก่อน Deploy ในอนาคต. [รายละเอียด GS-S1](implementation/gs-s1-operator-rpc-boundary.md).
-
-> **UX-R2-M01-05 (Candidate Test Stabilization — ยังไม่ได้ Merge/Deploy):** เพิ่มชุดทดสอบตรวจโครงสร้าง Native 24 ไฟล์ ลำดับ Script และ Global Functions, Bootstrap เพียงครั้งเดียว, HTML Handlers, การป้องกัน RPC ก่อน Boot, Guest/AI Reporter Unknown-state และ Negative Fixtures พร้อมเชื่อมเข้า `npm run check:contracts` โดย **ไม่มีการแก้ Runtime**. ดู [M01-05](implementation/ux-r2-m01-05-final-stabilization.md).
-
-> **UX-R2-M01-04 (Source Candidate — ยังไม่ Merge หรือ Deploy):** ระบบ AI Reporter แยกเป็น Native HTML Partials `03i-client-report-actions.html` (ความพร้อมข้อมูลและปุ่มรายงาน), `03j-client-report-job.html` (สถานะงาน, Polling, Recovery, ยกเลิก), และ `03k-client-report-generation.html` (สร้างรายงานและยืนยันคำเตือน). Native Stage 24 ไฟล์: 7 GS + 16 HTML + Index; ยังคง G-26/G-32/G-33, ความปลอดภัย Session, ป้องกันรายงานซ้ำ, สถานะ Unknown และ One-Click เดิม. ดู [M01-04](implementation/ux-r2-m01-04-ai-reporter.md).
-
-> **UX-R2-M01-03 (Source Candidate — ยังไม่ได้ Merge หรือ Deploy):** ย้าย Event badges/Owner/Attachment, ประวัติรายงาน Event, และตาราง/ฟอร์ม Event เป็น `03f-client-event-controls.html`, `03g-client-event-history.html`, `03h-client-event-records.html`; Native Stage 21 ไฟล์ (7 GS + 13 HTML + Index) โดยไม่เปลี่ยน 26 fields, RBAC, EventID/Revision, G-27/G-32/G-33, Schema v7 และ Frozen One-Click. ดู [M01-03](implementation/ux-r2-m01-03-event-management.md).
-
-> **UX-R2-M01-02 (candidate code only, not deployed):** Dashboard Filters, KPI/Insights, Google Charts และ Export/Capture ย้ายเป็น Native HTML Partials `03d-client-dashboard.html` และ `03e-client-dashboard-export.html`; Stage เป็น 18 ไฟล์ รวม Index (7 GS + 10 HTML). ไม่มีการเปลี่ยน Feature/RPC, Google Charts ยังคงเดิม, One-Click Frozen, Apps Script @10 ไม่ได้ Deploy. ดู [M01-02](implementation/ux-r2-m01-02-dashboard.md).
-
-> **UX-R2-M01-01 Native Client Split (source candidate, not deployed):** Client JS ใน `src/web/04-browser-app.html` ถูกแยกเฉพาะ Shared Core และ Auth/Session ลงใน `03b-client-core.html` และ `03c-client-auth.html` ตาม `tools/native-sources.mjs` (7 GS + 8 HTML + generated Index = 16). ฟีเจอร์และ RPC เดิมยังไม่เปลี่ยน. โปรดดู [M01-01](implementation/ux-r2-m01-01-shared-core.md); ห้ามสรุปว่ามีการ Deploy @10 แล้ว.
-
 # Smart SRRT — Feature Reference ฉบับสมบูรณ์ (Current Source)
 
-> **เอกสารอ้างอิง Current Implementation** ณ 11 ตุลาคม 2026  
-> Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt) · Baseline: `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778`  
+> **สถานะ Source ล่าสุด:** GS-S1–GS-S5 Merge เข้า `main` และผ่าน Post-Merge CI (60 Contract Tests / 419 Regression Tests / Native 24 Files). **Apps Script Deployment ยัง HOLD** ไม่รับรองว่า `/exec` ใช้โค้ดนี้แล้ว. [Readiness Review](release/gs-security-release-readiness-2026-10-12.md) · [G-34 Deployment](deployment/g34-native-multifile-apps-script.md).
+>
+> **Security Features ที่มีใน Source:** GS-S1 บังคับสิทธิ์ Google Operator 15 ฟังก์ชันและ Allowlist HTML; GS-S2 Redact Credential ใน Audit ใหม่; GS-S3 Salted PBKDF2 / Legacy Migration / Session Revocation / Best-effort Login Throttle; GS-S4 Consent Token และ Registry Gate ก่อน AI Report ซ้ำ; GS-S5 Audit Delivery Health สำหรับ Admin. การ Deploy ต้องผ่าน Gate เพิ่มเติมโดยเฉพาะการวัด PBKDF2 จริงและการจัดการ Secret Readback ใน `getSystemSettings()`.
+
+
+
+> **เอกสารอ้างอิง Current Implementation** ณ 12 ตุลาคม 2026  
+> Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt) · Baseline: `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`  
 > `CONFIG.VERSION = 2026.09.08.1` · `CONFIG.SCHEMA_VERSION = 7` · `CONFIG.REPORT_PROMPT_VERSION = 2026.10.06.1`
 >
 > รายละเอียดด้านล่างอธิบายสิ่งที่ **มีใน Source ปัจจุบัน** ไม่รับรองว่า Deploy ทุก Installation ตรงกับ GitHub และไม่รับรองการทดสอบ End-to-End ที่ไม่ได้เกิดขึ้น

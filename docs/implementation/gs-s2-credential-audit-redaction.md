@@ -1,6 +1,6 @@
 # GS-S2 — Credential / Audit Redaction
 
-**State:** Candidate source patch; unmerged / not deployed (2026-10-12).  
+**Current verified status (2026-10-12):** **MERGED** to `main` by PR [#96](https://github.com/9GotStory/smart-srrt/pull/96) at `22ee59e10d1dc79b72c0846413d6793cb2eb8f10`; [Post-Merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/38201820037) PASS. **NOT DEPLOYED** to Apps Script; [release readiness](../release/gs-security-release-readiness-2026-10-12.md) remains HOLD. Historical merge/candidate gates later in this document describe its original pre-merge authoring stage, not current GitHub state.  
 **Baseline:** `main@378506e19d418739e13cfb12e171bb722300a439` (GS-S1 Post-Merge CI PASS).  
 **Scope:** prevent newly supplied user passwords and prior password digests being persisted in **new** AuditLogs rows. Does not perform retroactive data cleanup.
 

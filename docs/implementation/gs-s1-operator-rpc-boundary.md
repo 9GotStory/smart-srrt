@@ -1,6 +1,6 @@
 # GS-S1 — Server RPC Boundary and Operator Maintenance Hardening
 
-**Status:** candidate source change, NOT MERGED, NOT DEPLOYED (2026-10-12).  
+**Current verified status (2026-10-12):** **MERGED** to `main` by PR [#95](https://github.com/9GotStory/smart-srrt/pull/95) at `378506e19d418739e13cfb12e171bb722300a439`; [Post-Merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/38200914386) PASS. **NOT DEPLOYED** to Apps Script; [release readiness](../release/gs-security-release-readiness-2026-10-12.md) remains HOLD. Historical merge/candidate gates later in this document describe its original pre-merge authoring stage, not current GitHub state.  
 **Base:** `main@b8e2c1043730f2ce9e9eed49e704ec7436cd23c9`, following [GS Architecture Review](../architecture/gs-architecture-review-2026-10-12.md).  
 **Scope:** seven canonical Apps Script server modules, same 24-file Native staged package, no schema or data migration.
 

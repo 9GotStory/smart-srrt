@@ -1,5 +1,8 @@
 # Smart SRRT — Google Apps Script Architecture Review
 
+> **Current follow-up (2026-10-12):** GS-S1…GS-S5 are **MERGED** to `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` (60/60 contracts, 419/419 regressions, 24-file native parity) but **NOT DEPLOYED**. This file's original 7-module architecture findings and source baseline are retained as historical evidence. New source-verified residual finding: authenticated `getSystemSettings()` returns all raw settings values to users with `settings` permission, potentially including `GEMINI_API_KEY`; see R-07 in the [Security Release Readiness Review](../release/gs-security-release-readiness-2026-10-12.md). The release decision remains **HOLD**; use that review for current go/no-go criteria.
+
+
 **Review date:** 2026-10-12 (Asia/Bangkok)  
 **Source authority:** `9GotStory/smart-srrt` at `main@ec072debd1f343ca9b1f34ac190584a75180f935`  
 **Type:** source-only architecture/security review. **No tests executed anew, no server mutation, no Apps Script deployment.**  
