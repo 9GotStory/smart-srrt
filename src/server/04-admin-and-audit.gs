@@ -291,7 +291,8 @@ function getAuditRetentionStatus(sessionToken) {
     malformedTimestampRows: malformed,
     cutoff: Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
     oldestTimestamp: oldest ? Utilities.formatDate(oldest, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss') : '',
-    archiveSpreadsheetId: String(settings.AUDIT_ARCHIVE_SPREADSHEET_ID || '')
+    archiveSpreadsheetId: String(settings.AUDIT_ARCHIVE_SPREADSHEET_ID || ''),
+    auditWriteHealth:readAuditWriteHealth_()
   };
 }
 
@@ -507,6 +508,74 @@ function sanitizeAuditPayload_(value, targetSheet) {
   return JSON.stringify(scrub(parsed, 0));
 }
 
+// GS-S5: bounded, non-secret, best-effort AuditLogs write-health telemetry.
+// A failure to persist telemetry must NEVER change a committed business result.
+var AUDIT_WRITE_HEALTH_KEY_ = 'SRRT_GS5_AUDIT_WRITE_HEALTH_V1';
+function auditHealthSafeLog_(eventCode, action) {
+  // Never log exceptions, caller data, credentials, EventID, document ID or payload.
+  var safeAction = /^[A-Z][A-Z0-9_]{0,63}$/.test(String(action||''))
+    ? String(action) : 'UNCLASSIFIED';
+  try {
+    if (typeof Logger !== 'undefined' && Logger && typeof Logger.log === 'function')
+      Logger.log('GS-S5 ' + eventCode + ' action=' + safeAction);
+  } catch(ignoreLogger) {}
+}
+
+function readAuditWriteHealth_() {
+  var unavailable = {state:'unavailable',failureCount:0,lastFailureAt:'',
+    lastRecoveryAt:'',lastFailureAction:''};
+  try {
+    if (typeof PropertiesService === 'undefined' || !PropertiesService) return unavailable;
+    var raw = PropertiesService.getScriptProperties().getProperty(AUDIT_WRITE_HEALTH_KEY_);
+    if (!raw) return {state:'unobserved',failureCount:0,lastFailureAt:'',
+      lastRecoveryAt:'',lastFailureAction:''};
+    var data = JSON.parse(raw);
+    if (!data || (data.state !== 'degraded' && data.state !== 'recovered') ||
+        !Number.isSafeInteger(data.failureCount) || data.failureCount<1 ||
+        data.failureCount>1000000 || typeof data.lastFailureAt !== 'string' ||
+        !/^\d{4}-\d\d-\d\dT/.test(data.lastFailureAt) ||
+        !/^[A-Z][A-Z0-9_]{0,63}$/.test(String(data.lastFailureAction||''))) return unavailable;
+    return {state:data.state,failureCount:data.failureCount,
+      lastFailureAt:data.lastFailureAt,
+      lastRecoveryAt:data.state==='recovered' && typeof data.lastRecoveryAt==='string'
+        ? data.lastRecoveryAt : '',
+      lastFailureAction:data.lastFailureAction};
+  } catch(ignoreTelemetryRead) { return unavailable; }
+}
+
+function recordAuditWriteOutcome_(wasWritten, action) {
+  if (!wasWritten) auditHealthSafeLog_('AUDIT_APPEND_FAILED',action);
+  try {
+    if (typeof PropertiesService === 'undefined' || !PropertiesService) {
+      if (!wasWritten) auditHealthSafeLog_('HEALTH_STORE_UNAVAILABLE',action);
+      return;
+    }
+    var props=PropertiesService.getScriptProperties();
+    var current=readAuditWriteHealth_();
+    if (wasWritten) {
+      if (current.state !== 'degraded') return; // No writes on healthy path.
+      props.setProperty(AUDIT_WRITE_HEALTH_KEY_,JSON.stringify({
+        state:'recovered',failureCount:current.failureCount,
+        lastFailureAt:current.lastFailureAt,
+        lastRecoveryAt:new Date().toISOString(),lastFailureAction:current.lastFailureAction
+      }));
+      auditHealthSafeLog_('AUDIT_RECOVERED',action);
+      return;
+    }
+    var count=(current.state==='degraded'||current.state==='recovered')
+      ? Math.min(current.failureCount+1,1000000) : 1;
+    var safeAction=/^[A-Z][A-Z0-9_]{0,63}$/.test(String(action||''))
+      ? String(action) : 'UNCLASSIFIED';
+    props.setProperty(AUDIT_WRITE_HEALTH_KEY_,JSON.stringify({
+      state:'degraded',failureCount:count,lastFailureAt:new Date().toISOString(),
+      lastRecoveryAt:'',lastFailureAction:safeAction
+    }));
+  } catch(ignoreTelemetryWrite) {
+    // Logger is our second channel; never serialize error.message/stack.
+    auditHealthSafeLog_('HEALTH_STORE_UNAVAILABLE',action);
+  }
+}
+
 function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValue) {
   try {
     // Sanitize before touching the sheet; never fall back to writing unsafe raw input.
@@ -524,7 +593,12 @@ function writeAudit_(user, action, targetSheet, targetId, beforeValue, afterValu
       '',
       Utilities.getUuid()
     ]);
-  } catch(e) {}
+  } catch(ignoreAuditTransport) {
+    recordAuditWriteOutcome_(false,action);
+    return false; // Already committed business work stays committed.
+  }
+  recordAuditWriteOutcome_(true,action);
+  return true;
 }
 
 function logVisit_() {
