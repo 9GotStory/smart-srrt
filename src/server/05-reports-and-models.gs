@@ -770,12 +770,14 @@ function clearGeminiModelCache_() {
 }
 
 function clearGeminiModelCache() {
+  requireTrustedOperator_('clearGeminiModelCache');
   clearGeminiModelCache_();
   Logger.log('ล้าง Cache โมเดล Gemini เรียบร้อยแล้ว');
   return 'ล้าง Cache โมเดล Gemini เรียบร้อยแล้ว';
 }
 
 function listAvailableGeminiModels() {
+  requireTrustedOperator_('listAvailableGeminiModels');
   clearGeminiModelCache_();
   var settings = getSettingsMap_();
   var apiKey = String(settings.GEMINI_API_KEY || '').trim();
@@ -804,6 +806,7 @@ function listAvailableGeminiModels() {
 }
 
 function testGeminiConnection() {
+  requireTrustedOperator_('testGeminiConnection');
   forceGeminiModelAuto();
   var settings = getSettingsMap_();
   settings.GEMINI_MODEL = 'AUTO';

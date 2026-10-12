@@ -316,6 +316,7 @@ function safePromptValue_(value) {
   return text;
 }
 function forceGeminiModelAuto() {
+  requireTrustedOperator_('forceGeminiModelAuto');
   var ss = getDb_();
   var sheet = ss.getSheetByName(CONFIG.SHEETS.SETTINGS);
 
@@ -356,5 +357,6 @@ function forceGeminiModelAuto() {
 
 // ชื่อเดิมยังใช้ได้ เพื่อไม่ให้เมนูหรือคู่มือเก่าเสีย
 function forceGeminiModelStable() {
+  requireTrustedOperator_('forceGeminiModelStable');
   return forceGeminiModelAuto();
 }

@@ -198,8 +198,37 @@ function doGet(e) {
 }
 
 function include(filename) {
+  // GS-S1: HTML Service requires a public include(), so restrict to trusted native partials.
+  var trusted = ["00-document-head","01-styles","02-app-layout","03-modals","03a-dashboard-mobile","03b-client-core","03c-client-auth","03d-client-dashboard","03e-client-dashboard-export","03f-client-event-controls","03g-client-event-history","03h-client-event-records","03i-client-report-actions","03j-client-report-job","03k-client-report-generation","04-browser-app"];
+  if (typeof filename !== 'string' || trusted.indexOf(filename) < 0) {
+    throw new Error('ไม่อนุญาตให้โหลดไฟล์ HTML นี้');
+  }
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
+
+/**
+ * GS-S1 privileged maintenance boundary. Editor-controlled, explicit fail-closed
+ * Google identity: never infer a trusted operator from the web app's effective
+ * execution account or from Smart SRRT's independent email/password session.
+ *
+ * An authorized operator must configure GS_TRUSTED_OPERATOR_EMAIL manually in
+ * Apps Script Project Settings > Script Properties before maintenance runs.
+ * This protects public GAS wrappers needed by existing Spreadsheet menus.
+ */
+function requireTrustedOperator_(operation) {
+  var configured = String(PropertiesService.getScriptProperties()
+    .getProperty('GS_TRUSTED_OPERATOR_EMAIL') || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(configured)) {
+    throw new Error('ไม่ได้กำหนดผู้ปฏิบัติการที่ได้รับอนุญาตใน Script Properties');
+  }
+  var active = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  var effective = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
+  if (!active || active !== configured || effective !== configured) {
+    throw new Error('ไม่มีสิทธิ์ดำเนินการบำรุงรักษาระบบ');
+  }
+  return true;
+}
+
 
 
 function onOpen() {
@@ -224,6 +253,7 @@ function onOpen() {
  * ปลอดภัยต่อการรันซ้ำ ใช้ซ่อมชีท/โฟลเดอร์/Template ที่ขาดได้
  */
 function installSmartSRRT() {
+  requireTrustedOperator_('installSmartSRRT');
   var result = installSmartSRRTCore_();
   try { SpreadsheetApp.getUi().alert(result.message); } catch (ignore) {}
   return result.message;
@@ -231,6 +261,7 @@ function installSmartSRRT() {
 
 /** รองรับชื่อฟังก์ชันเดิม */
 function setupDatabase() {
+  requireTrustedOperator_('setupDatabase');
   return installSmartSRRT();
 }
 
@@ -309,6 +340,7 @@ function installSmartSRRTCore_() {
 }
 
 function resetSuperAdminPassword() {
+  requireTrustedOperator_('resetSuperAdminPassword');
   var ss = getDb_();
   var sheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
   if (!sheet || sheet.getLastRow() <= 1) throw new Error('ไม่พบผู้ดูแลระบบ กรุณา Run installSmartSRRT()');
@@ -331,6 +363,7 @@ function resetSuperAdminPassword() {
 }
 
 function showDatabaseInfo() {
+  requireTrustedOperator_('showDatabaseInfo');
   var ss = getDb_();
   var settings = getSettingsMap_();
   var text = [
