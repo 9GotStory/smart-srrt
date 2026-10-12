@@ -104,10 +104,16 @@
       if(reportUnknownNeedsVerification||activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown')){
         throw new Error('ยังมีงานรายงานที่ต้องตรวจสอบสถานะก่อน');
       }
+      // GS-S4: the server issues a short-lived, owner/Event/registry-bound,
+      // one-use consent capability only after this explicit confirmation.
+      const proof=await gs('prepareReportRegeneration',session,eventId);
+      if(token!==session||!currentUser||reportHistoryEventId!==eventId)return;
+      if(!proof||proof.eventId!==eventId||!proof.consentId)
+        throw new Error('ยังยืนยันการสร้างรายงานใหม่ไม่ได้');
       closeModal('reportNewConfirmModal');
       reportNewConfirmReturnFocus=null;
       closeModal('reportHistoryModal');
-      await makeReport(eventId,button,true);
+      await makeReport(eventId,button,proof.consentId);
     }catch(e){if(token===session&&currentUser)toast(String(e.message||e))}
     finally{
       // G-33/R1: the same session always reopens a usable dialog, but a stale

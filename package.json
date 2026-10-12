@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npm run build:ui-assets && npm run build:gas-multifile",
     "build:check": "npm run check:ui-assets && npm run check:gas-multifile",
-    "check:contracts": "node --test tests/g30-release-parity.test.mjs tests/g34-multifile-parity.test.mjs tests/ux-r2-03-native-dashboard.test.mjs tests/ux-r2-m01-final-stabilization.test.mjs tests/gs-s1-operator-rpc-boundary.test.mjs tests/gs-s2-credential-audit-redaction.test.mjs tests/gs-s3-authentication-modernization.test.mjs",
+    "check:contracts": "node --test tests/g30-release-parity.test.mjs tests/g34-multifile-parity.test.mjs tests/ux-r2-03-native-dashboard.test.mjs tests/ux-r2-m01-final-stabilization.test.mjs tests/gs-s1-operator-rpc-boundary.test.mjs tests/gs-s2-credential-audit-redaction.test.mjs tests/gs-s3-authentication-modernization.test.mjs tests/gs-s4-report-regeneration-consent.test.mjs",
     "test": "node --test tests/*.test.mjs",
     "release:preflight": "node tools/p6-release-preflight.mjs",
     "build:gas-multifile": "node tools/build-apps-script-multifile.mjs --write",

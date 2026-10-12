@@ -1,5 +1,5 @@
 <script>
-  async function executeReport(eventId,btn){
+  async function executeReport(eventId,btn,regenerationConsentId){
     // G-33/R1: report generation stops at its dispatch point the moment the
     // local session is gone; logout invalidates token and user synchronously.
     if(!currentUser||!token)return;
@@ -19,7 +19,7 @@
     refreshReportActionButtons();
     try{
       if(btn){btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังเริ่มงาน'}
-      const job=await gs('createReportJob',session,eventId);
+      const job=await gs('createReportJob',session,eventId,String(regenerationConsentId||''));
       if(session!==token||user!==currentUser||request!==reportJobCreateRequest)return;
       if(!job||!job.id||!job.eventId)throw new Error('ยังไม่สามารถยืนยันข้อมูลงานรายงานที่สร้างได้');
       if(activeReportJob&&activeReportJob.id!==job.id&&!reportJobTerminal(activeReportJob)){
@@ -62,9 +62,10 @@
       const readiness=await gs('getAIReportReadiness',session,eventId);
       if(session!==token||user!==currentUser)return;
       if(readiness&&readiness.level==='ready'){
-        return await executeReport(eventId,btn);
+        return await executeReport(eventId,btn,allowExistingReport);
       }
       pendingReportExplicitRegeneration=!!allowExistingReport;
+      pendingReportRegenerationConsentId=String(allowExistingReport||'');
       renderReportReadinessModal(readiness,eventId);
     }catch(e){if(session===token&&user===currentUser)toast(e.message||e)}
     finally{
@@ -94,6 +95,7 @@
     const request=++reportWarningContinueRequest;
     const session=token,user=currentUser,summaryVersion=reportSummaryRequest;
     const explicit=!!pendingReportExplicitRegeneration;
+    const regenerationConsentId=explicit?pendingReportRegenerationConsentId:'';
     const button=el('continueReportBtn'),old=button.innerHTML;
     reportWarningContinueInFlight=true;
     button.disabled=true;
@@ -124,8 +126,9 @@
       if(reportUnknownNeedsVerification||
          activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))return;
       pendingReportExplicitRegeneration=false;
+      pendingReportRegenerationConsentId='';
       closeModal('reportReadinessModal');
-      await executeReport(eventId,button);
+      await executeReport(eventId,button,regenerationConsentId);
     }catch(error){
       if(session===token&&user===currentUser&&request===reportWarningContinueRequest){
         reportSummaryState={status:'error',summaries:{}};

@@ -31,6 +31,12 @@ function harness(handler){
   };
   vm.createContext(ctx);
   vm.runInContext(server,ctx,{filename:'Code.gs'});
+  // GS-S4: existing G-32 job fixtures model a valid empty read-only ReportRegistry.
+  // Dedicated GS-S4 tests exercise true/nonempty/corrupt registry outcomes.
+  ctx.listReportsForEvent=(_token,id)=>({
+    eventId:id,currentRevision:1,recordStatus:'active',count:0,
+    invalidCount:0,latest:null,reports:[]
+  });
   ctx.requireAuth_=(token,perm)=>{
     assert.equal(perm,'report');
     if(token==='u1')return user1;
