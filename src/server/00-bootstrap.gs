@@ -355,7 +355,7 @@ function resetSuperAdminPassword() {
     }
   }
   if (row < 0) throw new Error('ไม่พบบัญชี Super Admin');
-  var newPassword = 'SRRT-' + Utilities.getUuid().replace(/-/g,'').substring(0,8);
+  var newPassword = 'SRRT-' + (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g,'').substring(0,24);
   sheet.getRange(row,4).setValue(hashPassword_(newPassword));
   var message = 'รีเซ็ตรหัสผ่านเรียบร้อย\nEmail: ' + email + '\nรหัสผ่านใหม่: ' + newPassword;
   try { SpreadsheetApp.getUi().alert(message); } catch (ignore) {}
