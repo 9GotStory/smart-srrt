@@ -99,8 +99,8 @@ test('G33 browser removes both duplicate history buttons while preserving the hi
   const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
   assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,2);
   assert.doesNotMatch(render,/ประวัติรายงาน<\/button>/);
-  assert.match(html,/id="reportHistoryNewBtn"/);
-  assert.match(html,/id="reportNewConfirmModal" role="alertdialog"/);
+  assert.match(nativeHtml,/id="reportHistoryNewBtn"/);
+  assert.match(nativeHtml,/id="reportNewConfirmModal" role="alertdialog"/);
   assert.match(html,/function confirmNewReportFromHistory\(\)/);
   assert.match(html,/gs\('listReportsForEvent',session,eventId\)/);
   assert.match(html,/ข้อมูลเหตุการณ์มีการปรับปรุงหลังสร้างรายงานล่าสุด/);

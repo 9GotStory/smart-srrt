@@ -237,10 +237,10 @@ test('G-32 confirmation errors remain in themed modal and do not claim cancelled
 });
 
 test('G-32 compiled UI is accessible and has no native cancel confirmation',()=>{
-  assert.match(html,/id="reportCancelConfirmModal" role="alertdialog" aria-modal="true"/);
-  assert.match(html,/aria-labelledby="reportCancelConfirmTitle" aria-describedby="reportCancelConfirmDescription"/);
-  assert.match(html,/onclick="confirmReportCancelRequest\(\)"/);
-  assert.match(html,/id="reportCancelKeepBtn"/);
+  assert.match(nativeHtml,/id="reportCancelConfirmModal" role="alertdialog" aria-modal="true"/);
+  assert.match(nativeHtml,/aria-labelledby="reportCancelConfirmTitle" aria-describedby="reportCancelConfirmDescription"/);
+  assert.match(nativeHtml,/onclick="confirmReportCancelRequest\(\)"/);
+  assert.match(nativeHtml,/id="reportCancelKeepBtn"/);
   assert.match(html,/if\(reportCancelSubmitting\)return/);
   assert.doesNotMatch(reportSource,/if\(!confirm\(/);
 });

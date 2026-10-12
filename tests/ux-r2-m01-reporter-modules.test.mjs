@@ -90,7 +90,7 @@ test('M01-04 Job mutation boundaries retain session and report duplication guard
   assert.match(job,/getReportJobStatus/);
   assert.match(job,/reportUnknownNeedsVerification/);
   assert.match(job,/cancelReportJob/);
-  assert.match(job,/reportJobCreateRequest/);
+  assert.match(generation,/reportJobCreateRequest/);
   assert.match(generation,/createReportJob/);
   assert.match(generation,/getAIReportReadiness/);
   assert.match(generation,/reportGenerationInFlight/);
