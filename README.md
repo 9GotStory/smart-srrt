@@ -1,3 +1,5 @@
+> **UX-R2-M01-00 (12 ต.ค. 2569):** เตรียม Test Foundation สำหรับแยก Client JavaScript เป็น Native HTML Partials ตามลำดับ Manifest โดยยังไม่แก้ Runtime Source, ยังคง 14 ไฟล์ และยังไม่ Deploy; ดู [M01-00 Test Foundation](docs/implementation/ux-r2-m01-00-browser-module-foundation.md). งานแยก Module จริงต้องรับอนุมัติและเปิด PR แยกต่างหาก.
+
 # Smart SRRT
 
 > **UX-R2-03B (12 ต.ค. 2569):** การตรวจ Release/Regression ปัจจุบันใช้ **Native Source 14 ไฟล์** ผ่าน `tools/native-release-inspection.mjs`, G-30/G-34 และ P6 Native Offline Preflight. `npm run release:preflight` ต้องมี `dist/apps-script/` ที่ Stage แล้วและทำงานแบบ Read-only โดย Release Decision ยังเป็น **HOLD**. One-Click สองไฟล์เป็นเพียงหลักฐานเก่า มี Test ตรวจ Git Blob ที่ตรึงไว้เท่านั้น ไม่ใช่ Current Release. ดู [คู่มือ R2-03B](docs/implementation/ux-r2-03b-native-release-tests.md).

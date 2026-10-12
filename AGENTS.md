@@ -139,3 +139,7 @@ Product Owner authorized Issue #86 following PR #85 merge at `main@60f6eca030034
 
 ---
 **Agent reminder:** Read first → Inspect current code → Respect privacy/data integrity → Keep changes scoped → Separate implementation, review, merge, deploy and migration → Report evidence precisely.
+
+## UX-R2-M01-00 — Browser Modular Test Foundation (12 October 2026)
+
+Test-only preparation for future client module extraction: `tests/helpers/native-client.mjs` reads ordered classic inline JavaScript directly from `tools/native-sources.mjs`; `tests/helpers/native-current.mjs` exports `nativeClientScripts` and `nativeClientSource` while retaining `nativeBrowser` for old regression suites. Keep one final `boot()`; preserve inline markup global handlers, HTML Service/classic script lexical bindings, duplicate `fileToBase64` baseline, RPC/auth contracts and Native stage checks. No source extraction, One-Click writes, clasp execution, schema change, merge, or deployment is authorized by M01-00 itself. See `docs/implementation/ux-r2-m01-00-browser-module-foundation.md`.
