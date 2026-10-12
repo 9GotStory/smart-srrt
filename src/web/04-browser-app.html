@@ -144,6 +144,24 @@
     try{
       const s=await gs('getAuditRetentionStatus',token);
       el('auditRetentionStatus').innerHTML=`เก็บ Audit ในฐานข้อมูลหลัก <b>${Number(s.retentionDays||0)} วัน</b> · Active <b>${Number(s.activeRows||0)}</b> รายการ · เข้าเกณฑ์ Archive <b>${Number(s.eligibleRows||0)}</b> รายการ${Number(s.malformedTimestampRows||0)?` · <span style="color:#b45309">Timestamp ผิดรูปแบบ ${Number(s.malformedTimestampRows||0)} รายการ (ยังคงไว้)</span>`:''}${s.oldestTimestamp?`<br>รายการเก่าสุด: ${escapeHtml(s.oldestTimestamp)} · Cutoff: ${escapeHtml(s.cutoff||'')}`:''}`;
+      // GS-S5: read-only operator-visible audit delivery health. Do not
+      // interpolate untrusted error messages, identifiers or Audit payloads.
+      const health=s.auditWriteHealth||{state:'unavailable'};
+      let message='';
+      if(health.state==='degraded'){
+        message='AuditLogs: ตรวจพบการบันทึกขัดข้อง '+Number(health.failureCount||0)+
+          ' ครั้ง (รวมที่ตรวจพบ) · ล่าสุด '+escapeHtml(health.lastFailureAt||'ไม่ทราบเวลา')+
+          ' · งาน '+escapeHtml(health.lastFailureAction||'ไม่ระบุ')+
+          ' · กรุณาตรวจสอบ Apps Script Executions และสิทธิ์การเข้าถึง Spreadsheet';
+      }else if(health.state==='recovered'){
+        message='AuditLogs: กลับมาบันทึกได้หลังเคยขัดข้อง '+Number(health.failureCount||0)+
+          ' ครั้ง · ฟื้นตัวล่าสุด '+escapeHtml(health.lastRecoveryAt||'ไม่ทราบเวลา');
+      }else if(health.state==='unobserved'){
+        message='AuditLogs: ยังไม่มีเหตุขัดข้องที่บันทึกในตัวติดตาม (ไม่ใช่หลักฐานว่าทุก Audit สำเร็จ)';
+      }else{
+        message='AuditLogs: ไม่สามารถอ่านสถานะการบันทึกได้ กรุณาตรวจสอบ Apps Script Executions';
+      }
+      el('auditRetentionStatus').innerHTML+='<div class="help" role="status" style="margin-top:10px">'+message+'</div>';
       el('archiveAuditBtn').disabled=Number(s.eligibleRows||0)===0
     }catch(e){el('auditRetentionStatus').textContent=e.message||e}
   }

@@ -105,3 +105,7 @@ GS-S3 `docs/implementation/gs-s3-authentication-modernization.md` is the source-
 ### GS-S4 Follow-up — report regeneration consent (source candidate, 2026-10-12)
 
 GS-S4 `docs/implementation/gs-s4-server-report-consent.md` addresses F-04 by adding a server-issued, short-lived, one-use consent capability for an authenticated deliberate regeneration action. The G-32 job creation endpoint independently reads the Report Registry and confirms owner/Event/registry-count/latest-report/Revision freshness. This does not prove a literal human click and does not itself certify live GAS release readiness. The candidate is not deployed and has not accessed real clinical/report records or installed a migration.
+
+### GS-S5 Follow-up — Audit transport observability (source candidate, 2026-10-12)
+
+GS-S5 `docs/implementation/gs-s5-audit-observability.md` adds safe, bounded, best-effort AuditLogs write-health state. The existing `getAuditRetentionStatus` response (guarded by `audit` authorization) includes an `auditWriteHealth` summary for the existing Admin view, without creating new public server RPCs or changing the ten AuditLogs columns. Transport failures remain best effort and do not change business or post-ReportRegistry commit success. A blank health record means **unobserved**, not a verified complete audit history. Historical AuditLogs, archives, credentials and live Apps Script execution were not inspected. This source candidate is not deployed.
