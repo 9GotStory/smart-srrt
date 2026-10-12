@@ -1,4 +1,4 @@
-import {nativeHtml} from './helpers/native-current.mjs';
+import {nativeHtml,nativeClientSource} from './helpers/native-current.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +6,7 @@ import fs from 'node:fs';
 const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const layout=read('src/web/02-app-layout.html');
 const dialogs=read('src/web/03-modals.html');
-const app=read('src/web/04-browser-app.html');
+const app=nativeClientSource;
 const css=read('src/styles/shared-ui.css');
 const built=nativeHtml;
 
@@ -55,7 +55,9 @@ test('R2-02B shared control CSS keeps explicit focus, adaptive action group and 
   assert.ok(layout.includes('class="srrt-action-group"'));
   assert.ok(built.includes(layout),'One-Click HTML must contain exact layout');
   assert.ok(built.includes(dialogs),'One-Click HTML must contain exact modal markup');
-  assert.ok(built.includes(app),'One-Click HTML must contain exact application JavaScript');
+  for(const file of ['03b-client-core.html','03c-client-auth.html','04-browser-app.html']){
+    assert.ok(built.includes(read('src/web/'+file)),'Native HTML must include '+file);
+  }
   assert.ok(built.includes('UX-R2-02B'),'One-Click HTML must contain compiled shared CSS');
 });
 

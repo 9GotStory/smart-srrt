@@ -110,7 +110,7 @@ export function runOfflinePreflight(root = DEFAULT_ROOT) {
       'Live Gemini, Google Docs/Drive template and registered report history',
       'Human Product Owner technical review and explicit separate production go/no-go'
     ],
-    disclaimer:'This command inspects Native source and an existing offline 14-file stage without writes. It does not execute migrations, installer, Google Apps Script, external APIs, staging creation, or production. Code PASS is not release authorization.'
+    disclaimer:'This command inspects Native source and an existing offline manifest-defined Native stage without writes. It does not execute migrations, installer, Google Apps Script, external APIs, staging creation, or production. Code PASS is not release authorization.'
   };
 }
 
