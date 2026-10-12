@@ -2,7 +2,6 @@
 
 > **Current source authority (12 Oct 2026):** `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`; GS-S1–GS-S5 are **MERGED**, source and CI PASS (**60/60 contracts, 419/419 regressions, 24 native stage files**). **Apps Script /exec deployment is unchanged and on HOLD.** See the [Security Release Readiness Review](docs/release/gs-security-release-readiness-2026-10-12.md) and the [current G-34 deployment guide](docs/deployment/g34-native-multifile-apps-script.md). Historical phase notices in the implementation docs record earlier branch states, **not** current merge or deployment authority.
 
-
 **ระบบสนับสนุนการเฝ้าระวังเหตุการณ์ทางระบาดวิทยาและการสร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI**
 
 Smart SRRT เป็น Web App สำหรับหน่วยงานสาธารณสุขระดับพื้นที่ ใช้รับแจ้งและติดตามเหตุการณ์ ประเมินข้อมูลเพื่อการเฝ้าระวัง จัดการหลักฐานประกอบ แสดงภาพรวมเชิงสถิติ และช่วยจัดทำ **ร่าง** รายงานสอบสวนโรคเบื้องต้นใน Google Docs ด้วย Gemini API

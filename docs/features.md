@@ -4,8 +4,6 @@
 >
 > **Security Features ที่มีใน Source:** GS-S1 บังคับสิทธิ์ Google Operator 15 ฟังก์ชันและ Allowlist HTML; GS-S2 Redact Credential ใน Audit ใหม่; GS-S3 Salted PBKDF2 / Legacy Migration / Session Revocation / Best-effort Login Throttle; GS-S4 Consent Token และ Registry Gate ก่อน AI Report ซ้ำ; GS-S5 Audit Delivery Health สำหรับ Admin. การ Deploy ต้องผ่าน Gate เพิ่มเติมโดยเฉพาะการวัด PBKDF2 จริงและการจัดการ Secret Readback ใน `getSystemSettings()`.
 
-
-
 > **เอกสารอ้างอิง Current Implementation** ณ 12 ตุลาคม 2026  
 > Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt) · Baseline: `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`  
 > `CONFIG.VERSION = 2026.09.08.1` · `CONFIG.SCHEMA_VERSION = 7` · `CONFIG.REPORT_PROMPT_VERSION = 2026.10.06.1`

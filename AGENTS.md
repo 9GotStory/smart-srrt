@@ -1,8 +1,8 @@
 # AGENTS.md — Smart SRRT AI Coding Agent Instructions
 
-> ใช้กับ Codex, Claude Code, Antigravity, Multica และ AI Coding Agents ที่ทำงานใน Repository นี้  
+> สำหรับผู้พัฒนาและผู้ตรวจสอบที่อ่าน Source of Truth ของ Smart SRRT; ไม่อนุญาตให้มอบหมายงานแก่ Codex, Claude, Multica หรือ Agent อื่นใน Workflow ปัจจุบัน  
 > Canonical Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt)  
-> เอกสารชุดนี้อ้างอิง `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` ณ 11 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
+> Source review baseline ณ 12 ตุลาคม 2026: `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`; **ทุกครั้งต้องตรวจ HEAD จริงก่อนเริ่มงาน** ห้ามถือ SHA นี้เป็น HEAD ถาวร
 
 ## Current release/security authority (2026-10-12)
 
