@@ -25,6 +25,7 @@ function harness(){
   const state={count:0,invalidCount:0,currentRevision:1,recordStatus:'active',latest:null};
   const ctx={
     console,Date,JSON,
+    CONFIG:{SHEETS:{MAIN:'MainData'}},
     Utilities:{getUuid:()=>crypto.randomUUID()},
     LockService:{getScriptLock(){return {tryLock(){locks.tried++;return true;},releaseLock(){locks.released++;}}}},
     PropertiesService:{getScriptProperties(){return {
