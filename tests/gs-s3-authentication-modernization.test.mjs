@@ -15,7 +15,7 @@ const server=[
   'src/server/03-events-and-dashboard.gs'
 ];
 const toSigned=bytes=>[...bytes].map(n=>n>127?n-256:n);
-function harness(){
+function harness(initialOwnerHash=null){
   const rows=[['UserID','Name','Email','PasswordHash','Role','Status'],
     ['u-1','Legacy Operator','owner@example.org','','Super Admin','active','','','','',new Date(),'','',null],
     ['u-2','Pending Member','pending@example.org','','Staff','pending','','','','',new Date(),'','',null]];
@@ -66,7 +66,7 @@ function harness(){
   context.getSettingsMap_=()=>({ALLOW_SELF_REGISTER:'true'});
   const run=expr=>vm.runInContext(expr,context,{timeout:12000});
   run("PASSWORD_KDF_ROUNDS_=12000");
-  rows[1][3]=run("legacyPasswordHash_('LegacyPassword2026!')");
+  rows[1][3]=initialOwnerHash || run("legacyPasswordHash_('LegacyPassword2026!')");
   rows[2][3]=run("legacyPasswordHash_('PendingPassword2026!')");
   return {context,run,rows,cache,audit,mutations,locks,setLocked:x=>{noLock=x}};
 }
@@ -192,4 +192,81 @@ test('GS-S3 PBKDF2-HMAC-SHA256 matches independently computed RFC-style test vec
   const expected=crypto.pbkdf2Sync(password,Buffer.from(salt,'hex'),12000,32,'sha256').toString('hex');
   const actual=s.run("passwordKdf_("+JSON.stringify(password)+","+JSON.stringify(salt)+",12000)");
   assert.equal(actual,expected,'GAS Utilities-based KDF must agree with native PBKDF2-SHA256');
+});
+
+test('RR-01 paused rollback source accepts migrated PBKDF2 and remaining legacy users',()=>{
+  const forward=harness();
+  const initial=forward.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(initial.ok,true);
+  const migrated=forward.rows[1][3];
+  assert.match(migrated,/^pbkdf2-sha256\\$12000\\$/);
+
+  // Separate source execution with the SAME synthetic account data, simulating
+  // a new Apps Script version after the first version upgraded one user.
+  const rollback=harness(migrated);
+  rollback.run("AUTH_LEGACY_UPGRADE_MODE_='pause'");
+  const legacy=rollback.run("legacyPasswordHash_('LegacyStaffPassword2026!')");
+  rollback.rows.push(['u-3','Legacy Staff','legacy@example.org',legacy,'Staff','active',
+    '','','','',new Date(),'','',null]);
+  const modernLogin=rollback.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(modernLogin.ok,true);
+  assert.equal(rollback.rows[1][3],migrated,'PBKDF2 verifier must not change on rollback');
+  assert.equal(rollback.run("getUserByToken_("+JSON.stringify(modernLogin.token)+").userId"),'u-1');
+  const legacyLogin=rollback.run("login({email:'legacy@example.org',password:'LegacyStaffPassword2026!'})");
+  assert.equal(legacyLogin.ok,true);
+  assert.equal(rollback.rows[3][3],legacy,'pause must not rewrite a legacy verifier');
+  assert.equal(rollback.run("getUserByToken_("+JSON.stringify(legacyLogin.token)+").userId"),'u-3');
+  assert.equal(rollback.mutations.filter(x=>x.col===4).length,0,
+    'compatible rollback cannot rewrite existing password verifiers');
+  assert.equal(rollback.run("login({email:'owner@example.org',password:'wrong'}).ok"),false);
+  assert.equal(rollback.run("login({email:'legacy@example.org',password:'wrong'}).ok"),false);
+  assert.doesNotMatch(JSON.stringify(rollback.audit),/LegacyPassword2026!|LegacyStaffPassword2026!|pbkdf2-sha256/);
+
+  // Password creation remains modern even while automatic LEGACY upgrades pause.
+  rollback.run("registerUser({name:'New Staff',email:'new@example.org',password:'NewRegistration2026!'})");
+  assert.match(rollback.rows[4][3],/^pbkdf2-sha256\\$12000\\$/);
+  assert.equal(rollback.rows[4][5],'pending');
+});
+
+test('RR-01 resuming auto mode migrates once and invalidates pre-migration session',()=>{
+  const s=harness(),original=s.rows[1][3];
+  s.run("AUTH_LEGACY_UPGRADE_MODE_='pause'");
+  const paused=s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(paused.ok,true);
+  assert.equal(s.rows[1][3],original);
+  assert.equal(s.run("getUserByToken_("+JSON.stringify(paused.token)+").userId"),'u-1');
+  s.run("AUTH_LEGACY_UPGRADE_MODE_='auto'");
+  const resumed=s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(resumed.ok,true);
+  assert.match(s.rows[1][3],/^pbkdf2-sha256\\$12000\\$/);
+  assert.equal(s.run("getUserByToken_("+JSON.stringify(paused.token)+")"),null,
+    'old sessions must not survive verifier migration');
+  const migratedHash=s.rows[1][3];
+  const later=s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(later.ok,true);
+  assert.equal(s.rows[1][3],migratedHash,'modern verifier must not be re-hashed on login');
+  assert.equal(s.mutations.filter(x=>x.col===4).length,1);
+});
+
+test('RR-01 unknown source mode fails closed before login mutation and session issue',()=>{
+  const s=harness(),original=s.rows[1][3];
+  s.run("AUTH_LEGACY_UPGRADE_MODE_='invalid'");
+  assert.throws(()=>s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})"),
+    /ระบบยืนยันตัวตนไม่พร้อมใช้งาน/);
+  assert.equal(s.rows[1][3],original);
+  assert.equal(s.audit.length,0);
+  assert.equal(s.mutations.length,0);
+  assert.equal([...s.cache.keys()].filter(k=>k.startsWith('srrt_session_')).length,0);
+});
+
+test('RR-01 paused compatibility never bypasses account status or session revocation',()=>{
+  const s=harness();
+  s.run("AUTH_LEGACY_UPGRADE_MODE_='pause'");
+  assert.equal(s.run("login({email:'pending@example.org',password:'PendingPassword2026!'}).ok"),false);
+  const logged=s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'})");
+  assert.equal(logged.ok,true);
+  s.rows[1][5]='disabled';
+  assert.equal(s.run("getUserByToken_("+JSON.stringify(logged.token)+")"),null);
+  assert.equal(s.run("login({email:'owner@example.org',password:'LegacyPassword2026!'}).ok"),false);
+  assert.match(s.rows[1][3],/^[0-9a-f]{64}$/);
 });
