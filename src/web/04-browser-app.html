@@ -205,13 +205,15 @@
     select.value=selected||''
   }
 
-  async function loadContentAdmin(){try{const rows=await gs('listContent',token);el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){toast(e.message||e)}}
+  async function loadContentAdmin(){
+    const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listContent',ctx.token);if(!adminCurrent(ctx))return;el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
   function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
   function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
   async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
   async function loadAuditRetentionStatus(){
+    const ctx=adminContext();if(!ctx)return;
     try{
-      const s=await gs('getAuditRetentionStatus',token);
+      const s=await gs('getAuditRetentionStatus',ctx.token);if(!adminCurrent(ctx))return;
       el('auditRetentionStatus').innerHTML=`เก็บ Audit ในฐานข้อมูลหลัก <b>${Number(s.retentionDays||0)} วัน</b> · Active <b>${Number(s.activeRows||0)}</b> รายการ · เข้าเกณฑ์ Archive <b>${Number(s.eligibleRows||0)}</b> รายการ${Number(s.malformedTimestampRows||0)?` · <span style="color:#b45309">Timestamp ผิดรูปแบบ ${Number(s.malformedTimestampRows||0)} รายการ (ยังคงไว้)</span>`:''}${s.oldestTimestamp?`<br>รายการเก่าสุด: ${escapeHtml(s.oldestTimestamp)} · Cutoff: ${escapeHtml(s.cutoff||'')}`:''}`;
       // GS-S5: read-only operator-visible audit delivery health. Do not
       // interpolate untrusted error messages, identifiers or Audit payloads.
@@ -232,7 +234,7 @@
       }
       el('auditRetentionStatus').innerHTML+='<div class="help" role="status" style="margin-top:10px">'+message+'</div>';
       el('archiveAuditBtn').disabled=Number(s.eligibleRows||0)===0
-    }catch(e){el('auditRetentionStatus').textContent=e.message||e}
+    }catch(e){if(adminCurrent(ctx))el('auditRetentionStatus').textContent=e.message||e}
   }
   async function archiveAuditNow(){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับ Archive Audit');return}
@@ -246,7 +248,8 @@
     }catch(e){toast(e.message||e)}
     finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-box-archive"></i> Archive รายการเก่า'}
   }
-  async function loadAudit(){try{const rows=await gs('listAuditLogs',token,100);el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){toast(e.message||e)}}
+  async function loadAudit(){
+    const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
   function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
 
   boot();
