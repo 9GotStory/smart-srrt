@@ -72,7 +72,22 @@
     const ctx=adminContext();if(!ctx)return;
     try{const s=await gs('getInstallationStatus',ctx.token);if(!adminCurrent(ctx))return;el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){if(adminCurrent(ctx))el('installStatus').textContent=e.message||e}
   }
-  async function repairSystem(){if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;try{toast(await gs('repairInstallation',token));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||[];applyTheme();setupDashboardFilters();loadInstallStatus()}catch(e){toast(e.message||e)}}
+  async function repairSystem(){
+    const ctx=adminContext();if(!ctx||adminBusy.repair)return;
+    if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;
+    if(!adminCurrent(ctx))return;
+    adminBusy.repair=true;
+    try{
+      const message=await gs('repairInstallation',ctx.token);
+      if(!adminCurrent(ctx))return;
+      toast(message);
+      const b=await gs('getAppBoot',ctx.token);
+      if(!adminCurrent(ctx))return;
+      settings=b.settings||{};areas=b.areas||[];
+      applyTheme();setupDashboardFilters();await loadInstallStatus()
+    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    finally{adminBusy.repair=false}
+  }
 
   async function loadSettings(){
     const ctx=adminContext();if(!ctx)return;
@@ -237,17 +252,26 @@
     }catch(e){if(adminCurrent(ctx))el('auditRetentionStatus').textContent=e.message||e}
   }
   async function archiveAuditNow(){
-    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับ Archive Audit');return}
+    const ctx=adminContext();if(!ctx||adminBusy.archive)return;
     if(!confirm('ยืนยัน Archive Audit ที่เก่ากว่า retention policy? ระบบจะคัดลอกไปไฟล์ Archive และตรวจสอบก่อนนำออกจาก AuditLogs'))return;
-    const btn=el('archiveAuditBtn');
+    if(!adminCurrent(ctx))return;
+    const btn=el('archiveAuditBtn');adminBusy.archive=true;
     try{
       btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลัง Archive';
-      const r=await gs('archiveAuditLogs',token);
+      const r=await gs('archiveAuditLogs',ctx.token);
+      if(!adminCurrent(ctx))return;
       toast(`Archive สำเร็จ ${Number(r.removedFromActiveRows||0)} รายการ`);
       await Promise.all([loadAudit(),loadAuditRetentionStatus()])
-    }catch(e){toast(e.message||e)}
-    finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-box-archive"></i> Archive รายการเก่า'}
+    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    finally{
+      adminBusy.archive=false;
+      if(adminCurrent(ctx)){
+        btn.disabled=false;
+        btn.innerHTML='<i class="fa-solid fa-box-archive"></i> Archive รายการเก่า'
+      }
+    }
   }
+
   async function loadAudit(){
     const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
   function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
