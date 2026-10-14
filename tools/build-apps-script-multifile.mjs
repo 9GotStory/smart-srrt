@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
+import {compileNativeHtmlFragment} from './native-inline-vendor.mjs';
 export { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,7 +30,8 @@ export function buildGasMultiFileEntries() {
   for (const source of [...GAS_SERVER_SOURCES, ...GAS_HTML_SOURCES]) {
     const name = nameFromSource(source);
     if (entries.has(name)) throw new Error('Duplicate GAS file: ' + name);
-    entries.set(name, fs.readFileSync(path.join(ROOT, source)));
+    const authored=fs.readFileSync(path.join(ROOT, source));
+    entries.set(name, source.endsWith('.html')?compileNativeHtmlFragment(source,authored,ROOT):authored);
   }
   if (entries.has('Index.html')) throw new Error('Index.html name collision');
   entries.set('Index.html', Buffer.from(gasIndexTemplate(), 'utf8'));
