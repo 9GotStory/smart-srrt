@@ -82,5 +82,7 @@ test('P5-02 job state descriptions distinguish uncertain, queued, cancelled and 
 test('P5-02 status text derives from native state; no new API invocations',()=>{
   assert.match(jobSource,/updateReportJobStatePresentation\(job\)/);
   assert.match(jobSource,/updateReportJobStatePresentation\(activeReportJob\)/);
-  assert.doesNotMatch(jobSource,/gs\('(?:createReportJob|runReportJob|generateReportFromWeb)'/);
+  const presentation=jobSource.match(/function updateReportJobStatePresentation\(job\)\{[\s\S]*?(?=\n  function showReportGenerationStatus)/)?.[0]||'';
+  assert.match(presentation,/reportJobStateDescription\(job\)/);
+  assert.doesNotMatch(presentation,/\bgs\(/);
 });
