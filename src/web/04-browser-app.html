@@ -1,5 +1,48 @@
 <script>
 
+  // P6-03: each Admin form mutation has an originating session and single-flight owner.
+  const adminFormSavePending=Object.create(null);
+  const adminFormButtonIds={
+    settings:'adminSaveSettingsBtn',logo:'adminUploadLogoBtn',area:'adminSaveAreaBtn',
+    disableArea:null,user:'adminSaveUserBtn',master:'adminSaveMasterBtn',content:'adminSaveContentBtn'
+  };
+  async function runAdminFormSave(kind,work){
+    const ctx=adminContext();
+    if(!ctx||adminFormSavePending[kind])return;
+    adminFormSavePending[kind]=ctx;
+    const buttonId=adminFormButtonIds[kind];
+    const btn=buttonId?el(buttonId):null;
+    if(btn)btn.disabled=true;
+    try{await work(ctx)}
+    catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    finally{
+      if(adminFormSavePending[kind]===ctx){
+        delete adminFormSavePending[kind];
+        if(btn)btn.disabled=false
+      }
+    }
+  }
+  function resetAdminFormState(){
+    for(const kind of Object.keys(adminFormSavePending)){
+      const buttonId=adminFormButtonIds[kind];
+      const btn=buttonId?el(buttonId):null;
+      if(btn)btn.disabled=false;
+      delete adminFormSavePending[kind]
+    }
+    for(const id of ['userModal','areaModal','masterDataModal','contentModal']){
+      const node=el(id);
+      if(node&&node.classList&&typeof node.classList.remove==='function')node.classList.remove('open')
+    }
+    for(const id of ['uId','uName','uRole','uStatus','uOrg','uTambon','uAmphoe','uProvince','uPassword',
+      'aId','aProvince','aAmphoe','aTambon','aMoo','aVillage','aVillageCode','aActive',
+      'mdMode','mdOriginalType','mdOriginalValue','mdType','mdValue','mdLabel','mdSort','mdActive',
+      'cId','cCategory','cTitle','cDesc','cUrl','cStatus']){
+      const node=el(id);if(node)node.value=''
+    }
+    const progress=el('logoProgress');
+    if(progress&&progress.classList&&typeof progress.classList.remove==='function')progress.classList.remove('show')
+  }
+
   // P6-02: never accept private Admin results from a previous session.
   let adminEpoch=0,areaReadSeq=0,userReadSeq=0;
   const adminBusy={repair:false,archive:false,import:false};
@@ -9,6 +52,7 @@
       ctx.epoch===adminEpoch&&!!roleCanManage()
   }
   function resetAdminPrivate(){
+    resetAdminFormState();
     ++adminEpoch;++areaReadSeq;++userReadSeq;
     usersCache=[];areaAdminCache=[];masterAdminCache=[];masterTypePolicies=[];
     if(typeof window!=='undefined')window._contentRows=[];
@@ -97,19 +141,36 @@
     }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
   }
   async function saveSettings(){
-    try{
+    return runAdminFormSave('settings',async ctx=>{
       const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
-      toast(await gs('saveSystemSettings',token,arr));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||areas;applyTheme();loadInstallStatus()
-    }catch(e){toast(e.message||e)}
+      const message=await gs('saveSystemSettings',ctx.token,arr);
+      if(!adminCurrent(ctx))return;
+      toast(message);
+      const b=await gs('getAppBoot',ctx.token);
+      if(!adminCurrent(ctx))return;
+      settings=b.settings||{};areas=b.areas||areas;
+      applyTheme();await loadInstallStatus()
+    })
   }
+
   async function uploadLogoFile(){
-    const file=el('logoFile').files[0];if(!file){toast('กรุณาเลือกไฟล์โลโก้');return}if(file.size>3*1024*1024){toast('ไฟล์ต้องไม่เกิน 3 MB');return}
-    el('logoProgress').classList.add('show');
-    try{
-      const base64=await fileToBase64(file);const r=await gs('uploadLogo',token,{name:file.name,mimeType:file.type,base64});
-      settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
-    }catch(e){toast(e.message||e)}finally{el('logoProgress').classList.remove('show')}
+    return runAdminFormSave('logo',async ctx=>{
+      const file=el('logoFile').files&&el('logoFile').files[0];
+      if(!file){toast('กรุณาเลือกไฟล์โลโก้');return}
+      if(file.size>3*1024*1024){toast('ไฟล์ต้องไม่เกิน 3 MB');return}
+      el('logoProgress').classList.add('show');
+      try{
+        const base64=await fileToBase64(file);
+        if(!adminCurrent(ctx))return;
+        const r=await gs('uploadLogo',ctx.token,{name:file.name,mimeType:file.type,base64});
+        if(!adminCurrent(ctx))return;
+        settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
+      }finally{
+        if(adminCurrent(ctx))el('logoProgress').classList.remove('show')
+      }
+    })
   }
+
   function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file)})}
 
   async function loadAreasAdmin(){
@@ -120,13 +181,37 @@
     const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
   }
   async function saveAreaItem(){
-    try{
-      const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
-      toast(await gs('saveArea',token,item));closeModal('areaModal');await refreshAreas()
-    }catch(e){toast(e.message||e)}
+    return runAdminFormSave('area',async ctx=>{
+      const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,
+        tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,
+        villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
+      const message=await gs('saveArea',ctx.token,item);
+      if(!adminCurrent(ctx))return;
+      closeModal('areaModal');toast(message);
+      await refreshAreas()
+    })
   }
-  async function disableArea(id){if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;try{toast(await gs('deleteArea',token,id));await refreshAreas()}catch(e){toast(e.message||e)}}
-  async function refreshAreas(){const b=await gs('getAppBoot',token);areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();loadAreasAdmin()}
+
+  async function disableArea(id){
+    return runAdminFormSave('disableArea',async ctx=>{
+      if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;
+      if(!adminCurrent(ctx))return;
+      const message=await gs('deleteArea',ctx.token,id);
+      if(!adminCurrent(ctx))return;
+      toast(message);await refreshAreas()
+    })
+  }
+
+  async function refreshAreas(){
+    const ctx=adminContext();if(!ctx)return;
+    try{
+      const b=await gs('getAppBoot',ctx.token);
+      if(!adminCurrent(ctx))return;
+      areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();
+      await loadAreasAdmin()
+    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+  }
+
   async function importAreaFile(input){
     const file=input.files&&input.files[0];if(!file)return;
     const ctx=adminContext();
@@ -164,7 +249,18 @@
     try{const values=await gs('listUsers',ctx.token,el('userSearch').value);if(!adminCurrent(ctx)||seq!==userReadSeq)return;usersCache=values;el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===userReadSeq)toast(e.message||e)}
   }
   function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
-  async function saveUser(){try{const msg=await gs('updateUser',token,el('uId').value,{name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,province:el('uProvince').value,newPassword:el('uPassword').value});closeModal('userModal');toast(msg);loadUsers()}catch(e){toast(e.message||e)}}
+  async function saveUser(){
+    return runAdminFormSave('user',async ctx=>{
+      const userId=el('uId').value;
+      const data={name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,
+        org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,
+        province:el('uProvince').value,newPassword:el('uPassword').value};
+      const message=await gs('updateUser',ctx.token,userId,data);
+      if(!adminCurrent(ctx))return;
+      el('uPassword').value='';
+      closeModal('userModal');toast(message);await loadUsers()
+    })
+  }
 
   function masterPolicyByType(type){return masterTypePolicies.find(p=>p.type===type)||null}
   async function loadMasterDataAdmin(){
@@ -210,27 +306,25 @@
     openModal('masterDataModal')
   }
   async function saveMasterDataAdminItem(){
-    try{
+    return runAdminFormSave('master',async ctx=>{
       const item={
         mode:el('mdMode').value,
-        originalType:el('mdOriginalType').value,
-        originalValue:el('mdOriginalValue').value,
-        type:el('mdType').value,
-        value:el('mdValue').value,
-        label:el('mdLabel').value,
-        sortOrder:Number(el('mdSort').value||0),
-        active:el('mdActive').value==='true'
+        originalType:el('mdOriginalType').value,originalValue:el('mdOriginalValue').value,
+        type:el('mdType').value,value:el('mdValue').value,label:el('mdLabel').value,
+        sortOrder:Number(el('mdSort').value||0),active:el('mdActive').value==='true'
       };
-      toast(await gs('saveMasterDataItem',token,item));
-      closeModal('masterDataModal');
-      const b=await gs('getAppBoot',token);
+      const message=await gs('saveMasterDataItem',ctx.token,item);
+      if(!adminCurrent(ctx))return;
+      closeModal('masterDataModal');toast(message);
+      const b=await gs('getAppBoot',ctx.token);
+      if(!adminCurrent(ctx))return;
       master=b.master||{};
       currentContent=b.content||currentContent;
-      buildRecordForm();
-      populateContentCategoryOptions('');
+      buildRecordForm();populateContentCategoryOptions('');
       await Promise.all([loadMasterDataAdmin(),loadContentAdmin()])
-    }catch(e){toast(e.message||e)}
+    })
   }
+
   function populateContentCategoryOptions(selected){
     const select=el('cCategory');
     const items=master.content_category||[];
@@ -245,7 +339,21 @@
     const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listContent',ctx.token);if(!adminCurrent(ctx))return;el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
   function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
   function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
-  async function saveContentItem(){try{const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};toast(await gs('saveContent',token,item));closeModal('contentModal');loadContentAdmin();const b=await gs('getAppBoot',token);currentContent=b.content;renderLibrary()}catch(e){toast(e.message||e)}}
+  async function saveContentItem(){
+    return runAdminFormSave('content',async ctx=>{
+      const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,
+        description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};
+      const message=await gs('saveContent',ctx.token,item);
+      if(!adminCurrent(ctx))return;
+      closeModal('contentModal');toast(message);
+      await loadContentAdmin();
+      if(!adminCurrent(ctx))return;
+      const b=await gs('getAppBoot',ctx.token);
+      if(!adminCurrent(ctx))return;
+      currentContent=b.content;renderLibrary()
+    })
+  }
+
   async function loadAuditRetentionStatus(){
     const ctx=adminContext();if(!ctx)return;
     try{
