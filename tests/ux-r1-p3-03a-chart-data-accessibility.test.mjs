@@ -28,12 +28,13 @@ function fixture(){
     return nodes.get(id);
   };
   const Chart=class{
-    constructor(target){this.target=target}
-    draw(rows,options){draws.push({rows,options,target:this.target})}
+    constructor(canvas,config){draws.push({canvas,config,rows:[
+      [config.data.datasets[0].label,'จำนวน'],
+      ...config.data.labels.map((label,i)=>[label,config.data.datasets[0].data[i]])
+    ]});}
+    destroy(){}
   };
-  const ctx=vm.createContext({el,document:{createElement:element},google:{visualization:{
-    ColumnChart:Chart,LineChart:Chart,PieChart:Chart,arrayToDataTable:rows=>rows
-  }}});
+  const ctx=vm.createContext({el,document:{createElement:element},Chart,settings:{},console});
   vm.runInContext(source.slice(from,to),ctx,{timeout:1000});
   return {ctx,el,draws};
 }
@@ -92,8 +93,8 @@ test('P3-03A zero/absent data never draw a fictional category or crash a data-ta
 });
 
 test('P3-03A does not introduce a CDN, new RPC, or change existing image export contract',()=>{
-  assert.match(head,/www\.gstatic\.com\/charts\/loader\.js/,'Google Charts remains pending a later renderer-gated PR');
-  assert.doesNotMatch(head,/chart\.umd|chart\.js@/);
+  assert.doesNotMatch(head,/www\\.gstatic\\.com\\/charts\\/loader\\.js/);
+  assert.match(head,/SMART_SRRT_CHARTJS_VENDOR_INLINED_AT_BUILD/);
   assert.match(exportSource,/function captureDashboard\(\)/);
   assert.match(exportSource,/html2canvas\(el\('captureArea'\)/);
   assert.match(css,/srrt-dashboard-chart-details/);
