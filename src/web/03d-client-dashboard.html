@@ -32,6 +32,8 @@
     const page=el('page-dashboard'),message=el('dashboardLoadStatus');
     if(page&&typeof page.setAttribute==='function')page.setAttribute('data-dashboard-state',state);
     if(message){message.hidden=state==='ready';message.textContent=messages[state]||''}
+    const privatePanel=el('eventDetailPanel');
+    if(privatePanel)privatePanel.hidden=state==='loading'||state==='error';
     const captureButton=el('dashboardCaptureBtn');
     if(captureButton)captureButton.disabled=state==='loading'||state==='error';
     if(state==='loading'||state==='error'){
