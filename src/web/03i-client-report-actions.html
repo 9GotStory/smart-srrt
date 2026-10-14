@@ -204,6 +204,7 @@
       btn.setAttribute('aria-busy',String(state.busy));
       btn.classList.toggle('report-action-active',state.active);
     });
+    if(typeof updateReporterJobStatusCells==='function')updateReporterJobStatusCells();
   }
 
 </script>

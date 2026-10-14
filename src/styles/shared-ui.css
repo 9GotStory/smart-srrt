@@ -394,3 +394,12 @@ body{background:#f4f7fb}
   #reportHistoryModal .actions .btn,#reportReadinessModal .actions .btn,
   #reportResultModal .actions .btn{min-height:44px;white-space:normal}
 }
+/* UX-R1/P5-03: Job status is read-only and never an alternative AI action. */
+.app #page-reporter .srrt-reporter-table [data-report-job-event-id]{
+  color:#334155;line-height:1.65;font-size:13px;
+}
+@media(max-width:640px){
+  .app #page-reporter .srrt-reporter-table [data-report-job-event-id]{
+    font-size:13px;overflow-wrap:anywhere;
+  }
+}
