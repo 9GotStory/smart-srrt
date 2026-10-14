@@ -29,10 +29,9 @@
       empty:'ไม่มีเหตุการณ์ในช่วงเวลาหรือพื้นที่ที่เลือก ลองปรับตัวกรองแล้วค้นหาอีกครั้ง',
       error:'ไม่สามารถโหลดข้อมูล Dashboard ได้ กรุณาลองค้นหาใหม่อีกครั้ง'
     };
-    const page=el('page-dashboard'),message=el('dashboardLoadStatus'),capture=el('captureArea');
+    const page=el('page-dashboard'),message=el('dashboardLoadStatus');
     if(page&&typeof page.setAttribute==='function')page.setAttribute('data-dashboard-state',state);
     if(message){message.hidden=state==='ready';message.textContent=messages[state]||''}
-    if(capture&&typeof capture.setAttribute==='function')capture.setAttribute('aria-busy',state==='loading'?'true':'false');
     const captureButton=el('dashboardCaptureBtn');
     if(captureButton)captureButton.disabled=state==='loading'||state==='error';
     if(state==='loading'||state==='error'){
