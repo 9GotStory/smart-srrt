@@ -16,7 +16,7 @@
       'installStatus','auditRetentionStatus','mdPolicyNote']){
       const node=el(id);if(node)node.innerHTML=''
     }
-    for(const key of settingFields){
+    if(typeof settingFields!=='undefined')for(const key of settingFields){
       const node=el('set_'+key);if(node)node.value=''
     }
     for(const id of ['uPassword','userSearch','areaSearch','masterSearch','cUrl','logoFile','areaImportFile']){
