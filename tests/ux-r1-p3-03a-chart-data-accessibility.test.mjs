@@ -93,7 +93,7 @@ test('P3-03A zero/absent data never draw a fictional category or crash a data-ta
 });
 
 test('P3-03A does not introduce a CDN, new RPC, or change existing image export contract',()=>{
-  assert.doesNotMatch(head,/www\\.gstatic\\.com\\/charts\\/loader\\.js/);
+  assert.equal(head.includes('www.gstatic.com/charts/loader.js'),false);
   assert.match(head,/SMART_SRRT_CHARTJS_VENDOR_INLINED_AT_BUILD/);
   assert.match(exportSource,/function captureDashboard\(\)/);
   assert.match(exportSource,/html2canvas\(el\('captureArea'\)/);
