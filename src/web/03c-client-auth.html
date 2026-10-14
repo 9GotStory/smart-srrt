@@ -27,7 +27,7 @@
       const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
       applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
       if(currentUser)void recoverReportJob();
-      google.charts.setOnLoadCallback(loadDashboard)
+      await loadDashboard()
     }catch(e){toast(e.message||e)}
   }
 
