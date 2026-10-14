@@ -91,14 +91,33 @@
     for(const id of ['reportSearch','reportRegistryFilter'])el(id).value='';
     renderReporterWorklist()
   }
+
+  // P5-03: read-only G-32 worklist status. A registered document is not a human-approved report.
+  function reportJobWorklistLabel(eventId){
+    const job=activeReportJob;
+    if(job&&String(job.eventId||'')===String(eventId||'')){
+      if(job.status==='completed')return 'สร้างร่างรายงานแล้ว · ต้องตรวจทาน';
+      return reportStageLabel(job);
+    }
+    if(reportUnknownNeedsVerification)return 'ยังไม่ยืนยันสถานะงานก่อนหน้า';
+    if(job&&!reportJobTerminal(job))return 'มีงาน AI สำหรับเหตุการณ์อื่น';
+    return 'ไม่มีงานสร้างรายงานที่แสดงอยู่'
+  }
+  function updateReporterJobStatusCells(){
+    if(typeof document.querySelectorAll!=='function'||!currentUser)return;
+    document.querySelectorAll('td[data-report-job-event-id]').forEach(cell=>{
+      const eventId=cell.getAttribute('data-report-job-event-id')||'';
+      cell.textContent=reportJobWorklistLabel(eventId)
+    })
+  }
   function renderReporterWorklist(){
     if(!currentUser){el('reportBody').innerHTML='';clearReporterFilters();return}
     const visible=filteredReporterEntries();
     el('reportResultSummary').textContent='แสดง '+visible.length+' จาก '+allData.length+' เหตุการณ์';
     el('reportBody').innerHTML=visible.map(({r})=>{
       const reg=reportRegistryDisplay(String(r.eventId||''));
-      return`<tr class="srrt-reporter-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2||'-')}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="ความพร้อมข้อมูล">${reportReadinessBadge(r)||'<span class="mini">ยังไม่มีผลตรวจความพร้อม</span>'}</td><td data-label="ทะเบียนรายงาน" data-report-summary-event-id="${escapeHtml(r.eventId||'')}">${escapeHtml(reg.label)}</td><td data-label="การดำเนินการหลัก">${roleCanRecord()?reportActionButton(r.eventId||'',false):'<span class="mini">ไม่มีสิทธิ์สร้างหรือเปิดรายงาน</span>'}</td></tr>`
-    }).join('')||'<tr class="srrt-reporter-empty"><td colspan="6">'+(allData.length?'ไม่พบเหตุการณ์ที่ตรงกับตัวกรอง':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>'
+      return`<tr class="srrt-reporter-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2||'-')}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="ความพร้อมข้อมูล">${reportReadinessBadge(r)||'<span class="mini">ยังไม่มีผลตรวจความพร้อม</span>'}</td><td data-label="ทะเบียนรายงาน" data-report-summary-event-id="${escapeHtml(r.eventId||'')}">${escapeHtml(reg.label)}</td><td data-label="สถานะงาน AI" data-report-job-event-id="${escapeHtml(r.eventId||'')}">${escapeHtml(reportJobWorklistLabel(r.eventId||''))}</td><td data-label="การดำเนินการหลัก">${roleCanRecord()?reportActionButton(r.eventId||'',false):'<span class="mini">ไม่มีสิทธิ์สร้างหรือเปิดรายงาน</span>'}</td></tr>`
+    }).join('')||'<tr class="srrt-reporter-empty"><td colspan="7">'+(allData.length?'ไม่พบเหตุการณ์ที่ตรงกับตัวกรอง':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>'
   }
 
   function renderTables(){
