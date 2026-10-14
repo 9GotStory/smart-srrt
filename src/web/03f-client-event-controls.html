@@ -1,4 +1,126 @@
 <script>
+
+  // P4-03: one explicit, revision-safe confirmation surface for privileged actions.
+  let eventActionContext=null,eventActionPending=false,eventActionRequest=0;
+  let ownerSavePending=false,ownerModalRequest=0,attachmentListRequest=0;
+  const EVENT_ACTION_COPY={
+    close:{title:'ปิดเหตุการณ์',description:'เหตุการณ์จะอ่านอย่างเดียวจนกว่าจะเปิดใหม่',button:'ยืนยันปิดเหตุการณ์'},
+    reopen:{title:'เปิดเหตุการณ์อีกครั้ง',description:'เปิดให้แก้ไขเหตุการณ์และเอกสารแนบได้ตามสิทธิ์',button:'ยืนยันเปิดอีกครั้ง'},
+    void:{title:'ยกเลิกเหตุการณ์',description:'ข้อมูลจะยังเก็บไว้เป็นหลักฐานตรวจสอบย้อนหลัง',button:'ยืนยันยกเลิกเหตุการณ์'},
+    removeAttachment:{title:'นำเอกสารแนบออก',description:'บันทึกการนำออกเชิงตรรกะ โดยไม่ลบไฟล์จริงใน Drive',button:'ยืนยันนำออก'}
+  };
+  function openEventActionDialog(kind,eventId,revision,attachmentId){
+    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับดำเนินการ');return}
+    const item=allData.find(r=>r.eventId===eventId);
+    const rev=Number(revision);
+    if(!EVENT_ACTION_COPY[kind]||!item||!eventId||!Number.isInteger(rev)||rev<1||Number(item.revision||1)!==rev){
+      toast('ข้อมูลเหตุการณ์เปลี่ยนแปลง กรุณารีเฟรชรายการก่อน');return
+    }
+    const closed=String(item.recordStatus||'active').toLowerCase()==='closed';
+    if((kind==='close'&&closed)||(kind==='reopen'&&!closed)||
+       (kind==='removeAttachment'&&(closed||!attachmentId||
+          el('attachmentEventId').value!==eventId||Number(el('attachmentRevision').value||0)!==rev))){
+      toast('สถานะเหตุการณ์ไม่รองรับการดำเนินการนี้');return
+    }
+    if(eventActionPending)return;
+    const copy=EVENT_ACTION_COPY[kind];
+    eventActionContext={kind,eventId,revision:rev,attachmentId:attachmentId||'',session:token,
+      opener:document.activeElement};
+    el('eventActionTitle').textContent=copy.title;
+    el('eventActionDescription').textContent=copy.description+' — '+String(item.col6||'เหตุการณ์');
+    el('eventActionConfirmBtn').textContent=copy.button;
+    el('eventActionReason').value='';
+    el('eventActionError').textContent='';
+    el('eventActionError').hidden=true;
+    openModal('eventActionModal');
+    el('eventActionReason').focus()
+  }
+  function cancelEventAction(){
+    if(eventActionPending)return;
+    const opener=eventActionContext&&eventActionContext.opener;
+    eventActionContext=null;
+    closeModal('eventActionModal');
+    if(opener&&typeof opener.focus==='function')opener.focus()
+  }
+  async function confirmEventAction(){
+    const action=eventActionContext;
+    if(!action||eventActionPending||!roleCanManage()||token!==action.session)return;
+    const reason=String(el('eventActionReason').value||'').trim();
+    if(!reason){
+      el('eventActionError').textContent='กรุณาระบุเหตุผลก่อนยืนยัน';
+      el('eventActionError').hidden=false;
+      el('eventActionReason').focus();
+      return
+    }
+    const active=allData.find(r=>r.eventId===action.eventId);
+    if(!active||Number(active.revision||1)!==action.revision){
+      el('eventActionError').textContent='Revision เปลี่ยนแปลงแล้ว กรุณาปิดและรีเฟรช';
+      el('eventActionError').hidden=false;return
+    }
+    eventActionPending=true;
+    const request=++eventActionRequest,confirmBtn=el('eventActionConfirmBtn'),cancelBtn=el('eventActionCancelBtn');
+    confirmBtn.disabled=true;cancelBtn.disabled=true;
+    try{
+      let result;
+      if(action.kind==='removeAttachment'){
+        result=await gs('removeEventAttachment',token,action.attachmentId,reason,action.revision);
+      }else{
+        const fn={close:'closeEvent',reopen:'reopenEvent',void:'deleteRecord'}[action.kind];
+        result=await gs(fn,token,action.eventId,reason,action.revision)
+      }
+      if(request!==eventActionRequest||token!==action.session||!currentUser)return;
+      eventActionContext=null;
+      closeModal('eventActionModal');
+      if(action.kind==='removeAttachment'){
+        el('attachmentRevision').value=String(result.revision||action.revision);
+        toast(result.message||'นำเอกสารแนบออกแล้ว');
+      }else toast(result);
+      await loadDashboard();
+      if(request!==eventActionRequest||token!==action.session||!currentUser)return;
+      if(action.kind==='removeAttachment'&&el('attachmentEventId').value===action.eventId){
+        const refreshed=allData.find(r=>r.eventId===action.eventId);
+        if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
+        await loadAttachmentList()
+      }
+    }catch(e){
+      if(request===eventActionRequest&&token===action.session&&currentUser){
+        el('eventActionError').textContent=String(e.message||e);
+        el('eventActionError').hidden=false
+      }
+    }finally{
+      if(request===eventActionRequest){
+        eventActionPending=false;confirmBtn.disabled=false;cancelBtn.disabled=false
+      }
+    }
+  }
+  function invalidateEventActionUi(){
+    ++eventActionRequest;++ownerModalRequest;++attachmentListRequest;
+    eventActionContext=null;eventActionPending=false;ownerSavePending=false;
+    for(const id of ['eventActionModal','ownerModal','attachmentModal'])closeModal(id);
+    for(const id of ['eventActionConfirmBtn','eventActionCancelBtn','saveOwnerBtn','uploadAttachmentBtn']){
+      const control=el(id);if(control)control.disabled=false
+    }
+    el('eventActionReason').value='';
+    el('attachmentList').innerHTML='';
+    el('attachmentFile').value='';
+    el('attachmentDescription').value='';
+    el('ownerUserId').innerHTML='';
+    for(const id of ['ownerEventContext','ownerSaveStatus','attachmentEventContext','attachmentListStatus']){
+      el(id).textContent=''
+    }
+  }
+  document.addEventListener('keydown',event=>{
+    const modal=el('eventActionModal');
+    if(!modal||!modal.classList.contains('open'))return;
+    if(event.key==='Escape'){event.preventDefault();cancelEventAction();return}
+    if(event.key!=='Tab')return;
+    const focusable=[el('eventActionReason'),el('eventActionCancelBtn'),el('eventActionConfirmBtn')].filter(x=>x&&!x.disabled);
+    if(!focusable.length)return;
+    const index=focusable.indexOf(document.activeElement);
+    if(event.shiftKey&&index<=0){event.preventDefault();focusable[focusable.length-1].focus()}
+    else if(!event.shiftKey&&index===focusable.length-1){event.preventDefault();focusable[0].focus()}
+  });
+
   function riskBadge(v){let c='status ';if((v||'').includes('สูง'))c+='st-high';else if((v||'').includes('ปานกลาง'))c+='st-mid';else c+='st-low';return`<span class="${c}">${escapeHtml(v||'-')}</span>`}
   function lifecycleBadge(r){
     const code=String(r&&r.eventLifecycle||''),label=r&&r.eventLifecycleLabel?r.eventLifecycleLabel:'-';
@@ -22,26 +144,45 @@
     const detail=r.ownerOrg?`<div class="mini">${escapeHtml(r.ownerOrg)}</div>`:'';
     return`<b>${escapeHtml(name)}</b>${detail}`
   }
+
   async function openOwnerModal(i){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับกำหนดผู้รับผิดชอบ');return}
     const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
     if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return}
+    const session=token,request=++ownerModalRequest;
+    el('ownerSaveStatus').textContent='กำลังตรวจสอบรายชื่อผู้รับผิดชอบ';
     try{
-      assignableOwnerCache=await gs('listAssignableEventOwners',token);
+      const eligible=await gs('listAssignableEventOwners',token);
+      if(request!==ownerModalRequest||token!==session||!roleCanManage())return;
+      const current=allData.find(x=>x.eventId===r.eventId);
+      if(!current||Number(current.revision||1)!==Number(r.revision||1)){toast('ข้อมูลเหตุการณ์เปลี่ยน กรุณารีเฟรช');return}
+      assignableOwnerCache=eligible;
       el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
-      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+assignableOwnerCache.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)}`:''}</option>`).join('');
+      el('ownerEventContext').textContent=String(r.col6||'เหตุการณ์')+' — Revision '+String(r.revision||1);
+      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+eligible.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)`:''}</option>`).join('');
       el('ownerUserId').value=r.ownerUserId||'';
+      el('ownerSaveStatus').textContent='ตรวจสอบผู้รับผิดชอบก่อนบันทึก';
       openModal('ownerModal')
-    }catch(e){toast(e.message||e)}
+    }catch(e){if(request===ownerModalRequest&&token===session)toast(e.message||e)}
   }
   async function saveEventOwner(){
-    const btn=el('saveOwnerBtn');
+    if(ownerSavePending||!roleCanManage())return;
+    const eventId=el('ownerEventId').value,revision=Number(el('ownerRevision').value||0);
+    const session=token,request=ownerModalRequest,btn=el('saveOwnerBtn');
+    ownerSavePending=true;
     try{
-      btn.disabled=true;
-      const msg=await gs('assignEventOwner',token,el('ownerEventId').value,el('ownerUserId').value,Number(el('ownerRevision').value||0));
+      btn.disabled=true;el('ownerSaveStatus').textContent='กำลังบันทึกผู้รับผิดชอบ';
+      const msg=await gs('assignEventOwner',token,eventId,el('ownerUserId').value,revision);
+      if(token!==session||request!==ownerModalRequest||!currentUser)return;
       closeModal('ownerModal');toast(msg);await loadDashboard()
-    }catch(e){toast(e.message||e)}
-    finally{btn.disabled=false}
+    }catch(e){
+      if(token===session&&request===ownerModalRequest&&currentUser){
+        el('ownerSaveStatus').textContent='บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองใหม่';
+        toast(e.message||e)
+      }
+    }finally{
+      if(request===ownerModalRequest){ownerSavePending=false;btn.disabled=false}
+    }
   }
 
   function formatFileSize(bytes){
@@ -63,22 +204,34 @@
     el('attachmentClosed').value=closed?'1':'0';
     el('attachmentFile').value='';
     el('attachmentDescription').value='';
+    el('attachmentEventContext').textContent=String(r.col6||'เหตุการณ์')+' — Revision '+String(r.revision||1);
+    el('attachmentListStatus').textContent='กำลังโหลดเอกสารแนบ';
     el('attachmentUploadPanel').style.display=roleCanRecord()&&!closed?'block':'none';
     el('attachmentReadOnlyNotice').style.display=closed?'block':'none';
     openModal('attachmentModal');
     await loadAttachmentList()
   }
+
   async function loadAttachmentList(){
     const eventId=el('attachmentEventId').value;
-    if(!eventId)return;
+    if(!eventId||!currentUser)return;
+    const session=token,request=++attachmentListRequest;
+    el('attachmentListStatus').textContent='กำลังโหลดเอกสารแนบ';
     try{
       const items=await gs('listEventAttachments',token,eventId);
+      if(request!==attachmentListRequest||token!==session||!currentUser||el('attachmentEventId').value!==eventId)return;
       const closed=el('attachmentClosed').value==='1';
       el('attachmentList').innerHTML=items.map(a=>{
-        const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark"></i> นำออก</button>`:'';
-        return`<div class="content-item"><h4><i class="fa-solid fa-file"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-download"></i> ดาวน์โหลด</button>${remove}</div></div>`
-      }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>'
-    }catch(e){el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>'}
+        const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark" aria-hidden="true"></i> นำออก</button>`:'';
+        return`<div class="content-item"><h4><i class="fa-solid fa-file" aria-hidden="true"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-download" aria-hidden="true"></i> ดาวน์โหลด</button>${remove}</div></div>`
+      }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>';
+      el('attachmentListStatus').textContent='เอกสารแนบ '+items.length+' รายการ'
+    }catch(e){
+      if(request===attachmentListRequest&&token===session&&currentUser){
+        el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>';
+        el('attachmentListStatus').textContent='ไม่สามารถโหลดเอกสารแนบได้'
+      }
+    }
   }
   function attachmentMimeForFile(file){
     if(file&&file.type)return file.type;
@@ -134,22 +287,10 @@
       setTimeout(()=>URL.revokeObjectURL(url),1000)
     }catch(e){toast(e.message||e)}
   }
-  async function removeAttachment(attachmentId){
+  function removeAttachment(attachmentId){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับนำเอกสารแนบออก');return}
     if(el('attachmentClosed').value==='1'){toast('เหตุการณ์นี้ถูกปิดแล้ว');return}
-    const reason=prompt('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');
-    if(reason===null)return;
-    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการนำเอกสารแนบออก');return}
-    try{
-      const result=await gs('removeEventAttachment',token,attachmentId,String(reason).trim(),Number(el('attachmentRevision').value||0));
-      el('attachmentRevision').value=String(result.revision||el('attachmentRevision').value);
-      toast(result.message||'นำเอกสารแนบออกแล้ว');
-      await loadDashboard();
-      const refreshed=allData.find(x=>x.eventId===el('attachmentEventId').value);
-      if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
-      await loadAttachmentList()
-    }catch(e){toast(e.message||e)}
+    openEventActionDialog('removeAttachment',el('attachmentEventId').value,Number(el('attachmentRevision').value||0),attachmentId)
   }
-
 
 </script>
