@@ -8,7 +8,7 @@
       const tab=el('admin-tab-'+name), panel=el('admin-workspace-'+name);
       if(panel)panel.hidden=name!==selected;
       if(tab){
-        tab.setAttribute('aria-selected',String(name===selected));
+        if(typeof tab.setAttribute==='function')tab.setAttribute('aria-selected',String(name===selected));
         tab.tabIndex=name===selected?0:-1;
       }
     });
