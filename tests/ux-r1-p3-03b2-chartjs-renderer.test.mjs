@@ -62,6 +62,17 @@ test('P3-03B2 chart redraw destroys previous instance; empty does not invent dat
   assert.equal(f.el('barChart').children[0].tag,'p');
   assert.match(f.el('barChartTable').textContent,/ไม่มีข้อมูล/);
 });
+test('P3-03B2 logout disposal removes retained private charts and accessible tables',()=>{
+  const f=fixture();
+  f.ctx.draw('pieRisk','doughnut',[['ความเสี่ยง','จำนวน'],['synthetic-private-status',3]]);
+  assert.equal(f.el('pieRiskTable').children.length,1);
+  const instance=f.instances[0];
+  f.ctx.destroyDashboardCharts(true);
+  assert.equal(instance.dead,true);
+  assert.equal(f.el('pieRisk').children.length,0);
+  assert.equal(f.el('pieRiskTable').children.length,0);
+  assert.match(read('src/web/03c-client-auth.html'),/destroyDashboardCharts\(true\)/);
+});
 test('P3-03B2 PNG capture stops animations and checks the request/session boundary',async()=>{
   const f=fixture();
   f.ctx.draw('barChart','bar',[['หมู่บ้าน','จำนวน'],['บ้าน ก',3]]);
