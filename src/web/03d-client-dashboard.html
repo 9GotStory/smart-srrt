@@ -21,10 +21,40 @@
   }
 
   let dashboardLoadRequest=0;
+  // UX-R1/P3-02: one visible state for in-flight, empty and failed Dashboard reads.
+  // Never present stale figures as the currently selected filter's result.
+  function setDashboardViewState(state){
+    const messages={
+      loading:'กำลังโหลดข้อมูลตามช่วงเวลาและพื้นที่ที่เลือก...',
+      empty:'ไม่มีเหตุการณ์ในช่วงเวลาหรือพื้นที่ที่เลือก ลองปรับตัวกรองแล้วค้นหาอีกครั้ง',
+      error:'ไม่สามารถโหลดข้อมูล Dashboard ได้ กรุณาลองค้นหาใหม่อีกครั้ง'
+    };
+    const page=el('page-dashboard'),message=el('dashboardLoadStatus'),capture=el('captureArea');
+    if(page&&typeof page.setAttribute==='function')page.setAttribute('data-dashboard-state',state);
+    if(message){message.hidden=state==='ready';message.textContent=messages[state]||''}
+    if(capture&&typeof capture.setAttribute==='function')capture.setAttribute('aria-busy',state==='loading'?'true':'false');
+    const captureButton=el('dashboardCaptureBtn');
+    if(captureButton)captureButton.disabled=state==='loading'||state==='error';
+    if(state==='loading'||state==='error'){
+      const follow=el('dashboardFollowupSummary');
+      if(follow)follow.textContent='';
+    }
+  }
+  function refreshDashboardFollowupSummary(){
+    const target=el('dashboardFollowupSummary');
+    if(!target)return;
+    if(!currentUser){target.textContent='';return;}
+    const qualifying=allData.filter(r=>isInvestigationCriteriaMet(r.col17));
+    const pending=qualifying.filter(r=>String(r.col26||'').trim()==='').length;
+    target.textContent=!allData.length?'ไม่พบเหตุการณ์ในเงื่อนไขที่เลือก'
+      :pending?'เข้าเกณฑ์แต่ยังไม่ระบุวันที่ลงสอบสวน '+pending+' จาก '+qualifying.length+' รายการ'
+      :'ไม่มีรายการเข้าเกณฑ์ที่รอระบุวันที่ลงสอบสวนตามข้อมูลปัจจุบัน';
+  }
   async function loadDashboard(){
     const request=++dashboardLoadRequest,session=token,hasUser=!!currentUser;
     ++reportSummaryRequest;
     reportSummaryState={status:'loading',summaries:{}};
+    setDashboardViewState('loading');
     try{
       const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
       // Ignore old requests after filters, login/logout, or auth mode change.
@@ -32,12 +62,19 @@
         ?await gs('getDashboardData',session,filter)
         :await gs('getPublicDashboardData',filter);
       if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+      if(hasUser&&!Array.isArray(response))throw new Error('Invalid authenticated Dashboard response');
+      if(!hasUser&&(!response||typeof response!=='object'||!response.kpi))throw new Error('Invalid public Dashboard response');
       if(hasUser){allData=response;dashboardSummary=null}
       else{allData=[];dashboardSummary=response}
       updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters();
+      refreshDashboardFollowupSummary();
+      const count=hasUser?allData.length:Number(dashboardSummary.kpi.events||0);
+      setDashboardViewState(count>0?'ready':'empty');
       if(currentUser&&roleCanRecord())void refreshReportSummaries();
     }catch(e){
-      if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser)toast(e.message||e)
+      if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser){
+        setDashboardViewState('error');toast(e.message||e)
+      }
     }
   }
   function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
@@ -84,6 +121,17 @@
     draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
     draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
   }
-  function draw(id,type,arr,opt){const target=el(id);if(!target)return;new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr.length>1?arr:[arr[0],['-',0]]),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))}
+  function draw(id,type,arr,opt){
+    const target=el(id);if(!target)return;
+    if(arr.length<=1){
+      // Do not turn an empty data series into a fictional chart category.
+      if(typeof target.replaceChildren==='function'&&typeof document.createElement==='function'){
+        const empty=document.createElement('p');empty.className='srrt-dashboard-chart-empty';
+        empty.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';target.replaceChildren(empty);
+      }else target.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';
+      return;
+    }
+    new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))
+  }
   function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
 </script>
