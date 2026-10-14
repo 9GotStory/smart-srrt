@@ -97,8 +97,11 @@ test('G33 only returns requested IDs, with permission and batch bounds before re
 
 test('G33 browser removes both duplicate history buttons while preserving the history modal and consent',()=>{
   const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
-  assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,2);
-  assert.doesNotMatch(render,/ประวัติรายงาน<\/button>/);
+  const reporter=html.match(/function renderReporterWorklist\(\)\{[\s\S]*?(?=\n  function renderTables)/)?.[0]??'';
+  assert.match(render,/renderReporterWorklist\(\)/);
+  assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,1);
+  assert.equal((reporter.match(/reportActionButton\(r\.eventId/g)||[]).length,1);
+  assert.doesNotMatch(render+reporter,/ประวัติรายงาน<\/button>/);
   assert.match(nativeHtml,/id="reportHistoryNewBtn"/);
   assert.match(nativeHtml,/id="reportNewConfirmModal" role="alertdialog"/);
   assert.match(html,/function confirmNewReportFromHistory\(\)/);
