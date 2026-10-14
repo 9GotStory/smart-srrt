@@ -39,6 +39,7 @@ test('G-30 staged Native source checks are read-only; source and extra stage dri
       fs.mkdirSync(path.dirname(dest),{recursive:true});
       fs.copyFileSync(path.join(root,source),dest);
     }
+    fs.symlinkSync(path.join(root,'node_modules'),path.join(fixture,'node_modules'),'dir');
     const stage=path.join(fixture,'dist/apps-script');
     fs.mkdirSync(stage,{recursive:true});
     for(const name of expectedNativeFiles()){
