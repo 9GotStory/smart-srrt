@@ -115,7 +115,7 @@
     recordDraftSnapshot='';
   }
   function discardRecordFormOnLogout(){
-    fields.forEach(f=>{const control=el('in'+f[0]);if(control)control.value=''});
+    if(typeof fields!=='undefined'&&Array.isArray(fields))fields.forEach(f=>{const control=el('in'+f[0]);if(control)control.value=''});
     recordDraftSnapshot='';
     // A pending response is still guarded by the original session token below.
     closeModal('recordModal');
