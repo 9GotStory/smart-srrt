@@ -159,7 +159,7 @@
       assignableOwnerCache=eligible;
       el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
       el('ownerEventContext').textContent=String(r.col6||'เหตุการณ์')+' — Revision '+String(r.revision||1);
-      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+eligible.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?` — ${escapeHtml(u.org)`:''}</option>`).join('');
+      el('ownerUserId').innerHTML='<option value="">-- ยังไม่กำหนด --</option>'+eligible.map(u=>`<option value="${escapeHtml(u.userId)}">${escapeHtml(u.name||u.email)} — ${escapeHtml(u.role||'')}${u.org?' — '+escapeHtml(u.org):''}</option>`).join('');
       el('ownerUserId').value=r.ownerUserId||'';
       el('ownerSaveStatus').textContent='ตรวจสอบผู้รับผิดชอบก่อนบันทึก';
       openModal('ownerModal')
