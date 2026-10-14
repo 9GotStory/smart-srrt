@@ -54,9 +54,7 @@ const sample=[
   {eventId:'E-C',revision:7,col2:'2569-10-14',col6:'เหตุการณ์ C',col29:'บ้านกลาง',recordStatus:'active'}
 ];
 function signedIn(h,role='Manager'){
-  h.ctx.token='test-session';
-  h.ctx.currentUser={role};
-  h.ctx.allData=sample.map(r=>({...r}));
+  vm.runInContext("token='test-session';currentUser={role:"+JSON.stringify(role)+"};allData="+JSON.stringify(sample)+".map(r=>({...r}))",h.ctx);
 }
 test('P4-04 list → filtered original index → edit form → update RPC retains EventID/Revision',async()=>{
   const h=fixture();
