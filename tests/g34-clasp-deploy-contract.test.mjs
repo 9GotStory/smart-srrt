@@ -92,3 +92,65 @@ test('G-34 future clasp stage allowlist matches canonical Native manifest (14 + 
   assert.match(source,/SMART_SRRT_CONFIRM_DEPLOY/);
   assert.ok(source.includes('"$CLASP" update-deployment "$DEPLOYMENT_ID"'));
 });
+
+const native13Files = [
+  '00-bootstrap.gs', '01-schema-and-db.gs', '02-auth-and-attachments.gs',
+  '03-events-and-dashboard.gs', '04-admin-and-audit.gs', '05-reports-and-models.gs',
+  '06-gemini-and-prompts.gs', '00-document-head.html', '01-styles.html',
+  '02-app-layout.html', '03-modals.html', '04-browser-app.html', 'Index.html'
+];
+const native13Partials = [
+  '00-document-head', '01-styles', '02-app-layout', '03-modals', '04-browser-app'
+];
+function native13BackupFixture(options={}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'g34-native-13-layout-'));
+  try {
+    fs.writeFileSync(path.join(root, 'appsscript.json'),
+      JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
+    for (const name of native13Files) {
+      if (name === options.missing) continue;
+      let body = '// native 13 pre-upgrade source fixture\n';
+      if (name === '00-bootstrap.gs') body = options.badEntrypoints
+        ? 'function doGet(e) {}\n'
+        : 'function doGet(e) {}\nfunction include(filename) {}\n';
+      if (name === 'Index.html') body = (options.badIndex
+        ? native13Partials.slice(0,-1)
+        : native13Partials).map(partial =>
+          "<?!= include('" + partial + "') ?>"
+        ).join('');
+      fs.writeFileSync(path.join(root,name),body);
+    }
+    if (options.extra) fs.writeFileSync(path.join(root,options.extra),'// unexpected');
+    return spawnSync(process.execPath,['-',root],{
+      input:legacyBackupCheck[1],encoding:'utf8',
+    });
+  } finally {
+    fs.rmSync(root,{recursive:true,force:true});
+  }
+}
+test('G-34 recognizes exactly the previously deployed Native 13-file layout and checks V8/entrypoints/index', () => {
+  assert.equal(native13Files.length,13);
+  const pass = native13BackupFixture();
+  assert.equal(pass.status,0,pass.stderr);
+  assert.match(pass.stdout,/BACKED_UP_NATIVE_13_LAYOUT=PASS/);
+  assert.match(pass.stdout,/SOURCE_ENTRYPOINTS=PASS/);
+  assert.match(pass.stdout,/REMOTE_MANIFEST_V8=PASS/);
+});
+test('G-34 Native 13 backup gate denies missing, unknown, duplicate, malformed and non-V8 layouts', () => {
+  const negatives = [
+    [{missing:'04-browser-app.html'}, /exact known 13-file Native/],
+    [{extra:'Code.gs'}, /exact known 13-file Native/],
+    [{extra:'rogue.html'}, /exact known 13-file Native/],
+    [{extra:'99-other.gs'}, /exact known 13-file Native/],
+    [{badEntrypoints:true}, /expected doGet\/include entrypoints/],
+    [{badIndex:true}, /missing a known partial include/],
+    [{v8:false}, /runtimeVersion must be V8/],
+  ];
+  for (const [opts,reason] of negatives) {
+    const run=native13BackupFixture(opts);
+    assert.notEqual(run.status,0,JSON.stringify(opts)+' must stop before push');
+    assert.match(run.stderr,reason,JSON.stringify(opts));
+    assert.doesNotMatch(run.stdout,/BACKED_UP_NATIVE_13_LAYOUT=PASS/);
+  }
+});
+

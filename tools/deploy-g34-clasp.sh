@@ -65,19 +65,42 @@ const fs = require('fs'), path = require('path'), root = process.argv[2];
 const manifest = JSON.parse(fs.readFileSync(path.join(root,'appsscript.json'), 'utf8'));
 if (manifest.runtimeVersion !== 'V8') throw new Error('Remote Apps Script runtimeVersion must be V8');
 const actual = fs.readdirSync(root).filter(x=>/\.(gs|html)$/.test(x)).sort();
-const layouts = [
+const legacyLayouts = [
   ['Code.gs', 'Index.html'],
   ['Index.html', 'รหัส.gs']
 ];
-if (!layouts.some(layout => JSON.stringify(actual) === JSON.stringify(layout))) {
-  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; found: '+JSON.stringify(actual));
+const native13Layout = [
+  '00-bootstrap.gs', '01-schema-and-db.gs', '02-auth-and-attachments.gs',
+  '03-events-and-dashboard.gs', '04-admin-and-audit.gs', '05-reports-and-models.gs',
+  '06-gemini-and-prompts.gs', '00-document-head.html', '01-styles.html',
+  '02-app-layout.html', '03-modals.html', '04-browser-app.html',
+  'Index.html'
+].sort();
+const sameNames = expected =>
+  JSON.stringify(actual) === JSON.stringify(expected.slice().sort());
+const isLegacy = legacyLayouts.some(sameNames);
+const isNative13 = sameNames(native13Layout);
+if (!isLegacy && !isNative13) {
+  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; or exact known 13-file Native layout; found: '+JSON.stringify(actual));
 }
-const server = actual.find(x => x.endsWith('.gs'));
+const server = isNative13 ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
 const code = fs.readFileSync(path.join(root, server), 'utf8');
 if (!/\bfunction\s+doGet\s*\(/.test(code) || !/\bfunction\s+include\s*\(/.test(code)) {
-  throw new Error('Legacy server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
+  throw new Error('Known server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
 }
-console.log('BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server+'; REMOTE_MANIFEST_V8=PASS');
+if (isNative13) {
+  const index = fs.readFileSync(path.join(root, 'Index.html'), 'utf8');
+  const trustedPartials = [
+    '00-document-head','01-styles','02-app-layout','03-modals','04-browser-app'
+  ];
+  if (!trustedPartials.every(name =>
+    index.includes("include('"+name+"')") ||
+    index.includes('include("'+name+'")'))) {
+    throw new Error('Native 13-file Index template missing a known partial include');
+  }
+}
+console.log((isNative13 ? 'BACKED_UP_NATIVE_13_LAYOUT=PASS' : 'BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server)+
+            '; SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS');
 NODE
 (cd "$WORK/remote" && "$CLASP" list-deployments > "$WORK/deployments.before.txt") || fail 'Cannot list remote deployments.'
 (cd "$WORK/remote" && "$CLASP" list-versions > "$WORK/versions.before.txt") || fail 'Cannot list remote versions.'
