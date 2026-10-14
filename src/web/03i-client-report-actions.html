@@ -1,6 +1,10 @@
 <script>
   function renderReportReadinessModal(readiness,eventId){
     el('pendingReportEventId').value=eventId||'';
+    const sourceEvent=currentUser&&Array.isArray(allData)?allData.find(r=>String(r.eventId||'')===String(eventId||'')):null;
+    el('reportReadinessEventContext').textContent=sourceEvent
+      ?String(sourceEvent.col6||'เหตุการณ์')+' · '+String(sourceEvent.col2||'ไม่ระบุวันรับแจ้ง')
+      :'เหตุการณ์ที่เลือกสำหรับตรวจความพร้อม';
     const level=String(readiness&&readiness.level||'review');
     const count=Number(readiness&&readiness.warningCount||0);
     const headline=level==='limited'

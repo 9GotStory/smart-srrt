@@ -12,6 +12,7 @@
     }
     const eventId=event.eventId, request=++reportHistoryRequest, authToken=token;
     reportHistoryEventId=eventId;
+    el('reportHistoryEventContext').textContent=String(event.col6||'เหตุการณ์')+' · '+String(event.col2||'ไม่ระบุวันรับแจ้ง');
     el('reportHistoryNewBtn').style.display='none';
     el('reportHistoryWarning').textContent='';
     el('reportHistorySummary').textContent='กำลังโหลดประวัติรายงาน...';
