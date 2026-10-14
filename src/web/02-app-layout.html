@@ -48,9 +48,10 @@
           <div class="srrt-dashboard-filter-actions">
             <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
             <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
-            <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
+            <button id="dashboardCaptureBtn" class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
           </div>
         </div>
+        <div id="dashboardLoadStatus" class="srrt-dashboard-status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
         <div class="srrt-dashboard-section-heading">
           <div><p>สรุปสถานการณ์</p><h3>ตัวชี้วัดภาพรวม</h3></div>
           <span>คำนวณตามข้อมูลและตัวกรองที่เลือก</span>
@@ -75,6 +76,7 @@
       </div>
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
+        <div class="srrt-dashboard-worklist-heading"><div><p>สำหรับผู้ใช้งานที่ได้รับสิทธิ์</p><h3>รายการเหตุการณ์สำหรับติดตาม</h3></div><span id="dashboardFollowupSummary" class="srrt-dashboard-followup-summary" role="status" aria-live="polite"></span></div>
         <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div class="srrt-action-group"><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><table aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
