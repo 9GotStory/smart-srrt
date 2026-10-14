@@ -128,14 +128,35 @@
   async function disableArea(id){if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;try{toast(await gs('deleteArea',token,id));await refreshAreas()}catch(e){toast(e.message||e)}}
   async function refreshAreas(){const b=await gs('getAppBoot',token);areas=b.areas||[];refreshRecordAreaOptions();setupDashboardFilters();loadAreasAdmin()}
   async function importAreaFile(input){
-    const file=input.files[0];if(!file)return;
+    const file=input.files&&input.files[0];if(!file)return;
+    const ctx=adminContext();
+    if(!ctx){toast('สิทธิ์ไม่เพียงพอ');input.value='';return}
+    if(adminBusy.import){toast('กำลังนำเข้าข้อมูลพื้นที่');return}
+    adminBusy.import=true;
     try{
-      const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-      const mapped=rows.map(r=>({province:r['จังหวัด']||r['province']||r['Province'],amphoe:r['อำเภอ']||r['amphoe']||r['Amphoe'],tambon:r['ตำบล']||r['tambon']||r['Tambon'],moo:r['หมู่']||r['หมู่ที่']||r['moo']||r['Moo'],village:r['ชื่อหมู่บ้าน']||r['หมู่บ้าน']||r['village']||r['Village'],villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''})).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
+      const data=await file.arrayBuffer();
+      if(!adminCurrent(ctx))return;
+      const wb=XLSX.read(data,{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const mapped=rows.map(r=>({
+        province:r['จังหวัด']||r['province']||r['Province'],
+        amphoe:r['อำเภอ']||r['amphoe']||r['Amphoe'],
+        tambon:r['ตำบล']||r['tambon']||r['Tambon'],
+        moo:r['หมู่']||r['หมู่ที่']||r['moo']||r['Moo'],
+        village:r['ชื่อหมู่บ้าน']||r['หมู่บ้าน']||r['village']||r['Village'],
+        villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''
+      })).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
       if(!mapped.length)throw new Error('ไม่พบคอลัมน์ข้อมูลพื้นที่ที่รองรับ');
-      for(let i=0;i<mapped.length;i+=200)toast(await gs('importAreas',token,mapped.slice(i,i+200)));
-      await refreshAreas()
-    }catch(e){toast(e.message||e)}finally{input.value=''}
+      if(!confirm('ตรวจพบข้อมูลพื้นที่ '+mapped.length+' แถว จาก '+rows.length+' แถว ยืนยันนำเข้าหรือไม่?'))return;
+      if(!adminCurrent(ctx))return;
+      for(let i=0;i<mapped.length;i+=200){
+        const msg=await gs('importAreas',ctx.token,mapped.slice(i,i+200));
+        if(!adminCurrent(ctx))return;
+        toast(msg)
+      }
+      if(adminCurrent(ctx))await refreshAreas()
+    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    finally{adminBusy.import=false;input.value=''}
   }
 
   async function loadUsers(){
