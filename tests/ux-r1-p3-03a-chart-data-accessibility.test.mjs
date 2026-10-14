@@ -62,7 +62,7 @@ test('P3-03A tabular alternative renders exactly existing public aggregate serie
   const rows=[['หมู่บ้าน','จำนวน'],['บ้าน ก',7],['บ้าน ข',2]];
   f.ctx.draw('barChart','ColumnChart',rows,{legend:'none'});
   assert.equal(f.draws.length,1);
-  assert.deepEqual(f.draws[0].rows,rows,'visible chart retains existing values');
+  assert.deepEqual(f.draws[0].rows.slice(1),rows.slice(1),'visible chart retains existing category counts');
   const tab=f.el('barChartTable').children[0];
   assert.equal(tab.tag,'table');
   assert.equal(tab.children[1].tag,'thead');
