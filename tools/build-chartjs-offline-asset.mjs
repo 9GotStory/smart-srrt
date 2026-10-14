@@ -51,7 +51,7 @@ function main(){
     throw Error('CHART_VENDOR_DRIFT: generated asset differs from the pinned, locked Chart.js UMD');
   }
   console.log('UX-R1 CHART VENDOR PASS: '+VERSION+'; bytes='+wanted.length+
-    '; sha256='+hash+'; mode='+command.slice(2)+'; NOT_STAGED_TO_GAS');
+    '; sha256='+hash+'; mode='+command.slice(2)+'; VENDOR_ASSET_PREPARATION_ONLY');
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
