@@ -484,6 +484,74 @@ body{background:#f4f7fb}
   }
   .app #page-admin .srrt-admin-mobile-nav .input{width:100%;min-height:44px}
 }
+/* UX-R1/P6-04: public reference library — searchable cards and safe external actions. */
+.app #page-library .srrt-library-heading h2{
+  margin:0 0 8px;color:#153b4e;font-size:23px;line-height:1.45;
+}
+.app #page-library .srrt-library-heading p{
+  margin:0 0 18px;color:#52677a;font-size:13px;line-height:1.75;
+}
+.app #page-library .srrt-library-filters{
+  display:grid;grid-template-columns:minmax(240px,2fr) minmax(180px,1fr) auto;
+  gap:12px;align-items:end;padding:16px;margin-bottom:12px;
+  border:1px solid #dae7ee;border-radius:14px;background:#f8fafc;
+}
+.app #page-library .srrt-library-filters label{
+  display:flex;flex-direction:column;gap:7px;min-width:0;color:#334155;
+  font-size:13px;font-weight:650;
+}
+.app #page-library .srrt-library-filters .input{width:100%;min-height:44px;margin:0;background:white}
+.app #page-library .srrt-library-filters button{min-height:44px}
+.app #page-library .srrt-library-filters .input:focus-visible,
+.app #page-library .srrt-library-filters button:focus-visible,
+.app #page-library .srrt-library-link:focus-visible{
+  outline:3px solid #0ea5e9;outline-offset:2px;
+}
+.app #page-library .srrt-library-result{
+  margin:10px 2px 15px;color:#52677a;font-size:13px;
+}
+.app #page-library .srrt-library-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));
+  gap:16px;align-items:stretch;
+}
+.app #page-library .srrt-library-card{
+  display:flex;flex-direction:column;gap:12px;min-width:0;padding:18px;
+  border:1px solid #dae7ee;border-radius:15px;background:#fff;
+  box-shadow:0 2px 12px rgba(15,23,42,.04);
+}
+.app #page-library .srrt-library-card-category{
+  width:fit-content;max-width:100%;color:#115e59;background:#effaf6;
+  border-radius:18px;padding:6px 10px;font-size:12px;line-height:1.55;
+  overflow-wrap:anywhere;
+}
+.app #page-library .srrt-library-card h3{
+  margin:0;color:#153b4e;font-size:17px;line-height:1.6;
+  overflow-wrap:anywhere;
+}
+.app #page-library .srrt-library-card p{
+  margin:0;white-space:pre-line;line-height:1.75;font-size:13px;
+  color:#52677a;overflow-wrap:anywhere;
+}
+.app #page-library .srrt-library-card-footer{margin-top:auto;padding-top:8px}
+.app #page-library .srrt-library-link{
+  display:inline-flex;align-items:center;gap:8px;min-height:44px;
+  color:#115e59;font-size:13px;font-weight:700;text-decoration:underline;
+  text-underline-offset:3px;overflow-wrap:anywhere;
+}
+.app #page-library .srrt-library-link:hover{color:#0f766e}
+.app #page-library .srrt-library-no-link{font-size:12px;color:#64748b}
+.app #page-library .srrt-library-empty{
+  grid-column:1/-1;text-align:center;padding:36px 20px;
+  color:#52677a;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:14px;
+}
+.app #page-library .srrt-library-empty i{font-size:27px;margin-bottom:8px}
+.app #page-library .srrt-library-empty p{margin:0;line-height:1.7}
+@media(max-width:720px){
+  .app #page-library .srrt-library-filters{grid-template-columns:minmax(0,1fr);padding:14px}
+  .app #page-library .srrt-library-filters button{width:100%}
+  .app #page-library .srrt-library-grid{grid-template-columns:minmax(0,1fr)}
+  .app #page-library .srrt-library-card{padding:16px}
+}
 
 /* UX-R1 Dashboard UI */
 /* UX-R1/P3-01: Dashboard view only, authored CSS. No hidden business state or JS. */
