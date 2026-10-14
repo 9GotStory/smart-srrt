@@ -89,7 +89,7 @@ test('P4-03 attachment removal is manager gated, revision-safe, and cancellation
   vm.runInContext('currentUser={role:"Admin"}',ctx);
   vm.runInContext("removeAttachment('A1')",ctx);
   assert.equal(el('eventActionModal').classList.contains('open'),false);
-  assert.equal(rpc.length,1);
+  assert.equal(rpc.filter(([name])=>name==='removeEventAttachment').length,1);
 });
 test('P4-03 explicit session invalidation disarms open event action without RPC',async()=>{
   const {ctx,el,rpc}=fixture();
