@@ -108,6 +108,31 @@
     </section>
 
     <section id="page-admin" class="section">
+      <header class="srrt-admin-heading">
+        <h2>การจัดการระบบ</h2>
+        <p>เลือกพื้นที่ทำงานเพื่อดูข้อมูลหรือดำเนินการเฉพาะส่วน การเปลี่ยนหมวดไม่บันทึกหรือแก้ไขข้อมูลอัตโนมัติ</p>
+      </header>
+      <div id="adminWorkspaceTabs" class="srrt-admin-tabs" role="tablist" aria-label="เลือกพื้นที่ทำงานผู้ดูแล" onkeydown="handleAdminWorkspaceKeys(event)">
+        <button type="button" id="admin-tab-overview" role="tab" aria-controls="admin-workspace-overview" aria-selected="true" tabindex="0" onclick="switchAdminWorkspace('overview')">ภาพรวมและสถานะระบบ</button>
+        <button type="button" id="admin-tab-settings" role="tab" aria-controls="admin-workspace-settings" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('settings')">ตั้งค่าและแบรนด์</button>
+        <button type="button" id="admin-tab-users" role="tab" aria-controls="admin-workspace-users" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('users')">ผู้ใช้และสิทธิ์</button>
+        <button type="button" id="admin-tab-master" role="tab" aria-controls="admin-workspace-master" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('master')">ข้อมูลมาตรฐาน</button>
+        <button type="button" id="admin-tab-areas" role="tab" aria-controls="admin-workspace-areas" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('areas')">ข้อมูลพื้นที่</button>
+        <button type="button" id="admin-tab-content" role="tab" aria-controls="admin-workspace-content" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('content')">ประกาศและคู่มือ</button>
+        <button type="button" id="admin-tab-audit" role="tab" aria-controls="admin-workspace-audit" aria-selected="false" tabindex="-1" onclick="switchAdminWorkspace('audit')">Audit และ Retention</button>
+      </div>
+      <label class="srrt-admin-mobile-nav" for="adminWorkspacePicker">พื้นที่ทำงาน
+        <select class="input" id="adminWorkspacePicker" onchange="switchAdminWorkspace(this.value)">
+          <option value="overview">ภาพรวมและสถานะระบบ</option>
+          <option value="settings">ตั้งค่าและแบรนด์</option>
+          <option value="users">ผู้ใช้และสิทธิ์</option>
+          <option value="master">ข้อมูลมาตรฐาน</option>
+          <option value="areas">ข้อมูลพื้นที่</option>
+          <option value="content">ประกาศและคู่มือ</option>
+          <option value="audit">Audit และ Retention</option>
+        </select>
+      </label>
+      <div id="admin-workspace-overview" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-overview">
       <div class="grid kpis">
         <div class="card kpi"><i class="fa-solid fa-users"></i><div class="num" id="akUsers">0</div><div class="label">ผู้ใช้ทั้งหมด</div></div>
         <div class="card kpi"><i class="fa-solid fa-user-check"></i><div class="num" id="akActive">0</div><div class="label">ผู้ใช้ Active</div></div>
@@ -120,6 +145,8 @@
         <div id="installStatus" class="help">กำลังตรวจสอบ...</div>
       </div>
 
+      </div>
+      <div id="admin-workspace-settings" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-settings" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
         <div class="settings-grid">
@@ -156,6 +183,8 @@
         </div>
       </div>
 
+      </div>
+      <div id="admin-workspace-master" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-master" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0">
           <h3><i class="fa-solid fa-list-check"></i> จัดการข้อมูลมาตรฐาน (MasterData)</h3>
@@ -169,6 +198,8 @@
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลตัวเลือกมาตรฐาน"><table aria-label="ตารางจัดการข้อมูลตัวเลือกมาตรฐาน"><thead><tr><th>Type</th><th>Value</th><th>Label</th><th>ลำดับ</th><th>อ้างอิง</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="masterDataBody"></tbody></table></div>
       </div>
 
+      </div>
+      <div id="admin-workspace-areas" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-areas" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" aria-label="เลือกไฟล์นำเข้าข้อมูลพื้นที่" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
         <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
@@ -176,14 +207,19 @@
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><table aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
       </div>
 
+      </div>
+      <div id="admin-workspace-users" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-users" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3>จัดการผู้ใช้งาน</h3><button class="btn" onclick="loadUsers()"><i class="fa-solid fa-rotate"></i>โหลดผู้ใช้</button></div>
         <input class="input" id="userSearch" aria-label="ค้นหาผู้ใช้งาน" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><table aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
       </div>
 
-      <div class="grid charts" style="margin-top:16px">
+      </div>
+      <div id="admin-workspace-content" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-content" hidden>
         <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><div id="contentAdminList"></div></div>
+      </div>
+      <div id="admin-workspace-audit" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
         <div class="card">
   <div class="panel-head" style="margin-top:0">
     <h3>Audit Logs</h3>

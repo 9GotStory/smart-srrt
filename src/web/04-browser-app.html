@@ -1,4 +1,43 @@
 <script>
+
+  // UX-R1/P6-01: one authenticated in-page Admin workspace, no navigation RPCs.
+  const adminWorkspaceKeys=["overview","settings","users","master","areas","content","audit"];
+  function applyAdminWorkspace(key){
+    const selected=adminWorkspaceKeys.includes(key)?key:'overview';
+    adminWorkspaceKeys.forEach(name=>{
+      const tab=el('admin-tab-'+name), panel=el('admin-workspace-'+name);
+      if(panel)panel.hidden=name!==selected;
+      if(tab){
+        tab.setAttribute('aria-selected',String(name===selected));
+        tab.tabIndex=name===selected?0:-1;
+      }
+    });
+    const picker=el('adminWorkspacePicker');
+    if(picker)picker.value=selected;
+    return selected
+  }
+  function switchAdminWorkspace(key){
+    if(!roleCanManage())return;
+    applyAdminWorkspace(key)
+  }
+  function resetAdminWorkspace(){
+    applyAdminWorkspace('overview')
+  }
+  function handleAdminWorkspaceKeys(event){
+    if(!roleCanManage())return;
+    const keys=['ArrowRight','ArrowLeft','Home','End'];
+    if(!keys.includes(event.key))return;
+    const selected=adminWorkspaceKeys.find(name=>el('admin-tab-'+name)?.getAttribute('aria-selected')==='true')||'overview';
+    const current=adminWorkspaceKeys.indexOf(selected);
+    let next=current;
+    if(event.key==='ArrowRight')next=(current+1)%adminWorkspaceKeys.length;
+    if(event.key==='ArrowLeft')next=(current-1+adminWorkspaceKeys.length)%adminWorkspaceKeys.length;
+    if(event.key==='Home')next=0;
+    if(event.key==='End')next=adminWorkspaceKeys.length-1;
+    event.preventDefault();
+    switchAdminWorkspace(adminWorkspaceKeys[next]);
+    el('admin-tab-'+adminWorkspaceKeys[next]).focus()
+  }
   async function loadAdmin(){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
     try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
