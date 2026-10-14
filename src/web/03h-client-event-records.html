@@ -87,8 +87,42 @@
     el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`${reportActionButton(r.eventId||'',false)} ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 
+
+  // P4-02: group presentation only; colN persistence and server-side rules remain unchanged.
+  const recordFieldGroups=[
+    {id:'receive',title:'1. รับแจ้งและจำแนกเหตุการณ์',keys:[2,3,4,5,6,7]},
+    {id:'place',title:'2. เวลาและสถานที่เกิดเหตุ',keys:[9,8,13,12,11,10,29,30]},
+    {id:'verify',title:'3. รายละเอียด การตรวจสอบ และความเสี่ยง',keys:[14,15,16,17,19,20,23]},
+    {id:'investigate',title:'4. การสอบสวนและมาตรการ',keys:[18,24,26,21,22]}
+  ];
+  let recordDraftSnapshot='',recordSaveInFlight=false;
+  function recordDraftValues(){
+    return JSON.stringify(fields.map(f=>String(el('in'+f[0]).value||'')));
+  }
+  function recordDraftChanged(){
+    return recordDraftValues()!==recordDraftSnapshot;
+  }
+  function updateRecordDraftState(){
+    const status=el('recordDraftStatus');
+    if(status)status.textContent=recordDraftChanged()?'มีข้อมูลแก้ไขที่ยังไม่บันทึก':'ยังไม่มีการเปลี่ยนแปลง';
+    const review=el('recordReviewSummary');
+    if(review)review.textContent='ตรวจทานข้อมูลทั้งหมด '+fields.length+' รายการก่อนบันทึก ข้อมูลที่ไม่กรอกจะคงเป็นค่าว่างตามกฎเดิมของระบบ';
+  }
+  function cancelRecordForm(){
+    if(recordSaveInFlight)return;
+    if(recordDraftChanged()&&!confirm('ข้อมูลที่แก้ไขยังไม่ได้บันทึก ต้องการยกเลิกและทิ้งการเปลี่ยนแปลงหรือไม่?'))return;
+    closeModal('recordModal');
+    recordDraftSnapshot='';
+  }
+  function discardRecordFormOnLogout(){
+    if(typeof fields!=='undefined'&&Array.isArray(fields))fields.forEach(f=>{const control=el('in'+f[0]);if(control)control.value=''});
+    recordDraftSnapshot='';
+    // A pending response is still guarded by the original session token below.
+    closeModal('recordModal');
+    const status=el('recordDraftStatus');if(status)status.textContent='';
+  }
   function buildRecordForm(){
-    el('recordForm').innerHTML=fields.map(f=>{
+    const inputs=new Map(fields.map(f=>{
       const span=f[2]==='textarea'?' span-3':'',id='in'+f[0];let input='';
       if(f[2]==='textarea')input=`<textarea id="${id}" rows="3"></textarea>`;
       else if(f[2]==='date')input=`<input type="date" id="${id}">`;
@@ -96,9 +130,19 @@
       else if(f[2].startsWith('select_custom:')){const opts=f[2].split(':')[1].split('|');input=`<select id="${id}"><option value="">-- เลือก --</option>${opts.map(o=>`<option>${escapeHtml(o)}</option>`).join('')}</select>`}
       else if(f[2].startsWith('area:'))input=`<input type="text" id="${id}" list="${id}List" onchange="onRecordAreaChange(${f[0]})"><datalist id="${id}List"></datalist>`;
       else input=`<input type="text" id="${id}">`;
-      return`<div class="fg${span}"><label for="${id}">${escapeHtml(f[1])}</label>${input}</div>`
-    }).join('');
-    refreshRecordAreaOptions()
+      return[f[0],`<div class="fg${span}"><label for="${id}">${escapeHtml(f[1])}</label>${input}</div>`]
+    }));
+    const controlByKey=new Map(inputs);
+    const keys=recordFieldGroups.flatMap(group=>group.keys);
+    if(keys.length!==fields.length||new Set(keys).size!==fields.length||
+       keys.some(key=>!controlByKey.has(key)))throw Error('P4-02 record field group mapping mismatch');
+    el('recordForm').innerHTML=recordFieldGroups.map(group=>
+      `<section class="srrt-record-section" id="record-group-${group.id}" aria-labelledby="record-heading-${group.id}"><h3 id="record-heading-${group.id}">${group.title}</h3><div class="form-grid">${group.keys.map(key=>controlByKey.get(key)).join('')}</div></section>`
+    ).join('')+
+      '<section class="srrt-record-section srrt-record-review" id="record-group-review" aria-labelledby="record-heading-review"><h3 id="record-heading-review">5. ตรวจทานก่อนบันทึก</h3><p id="recordReviewSummary" class="help"></p></section>';
+    refreshRecordAreaOptions();
+    recordDraftSnapshot=recordDraftValues();
+    updateRecordDraftState();
   }
   function refreshRecordAreaOptions(){
     if(!el('in13'))return;
@@ -138,17 +182,30 @@
         x.value=f[2]==='date'?toIso(v):v
       })
     }
-    refreshRecordAreaOptions();openModal('recordModal')
+    refreshRecordAreaOptions();recordDraftSnapshot=recordDraftValues();updateRecordDraftState();openModal('recordModal')
   }
+
   async function saveRecord(){
-    const btn=el('saveRecordBtn');try{
-      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
+    if(recordSaveInFlight||!roleCanRecord())return;
+    const btn=el('saveRecordBtn'),cancel=el('cancelRecordBtn');
+    const sessionToken=token;
+    recordSaveInFlight=true;
+    try{
+      btn.disabled=true;cancel.disabled=true;
+      btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
       const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
       const msg=el('formMode').value==='add'
         ?await gs('addRecord',token,data)
         :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
+      if(token!==sessionToken||!currentUser)return;
+      recordDraftSnapshot=recordDraftValues();
       closeModal('recordModal');toast(msg);await loadDashboard()
-    }catch(e){toast('บันทึกไม่สำเร็จ: '+(e.message||e))}finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก'}
+    }catch(e){
+      if(token===sessionToken&&currentUser)toast('บันทึกไม่สำเร็จ: '+(e.message||e));
+    }finally{
+      recordSaveInFlight=false;btn.disabled=false;cancel.disabled=false;
+      btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก';
+    }
   }
   async function deleteEvent(eventId,revision){
     if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
