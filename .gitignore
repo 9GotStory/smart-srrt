@@ -8,3 +8,6 @@
 # Local frontend build dependencies and npm cache
 /node_modules/
 /.npm/
+
+# Reproducible pinned Chart.js 4 UMD artifact; never commit generated vendor files
+/dist/vendor/

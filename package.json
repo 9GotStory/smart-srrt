@@ -12,13 +12,16 @@
     "build:gas-multifile": "node tools/build-apps-script-multifile.mjs --write",
     "check:gas-multifile": "node tools/build-apps-script-multifile.mjs --check",
     "build:ui-assets": "node tools/build-ui-assets.mjs --write",
-    "check:ui-assets": "node tools/build-ui-assets.mjs --check"
+    "check:ui-assets": "node tools/build-ui-assets.mjs --check",
+    "build:chart-asset": "node tools/build-chartjs-offline-asset.mjs --write",
+    "check:chart-asset": "node tools/build-chartjs-offline-asset.mjs --check"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@tailwindcss/cli": "4.3.3",
+    "chart.js": "4.5.1",
     "tailwindcss": "4.3.3"
   }
 }

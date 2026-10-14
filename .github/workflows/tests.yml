@@ -25,6 +25,10 @@ jobs:
           node-version: '24'
       - name: Install pinned build dependencies (no install scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build pinned Chart.js vendor artifact (offline)
+        run: npm run build:chart-asset
+      - name: Verify pinned Chart.js artifact SHA/bytes (read-only)
+        run: npm run check:chart-asset
       - name: Verify generated Tailwind CSS (read-only)
         run: npm run check:ui-assets
       - name: Build canonical native Apps Script package (offline)
