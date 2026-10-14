@@ -170,12 +170,17 @@ test('Event and Reporter views have read-only history controls without public re
   assert.match(html,/function openEventReportHistoryByIndex\(index\)/);
   assert.match(html,/gs\('listReportsForEvent',authToken,eventId\)/);
   const render=html.match(/function renderTables\(\)\{[\s\S]*?(?=\n  function buildRecordForm)/)?.[0]??'';
+  const reporter=html.match(/function renderReporterWorklist\(\)\{[\s\S]*?(?=\n  function renderTables)/)?.[0]??'';
   assert.match(render,/el\('eventBody'\)\.innerHTML=allData\.map/);
-  assert.match(render,/el\('reportBody'\)\.innerHTML=allData\.map/);
-  assert.equal((render.match(/openEventReportHistoryByIndex/g)||[]).length,0,
+  assert.match(render,/renderReporterWorklist\(\)/);
+  assert.match(reporter,/el\('reportBody'\)\.innerHTML=visible\.map/);
+  assert.equal((render.match(/openEventReportHistoryByIndex/g)||[]).length,0);
+  assert.equal((reporter.match(/openEventReportHistoryByIndex/g)||[]).length,0,
     'standalone history buttons must be removed from both tables');
-  assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,2,
-    'one report action per table');
+  assert.equal((render.match(/reportActionButton\(r\.eventId/g)||[]).length,1,
+    'one report action per Event table');
+  assert.equal((reporter.match(/reportActionButton\(r\.eventId/g)||[]).length,1,
+    'one report action per AI Reporter row');
   assert.match(html,/function handleReportAction\(eventId,btn\)/);
   assert.match(html,/id="reportHistoryNewBtn"/);
   assert.match(html,/id="reportNewConfirmModal"/);
