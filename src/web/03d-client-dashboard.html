@@ -108,19 +108,25 @@
   }
   function topBy(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||'ไม่ระบุ'}
   function countMap(getter){const m={};allData.forEach(r=>{const k=getter(r)||'ไม่ระบุ';m[k]=(m[k]||0)+1});return Object.entries(m)}
+  const dashboardChartInstances=new Map();
+  function destroyDashboardCharts(){
+    for(const chart of dashboardChartInstances.values())chart.destroy();
+    dashboardChartInstances.clear();
+  }
   function drawCharts(){
-    if(!google.visualization)return;
+    if(typeof Chart!=='function')throw new Error('Pinned Chart.js is unavailable');
     if(!currentUser){
-      const s=dashboardSummary||{};
-      draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...(s.byVillage||[])],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
-      draw('lineChart','LineChart',[['เดือน','จำนวน'],...(s.byMonth||[])],{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
-      draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...(s.byDiseaseGroup||[])],{pieHole:.42});
-      draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...(s.byRisk||[])],{pieHole:.42});return
+      const summary=dashboardSummary||{};
+      draw('barChart','bar',[['หมู่บ้าน','จำนวน'],...(summary.byVillage||[])]);
+      draw('lineChart','line',[['เดือน','จำนวน'],...(summary.byMonth||[])]);
+      draw('pieDisease','doughnut',[['กลุ่มโรค','จำนวน'],...(summary.byDiseaseGroup||[])]);
+      draw('pieRisk','doughnut',[['ความเสี่ยง','จำนวน'],...(summary.byRisk||[])]);
+      return;
     }
-    draw('barChart','ColumnChart',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))],{legend:'none',colors:[settings.PRIMARY_COLOR||'#0f766e'],hAxis:{slantedText:true,slantedTextAngle:45}});
-    draw('lineChart','LineChart',monthRows(),{legend:'none',colors:[settings.SECONDARY_COLOR||'#2563eb'],curveType:'function'});
-    draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
-    draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
+    draw('barChart','bar',[['หมู่บ้าน','จำนวน'],...countMap(r=>villageLabel(r))]);
+    draw('lineChart','line',monthRows());
+    draw('pieDisease','doughnut',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)]);
+    draw('pieRisk','doughnut',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)]);
   }
   // P3-03A: chart accessibility renders ONLY the exact aggregate series passed to the chart.
   // No direct allData, private EventID, narratives or fresh RPC access is introduced here.
@@ -155,18 +161,57 @@
     table.appendChild(tbody);
     target.replaceChildren(table);
   }
-  function draw(id,type,arr,opt){
+  function draw(id,type,arr){
     const target=el(id);if(!target)return;
+    const old=dashboardChartInstances.get(id);
+    if(old){old.destroy();dashboardChartInstances.delete(id);}
     renderDashboardChartData(id,arr);
-    if(arr.length<=1||!arr.slice(1).some(row=>Array.isArray(row)&&Number(row[1])>0)){
-      // Do not turn an empty data series into a fictional chart category.
-      if(typeof target.replaceChildren==='function'&&typeof document.createElement==='function'){
-        const empty=document.createElement('p');empty.className='srrt-dashboard-chart-empty';
-        empty.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';target.replaceChildren(empty);
-      }else target.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';
-      return;
+    // Identical sanitized values are consumed by Chart.js and the accessible data table.
+    const rows=arr.slice(1).filter(row=>Array.isArray(row)&&row.length>=2&&
+      Number.isFinite(Number(row[1]))&&Number(row[1])>=0)
+      .map(row=>({label:String(row[0]??'-'),value:Number(row[1])}));
+    if(!rows.length||!rows.some(row=>row.value>0)){
+      const empty=document.createElement('p');empty.className='srrt-dashboard-chart-empty';
+      empty.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';
+      target.replaceChildren(empty);return;
     }
-    new google.visualization[type](target).draw(google.visualization.arrayToDataTable(arr),Object.assign({chartArea:{width:'80%',height:'70%'},fontName:'Prompt'},opt||{}))
+    if(typeof Chart!=='function')throw new Error('Chart.js is unavailable');
+    const canvas=document.createElement('canvas');
+    canvas.setAttribute('aria-hidden','true');
+    target.replaceChildren(canvas);
+    const palette=['#0f766e','#2563eb','#b45309','#7c3aed','#be185d','#0284c7','#4d7c0f','#9a3412'];
+    const primary=settings.PRIMARY_COLOR||palette[0];
+    const secondary=settings.SECONDARY_COLOR||palette[1];
+    const values=rows.map(row=>row.value),labels=rows.map(row=>row.label);
+    const doughnut=type==='doughnut';
+    const color=doughnut?rows.map((_,i)=>palette[i%palette.length]):type==='line'?secondary:primary;
+    const total=values.reduce((sum,value)=>sum+value,0);
+    const chart=new Chart(canvas,{
+      type:type,
+      data:{labels:labels,datasets:[{label:String(arr[0][1]||'จำนวน'),data:values,
+        backgroundColor:doughnut?color:type==='line'?'rgba(37,99,235,.16)':color,
+        borderColor:doughnut?'#ffffff':type==='line'?secondary:primary,
+        borderWidth:doughnut?2:1,fill:type==='line',tension:type==='line'?.3:0,
+        pointRadius:type==='line'?4:0}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,
+        indexAxis:id==='barChart'?'y':'x',
+        plugins:{legend:{display:doughnut,position:'bottom',
+          labels:{boxWidth:12,font:{family:'Prompt, sans-serif',size:11}}},
+          tooltip:{callbacks:{label:context=>{
+            const value=Number(context.raw||0);
+            return String(context.label||'')+': '+value.toLocaleString('th-TH')+
+              (doughnut&&total>0?' / '+total.toLocaleString('th-TH')+' ('+
+              (100*value/total).toFixed(1)+'%)':'');
+          }}}},
+        scales:doughnut?{}:{
+          x:{beginAtZero:id==='barChart',
+            ticks:{precision:0,font:{family:'Prompt, sans-serif'}}},
+          y:{beginAtZero:id==='lineChart',
+            ticks:{precision:id==='lineChart'?0:undefined,font:{family:'Prompt, sans-serif'}}}
+        }
+      }
+    });
+    dashboardChartInstances.set(id,chart);
   }
   function monthRows(){const m={};allData.forEach(r=>{if(r.col2){const k=r.col2.substring(0,7);m[k]=(m[k]||0)+1}});return[['เดือน','จำนวน'],...Object.keys(m).sort().map(k=>[k,m[k]])]}
 </script>
