@@ -75,13 +75,14 @@ test('G-34 CLI writes only an isolated deterministic package; check is read-only
   try {
     fs.mkdirSync(path.join(fixture,'tools'),{recursive:true});
     fs.writeFileSync(path.join(fixture,'package.json'),JSON.stringify({type:'module'}));
-    for (const file of ['build-apps-script-multifile.mjs','native-sources.mjs']) {
+    for (const file of ['build-apps-script-multifile.mjs','native-sources.mjs','native-inline-vendor.mjs','build-chartjs-offline-asset.mjs']) {
       fs.copyFileSync(path.join(ROOT,'tools',file),path.join(fixture,'tools',file));
     }
     for (const src of [...GAS_SERVER_SOURCES,...GAS_HTML_SOURCES]) {
       fs.mkdirSync(path.dirname(path.join(fixture,src)),{recursive:true});
       fs.copyFileSync(path.join(ROOT,src),path.join(fixture,src));
     }
+    fs.symlinkSync(path.join(ROOT,'node_modules'),path.join(fixture,'node_modules'),'dir');
     // Native fixture deliberately excludes both frozen One-Click files.
     const run=flag => spawnSync(process.execPath,
       [path.join(fixture,'tools','build-apps-script-multifile.mjs'),flag],
