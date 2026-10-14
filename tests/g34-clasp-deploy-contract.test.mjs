@@ -154,3 +154,88 @@ test('G-34 Native 13 backup gate denies missing, unknown, duplicate, malformed a
   }
 });
 
+
+function native24BackupFixture(options={}) {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'g34-native-24-layout-'));
+  try{
+    fs.writeFileSync(path.join(root,'appsscript.json'),
+      JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
+    const nativeFiles=expectedNativeFiles();
+    const canonicalIndex=nativeFiles.filter(x=>x.endsWith('.html')&&x!=='Index.html')
+      .map(x=>path.parse(x).name);
+    assert.equal(canonicalIndex.length,16);
+    const canonicalOrder=[
+      '00-document-head','01-styles','02-app-layout','03-modals',
+      '03a-dashboard-mobile','03b-client-core','03c-client-auth',
+      '03d-client-dashboard','03e-client-dashboard-export',
+      '03f-client-event-controls','03g-client-event-history',
+      '03h-client-event-records','03i-client-report-actions',
+      '03j-client-report-job','03k-client-report-generation','04-browser-app'
+    ];
+    assert.deepEqual(canonicalIndex.sort(),[...canonicalOrder].sort());
+    let parts=canonicalOrder;
+    if(options.indexReorder)parts=[...parts.slice(1),parts[0]];
+    if(options.indexMissing)parts=parts.filter(x=>x!==options.indexMissing);
+    if(options.indexDuplicate)parts=[...parts,parts[0]];
+    for(const name of nativeFiles){
+      if(name===options.missing)continue;
+      let content='// known pre-existing Native24 source\n';
+      if(name==='00-bootstrap.gs')content=options.badEntrypoints
+        ? 'function doGet(e) {}\n'
+        : 'function doGet(e) {}\nfunction include(filename) {}\n';
+      if(name==='Index.html')content=parts.map(p=>
+        "<?!= include('"+p+"') ?>").join('');
+      if(name===options.empty)content='';
+      fs.writeFileSync(path.join(root,name),content);
+    }
+    if(options.extra)fs.writeFileSync(path.join(root,options.extra),'// rogue');
+    return spawnSync(process.execPath,['-',root],{
+      input:legacyBackupCheck[1],encoding:'utf8'
+    });
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+}
+test('G-34 Native24 v11 backup preflight recognizes exact file and ordered Index include topology',()=>{
+  const run=native24BackupFixture();
+  assert.equal(run.status,0,run.stderr);
+  assert.match(run.stdout,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
+  assert.match(run.stdout,/SOURCE_ENTRYPOINTS=PASS/);
+  assert.match(run.stdout,/REMOTE_MANIFEST_V8=PASS/);
+  assert.doesNotMatch(run.stdout,/BACKED_UP_NATIVE_13_LAYOUT=PASS/);
+});
+test('G-34 Native24 rejects unknown, missing, duplicate and malformed backups before push',()=>{
+  const cases=[
+    [{missing:'03i-client-report-actions.html'},/exact known 24-file Native layout/],
+    [{missing:'Index.html'},/exact known 24-file Native layout/],
+    [{extra:'extra.gs'},/exact known 24-file Native layout/],
+    [{extra:'rogue.html'},/exact known 24-file Native layout/],
+    [{extra:'Code.gs'},/exact known 24-file Native layout/],
+    [{indexMissing:'03d-client-dashboard'},/Index template missing, extra, reordered or untrusted/],
+    [{indexReorder:true},/Index template missing, extra, reordered or untrusted/],
+    [{indexDuplicate:true},/Index template missing, extra, reordered or untrusted/],
+    [{badEntrypoints:true},/expected doGet\/include entrypoints/],
+    [{v8:false},/runtimeVersion must be V8/],
+    [{empty:'03e-client-dashboard-export.html'},/empty or invalid source/],
+  ];
+  for(const [options,message] of cases){
+    const r=native24BackupFixture(options);
+    assert.notEqual(r.status,0,JSON.stringify(options)+' must fail closed');
+    assert.match(r.stderr,message,JSON.stringify(options));
+    assert.doesNotMatch(r.stdout,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
+  }
+});
+test('G-34 new Native24 backup gate does not weaken deploy approval, rollback evidence or exact staged file guard',()=>{
+  assert.match(source,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
+  assert.match(source,/expectedIndex = native24Partials\.map/);
+  assert.match(source,/index\.trim\(\) !== expectedIndex/);
+  assert.ok(source.includes('"$CLASP" list-deployments > "$WORK/deployments.before.txt"'));
+  assert.ok(source.includes('"$CLASP" list-versions > "$WORK/versions.before.txt"'));
+  assert.ok(source.includes('"$CLASP" show-file-status'));
+  assert.match(source,/PREFLIGHT=PASS; remote source and deployment unchanged/);
+  assert.match(source,/SMART_SRRT_CONFIRM_DEPLOY/);
+  assert.ok(source.includes('"$CLASP" update-deployment "$DEPLOYMENT_ID"'));
+  assert.doesNotMatch(source,/create-deployment|create-project/);
+  const staged=source.match(/const expected = \[([\s\S]*?)\]\.sort\(\);/);
+  assert.ok(staged);
+  const names=[...staged[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
+  assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort());
+});
