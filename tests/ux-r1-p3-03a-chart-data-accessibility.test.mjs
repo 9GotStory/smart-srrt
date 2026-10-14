@@ -18,7 +18,8 @@ function element(tag){
   return {
     tag,children:[],textContent:'',className:'',scope:'',
     appendChild(child){this.children.push(child);return child},
-    replaceChildren(...children){this.children=children}
+    replaceChildren(...children){this.children=children},
+    setAttribute(key,value){this[key]=value}
   };
 }
 function fixture(){
