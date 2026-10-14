@@ -45,7 +45,7 @@ test('P4-01 UI has one Event table with search/filter/reset and responsive card 
   assert.match(css,/@media\(max-width:640px\)/);
   assert.match(css,/content:attr\(data-label\)/);
   assert.match(records,/visibleRecords\.map\(\(\{r,i\}\)=>/);
-  assert.match(auth,/currentUser=null;allData=\[\];dashboardSummary=null;renderTables\(\)/);
+  assert.match(auth,/currentUser=null;allData=\[\];dashboardSummary=null;discardRecordFormOnLogout\(\);renderTables\(\)/);
 });
 
 test('P4-01 search, disease and status filter return original event indices',()=>{
