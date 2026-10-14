@@ -291,3 +291,22 @@ body{background:#f4f7fb}
   #recordModal .srrt-record-actions .btn{flex:1 1 110px}
   #recordModal .srrt-record-draft-status{flex:1 0 100%}
 }
+/* UX-R1/P4-03: meaningful context and explicit reason confirmation. */
+#ownerModal .srrt-event-context,#attachmentModal .srrt-event-context,
+#eventActionModal .srrt-event-context{
+  font-size:13px;line-height:1.75;color:#475569;overflow-wrap:anywhere;margin:0 0 14px;
+}
+.srrt-event-status{color:#475569;font-size:12px;margin:10px 0;line-height:1.6}
+#eventActionModal{z-index:75}
+#eventActionModal .modal-box{border:1px solid #fecaca}
+#eventActionModal .modal-title{color:#991b1b}
+#eventActionModal textarea{min-height:104px;resize:vertical}
+#eventActionModal .srrt-event-error{color:#991b1b;font-size:13px;line-height:1.6;margin:10px 0}
+#eventActionModal .btn:focus-visible,#ownerModal .btn:focus-visible,#attachmentModal .btn:focus-visible{
+  outline:3px solid #0ea5e9;outline-offset:3px;
+}
+@media(max-width:560px){
+  #eventActionModal{padding:12px}
+  #eventActionModal .modal-box{padding:17px}
+  #eventActionModal .actions .btn{flex:1 1 120px}
+}

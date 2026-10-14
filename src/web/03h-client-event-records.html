@@ -19,22 +19,12 @@
     }
     return buttons.join(' ')||'-'
   }
-  async function closeEventFlow(eventId,revision){
-    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับปิดเหตุการณ์');return}
-    if(!confirm('ยืนยันปิดเหตุการณ์นี้? เหตุการณ์จะเป็นแบบอ่านอย่างเดียวจนกว่าจะเปิดอีกครั้ง'))return;
-    const reason=prompt('กรุณาระบุเหตุผลในการปิดเหตุการณ์');
-    if(reason===null)return;
-    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการปิดเหตุการณ์');return}
-    try{toast(await gs('closeEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  function closeEventFlow(eventId,revision){
+    openEventActionDialog('close',eventId,revision)
   }
-  async function reopenEventFlow(eventId,revision){
-    if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับเปิดเหตุการณ์อีกครั้ง');return}
-    const reason=prompt('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');
-    if(reason===null)return;
-    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการเปิดเหตุการณ์อีกครั้ง');return}
-    try{toast(await gs('reopenEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  function reopenEventFlow(eventId,revision){
+    openEventActionDialog('reopen',eventId,revision)
   }
-
 
   // UX-R1/P4-01: filters operate on private, already authorized in-memory rows only.
   function updateRecordFilterOptions(){
@@ -207,12 +197,7 @@
       btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก';
     }
   }
-  async function deleteEvent(eventId,revision){
-    if(!eventId){toast('ไม่พบ EventID กรุณารีเฟรชหรืออัปเกรดโครงสร้างข้อมูล');return}
-    if(!confirm('ยืนยันยกเลิกเหตุการณ์นี้? ข้อมูลจะยังถูกเก็บไว้ในระบบเพื่อการตรวจสอบย้อนหลัง'))return;
-    const reason=prompt('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');
-    if(reason===null)return;
-    if(!String(reason).trim()){toast('กรุณาระบุเหตุผลในการยกเลิกเหตุการณ์');return}
-    try{toast(await gs('deleteRecord',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
+  function deleteEvent(eventId,revision){
+    openEventActionDialog('void',eventId,revision)
   }
 </script>

@@ -173,8 +173,9 @@ test('AI report lookup remains allowed for closed Events',()=>{
 test('G-19 browser exposes separate close, reopen and void controls',()=>{
   assert.match(html,/function closeEventFlow\(eventId,revision\)/);
   assert.match(html,/function reopenEventFlow\(eventId,revision\)/);
-  assert.match(html,/gs\('closeEvent'/);
-  assert.match(html,/gs\('reopenEvent'/);
+  assert.match(html,/close:'closeEvent'/);
+  assert.match(html,/reopen:'reopenEvent'/);
+  assert.match(html,/await gs\(fn,token,action.eventId,reason,action.revision\)/);
   assert.match(html,/ปิดเหตุการณ์/);
   assert.match(html,/เปิดใหม่/);
   assert.match(html,/deleteEvent/);
