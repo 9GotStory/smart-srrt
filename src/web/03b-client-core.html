@@ -1,5 +1,5 @@
 <script>
-  google.charts.load('current', {'packages':['corechart']});
+  // Chart.js is installed synchronously by the pinned inline Native head vendor.
   let token=localStorage.getItem('SRRT_TOKEN')||'';
   let currentUser=null,settings={},master={},areas=[],allData=[],dashboardSummary=null,currentContent=[],usersCache=[],areaAdminCache=[],assignableOwnerCache=[],masterAdminCache=[],masterTypePolicies=[];
   const fields=[

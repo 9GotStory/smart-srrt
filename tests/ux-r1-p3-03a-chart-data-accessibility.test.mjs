@@ -10,7 +10,7 @@ const layout=read('src/web/02-app-layout.html');
 const css=read('src/styles/dashboard-ui.css');
 const head=read('src/web/00-document-head.html');
 const exportSource=read('src/web/03e-client-dashboard-export.html');
-const from=source.indexOf('  function renderDashboardChartData(id,arr){');
+const from=source.indexOf('  const dashboardChartInstances=new Map();');
 const to=source.indexOf('  function monthRows(){',from);
 assert.ok(from>0&&to>from,'render adapter/Google Charts boundaries are required');
 
@@ -18,7 +18,8 @@ function element(tag){
   return {
     tag,children:[],textContent:'',className:'',scope:'',
     appendChild(child){this.children.push(child);return child},
-    replaceChildren(...children){this.children=children}
+    replaceChildren(...children){this.children=children},
+    setAttribute(key,value){this[key]=value}
   };
 }
 function fixture(){
@@ -28,12 +29,13 @@ function fixture(){
     return nodes.get(id);
   };
   const Chart=class{
-    constructor(target){this.target=target}
-    draw(rows,options){draws.push({rows,options,target:this.target})}
+    constructor(canvas,config){draws.push({canvas,config,rows:[
+      [config.data.datasets[0].label,'จำนวน'],
+      ...config.data.labels.map((label,i)=>[label,config.data.datasets[0].data[i]])
+    ]});}
+    destroy(){}
   };
-  const ctx=vm.createContext({el,document:{createElement:element},google:{visualization:{
-    ColumnChart:Chart,LineChart:Chart,PieChart:Chart,arrayToDataTable:rows=>rows
-  }}});
+  const ctx=vm.createContext({el,document:{createElement:element},Chart,settings:{},console});
   vm.runInContext(source.slice(from,to),ctx,{timeout:1000});
   return {ctx,el,draws};
 }
@@ -60,7 +62,7 @@ test('P3-03A tabular alternative renders exactly existing public aggregate serie
   const rows=[['หมู่บ้าน','จำนวน'],['บ้าน ก',7],['บ้าน ข',2]];
   f.ctx.draw('barChart','ColumnChart',rows,{legend:'none'});
   assert.equal(f.draws.length,1);
-  assert.deepEqual(f.draws[0].rows,rows,'visible chart retains existing values');
+  assert.deepEqual(f.draws[0].rows.slice(1),rows.slice(1),'visible chart retains existing category counts');
   const tab=f.el('barChartTable').children[0];
   assert.equal(tab.tag,'table');
   assert.equal(tab.children[1].tag,'thead');
@@ -92,8 +94,8 @@ test('P3-03A zero/absent data never draw a fictional category or crash a data-ta
 });
 
 test('P3-03A does not introduce a CDN, new RPC, or change existing image export contract',()=>{
-  assert.match(head,/www\.gstatic\.com\/charts\/loader\.js/,'Google Charts remains pending a later renderer-gated PR');
-  assert.doesNotMatch(head,/chart\.umd|chart\.js@/);
+  assert.equal(head.includes('www.gstatic.com/charts/loader.js'),false);
+  assert.match(head,/SMART_SRRT_CHARTJS_VENDOR_INLINED_AT_BUILD/);
   assert.match(exportSource,/function captureDashboard\(\)/);
   assert.match(exportSource,/html2canvas\(el\('captureArea'\)/);
   assert.match(css,/srrt-dashboard-chart-details/);

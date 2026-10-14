@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { GAS_SERVER_SOURCES, GAS_HTML_SOURCES } from './native-sources.mjs';
+import {compileNativeHtmlFragment} from './native-inline-vendor.mjs';
 
 export const NATIVE_STAGE_DIR = 'dist/apps-script';
 
@@ -23,7 +24,8 @@ export function inspectNativeRelease(root) {
   const add=(id,pass,detail)=>checks.push({id,status:pass?'PASS':'FAIL',detail});
   for(const source of [...GAS_SERVER_SOURCES,...GAS_HTML_SOURCES]){
     const name=path.basename(source);
-    try { sources.set(name,fs.readFileSync(path.join(root,source))); }
+    try { const authored=fs.readFileSync(path.join(root,source));
+      sources.set(name,source.endsWith('.html')?compileNativeHtmlFragment(source,authored,root):authored); }
     catch(e){add('source:'+name,false,'Missing or unreadable Native source: '+(e.code||'ERROR'));}
   }
   sources.set('Index.html',Buffer.from(expectedNativeIndex(),'utf8'));

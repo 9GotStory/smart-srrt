@@ -123,7 +123,7 @@ test('P3-02 errors remain visible and prevent capture or stale private worklist 
 });
 
 test('P3-02 empty charts show truthful text instead of a fictional zero-count category',()=>{
-  const start=dashboard.indexOf('  function renderDashboardChartData(id,arr){');
+  const start=dashboard.indexOf('  const dashboardChartInstances=new Map();');
   const stop=dashboard.indexOf('  function monthRows(){',start);
   assert.ok(start>0&&stop>start);
   const target={textContent:'',children:[],replaceChildren(...children){this.children=children}};

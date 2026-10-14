@@ -14,19 +14,26 @@ function fixture(){
   const cells=new Map(),charts=[],workbooks=[],downloads=[];
   const cell=id=>{
     if(!cells.has(id))cells.set(id,{id,textContent:'',innerHTML:'',value:'',style:{},
-      classList:{add(){},remove(){},contains(){return false}}});
+      classList:{add(){},remove(){},contains(){return false}},
+      children:[],replaceChildren(...items){this.children=items}});
     return cells.get(id);
   };
-  const makeChart=type=>class{
-    constructor(target){this.target=target;}
-    draw(rows,options){charts.push({type,target:this.target.id,rows,options});}
+  const makeChart=class{
+    constructor(canvas,config){
+      this.canvas=canvas;this.config=config;
+      charts.push({type:config.type,rows:[[config.data.datasets[0].label||'','จำนวน'],
+        ...config.data.labels.map((label,i)=>[label,config.data.datasets[0].data[i]])],
+        options:config.options});
+    }
+    stop(){}
+    update(){}
+    destroy(){}
   };
   const ctx=vm.createContext({
-    document:{readyState:'loading',addEventListener(){},getElementById:cell},
+    document:{readyState:'loading',addEventListener(){},getElementById:cell,
+      createElement:tag=>({tag,children:[],setAttribute(){},appendChild(x){this.children.push(x)},replaceChildren(...x){this.children=x},textContent:''})},
     localStorage:{getItem(){return null}},
-    google:{charts:{load(){}},visualization:{
-      ColumnChart:makeChart('ColumnChart'),LineChart:makeChart('LineChart'),
-      PieChart:makeChart('PieChart'),arrayToDataTable:rows=>rows}},
+    Chart:makeChart,google:{script:{run:{}}},
     XLSX:{utils:{book_new:()=>({sheets:[]}),json_to_sheet:rows=>rows,
       book_append_sheet:(wb,rows,name)=>wb.sheets.push({rows,name})},
       writeFile:(wb,name)=>workbooks.push({wb,name})},

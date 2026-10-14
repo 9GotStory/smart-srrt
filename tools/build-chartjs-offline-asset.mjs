@@ -14,13 +14,15 @@ const UMD=path.join(ROOT,'node_modules/chart.js/dist/chart.umd.min.js');
 const OUTPUT=path.join(ROOT,'dist/vendor/chartjs-'+VERSION+'.html');
 const MAX_BYTES=512*1024;
 
-export function chartVendorBytes(){
-  if(!fs.existsSync(PACKAGE)||!fs.existsSync(UMD)){
+export function chartVendorBytes(root=ROOT){
+  const vendorPackage=path.join(root,'node_modules/chart.js/package.json');
+  const vendorUmd=path.join(root,'node_modules/chart.js/dist/chart.umd.min.js');
+  if(!fs.existsSync(vendorPackage)||!fs.existsSync(vendorUmd)){
     throw Error('Chart.js dependency missing: npm ci --ignore-scripts from committed package-lock.json');
   }
-  const info=JSON.parse(fs.readFileSync(PACKAGE,'utf8'));
+  const info=JSON.parse(fs.readFileSync(vendorPackage,'utf8'));
   if(info.version!==VERSION)throw Error('Chart.js vendor version mismatch: expected '+VERSION);
-  const code=fs.readFileSync(UMD,'utf8')
+  const code=fs.readFileSync(vendorUmd,'utf8')
     .replace(/\/\/# sourceMappingURL=[^\r\n]*/g,'').trim();
   const size=Buffer.byteLength(code,'utf8');
   if(size<50000||size>MAX_BYTES||/<\/script\b/i.test(code)){
@@ -49,7 +51,7 @@ function main(){
     throw Error('CHART_VENDOR_DRIFT: generated asset differs from the pinned, locked Chart.js UMD');
   }
   console.log('UX-R1 CHART VENDOR PASS: '+VERSION+'; bytes='+wanted.length+
-    '; sha256='+hash+'; mode='+command.slice(2)+'; NOT_STAGED_TO_GAS');
+    '; sha256='+hash+'; mode='+command.slice(2)+'; VENDOR_ASSET_PREPARATION_ONLY');
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

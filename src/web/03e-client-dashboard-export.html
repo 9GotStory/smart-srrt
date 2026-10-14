@@ -5,6 +5,33 @@
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
   }
   async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
-  function captureDashboard(){html2canvas(el('captureArea'),{scale:2,backgroundColor:'#eef4f7',useCORS:true}).then(canvas=>{const a=document.createElement('a');a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';a.href=canvas.toDataURL('image/png');a.click()}).catch(e=>toast(e.message))}
+  async function captureDashboard(){
+    const page=el('page-dashboard'),captureButton=el('dashboardCaptureBtn');
+    if(!page||['loading','error'].includes(page.getAttribute('data-dashboard-state'))||
+      (captureButton&&captureButton.disabled)){toast('กรุณารอให้ Dashboard โหลดเสร็จ');return}
+    const request=dashboardLoadRequest,session=token,hasUser=!!currentUser;
+    try{
+      if(captureButton)captureButton.disabled=true;
+      // Chart.js uses canvas. Stop animations and render the exact complete frame
+      // before html2canvas clones the aggregate-only captureArea.
+      for(const chart of dashboardChartInstances.values()){
+        chart.stop();chart.update('none');
+      }
+      if(typeof requestAnimationFrame==='function'){
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      }
+      if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+      const canvas=await html2canvas(el('captureArea'),{
+        scale:2,backgroundColor:'#eef4f7',useCORS:true
+      });
+      if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+      const a=document.createElement('a');
+      a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';
+      a.href=canvas.toDataURL('image/png');
+      a.click();
+    }catch(e){toast('ไม่สามารถบันทึกภาพ Dashboard ได้: '+(e.message||e))}
+    finally{if(captureButton)captureButton.disabled=
+      ['loading','error'].includes(page.getAttribute('data-dashboard-state'));}
+  }
 
 </script>

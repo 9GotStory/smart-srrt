@@ -638,6 +638,22 @@ body{background:#f4f7fb}
   font-variant-numeric:tabular-nums;
 }
 
+/* P3-03B2: Chart.js canvas must have a bounded responsive parent height. */
+.app #page-dashboard .srrt-dashboard-chart .chart{
+  position:relative;
+  width:100%;
+  height:290px;
+  min-height:220px;
+  overflow:hidden;
+}
+.app #page-dashboard .srrt-dashboard-chart .chart canvas{
+  display:block;
+  max-width:100%;
+}
+@media(max-width:560px){
+  .app #page-dashboard .srrt-dashboard-chart .chart{height:260px}
+}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}
