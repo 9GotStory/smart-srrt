@@ -494,6 +494,88 @@ body{background:#f4f7fb}
   .app #page-dashboard .srrt-dashboard-insight{padding:16px}
 }
 
+/* UX-R1/P3-02: loading/empty/error never masquerade as current filtered results. */
+.app #page-dashboard .srrt-dashboard-status{
+  margin:17px 0 12px;
+  padding:14px 17px;
+  border:1px solid #b8d7e3;
+  border-radius:13px;
+  background:#edf7fb;
+  color:#1e5369;
+  font-size:13px;
+  line-height:1.7;
+  font-weight:550;
+}
+.app #page-dashboard .srrt-dashboard-status[hidden]{display:none}
+.app #page-dashboard[data-dashboard-state="error"] .srrt-dashboard-status{
+  color:#8e3030;
+  border-color:#edc7c7;
+  background:#fff5f5;
+}
+.app #page-dashboard[data-dashboard-state="empty"] .srrt-dashboard-status{
+  color:#556272;
+  border-color:#d8e2eb;
+  background:#f6f8fa;
+}
+.app #page-dashboard:is([data-dashboard-state="loading"],[data-dashboard-state="error"]) #captureArea :is(.grid.kpis,.srrt-dashboard-insight,.grid.charts,.srrt-dashboard-charts-heading,.srrt-dashboard-section-heading){
+  display:none;
+}
+.app #page-dashboard:is([data-dashboard-state="loading"],[data-dashboard-state="error"]) #eventDetailPanel{
+  display:none;
+}
+.app #page-dashboard .srrt-dashboard-chart-empty{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:150px;
+  margin:0;
+  padding:14px;
+  color:#516576;
+  background:#f7fafc;
+  border:1px dashed #d2e0e8;
+  border-radius:12px;
+  text-align:center;
+  font-size:12px;
+  line-height:1.7;
+}
+.app #page-dashboard .srrt-dashboard-worklist-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:22px 0 0;
+  padding:17px 19px;
+  border:1px solid #dce8ee;
+  border-left:4px solid #147d76;
+  border-radius:13px;
+  background:#f7fbfc;
+}
+.app #page-dashboard .srrt-dashboard-worklist-heading p{
+  margin:0 0 3px;
+  color:#456271;
+  font-size:11px;
+  font-weight:600;
+}
+.app #page-dashboard .srrt-dashboard-worklist-heading h3{
+  margin:0;
+  color:#193a4b;
+  font-size:17px;
+  line-height:1.5;
+}
+.app #page-dashboard .srrt-dashboard-followup-summary{
+  max-width:100%;
+  color:#6b481a;
+  font-size:12px;
+  font-weight:600;
+  line-height:1.65;
+  overflow-wrap:anywhere;
+}
+@media(max-width:560px){
+  .app #page-dashboard .srrt-dashboard-worklist-heading{padding:14px}
+  .app #page-dashboard .srrt-dashboard-worklist-heading h3{font-size:16px}
+}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}
