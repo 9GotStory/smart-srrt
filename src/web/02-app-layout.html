@@ -28,30 +28,49 @@
 
     <section id="page-dashboard" class="section active">
       <div id="captureArea">
+        <header class="srrt-dashboard-intro">
+          <div>
+            <p class="srrt-dashboard-kicker">ภาพรวมข้อมูลระบาดวิทยาระดับพื้นที่</p>
+            <h3>ภาพรวมการเฝ้าระวังโรคและภัยสุขภาพ</h3>
+            <p class="srrt-dashboard-description">เลือกช่วงเวลาและพื้นที่เพื่อดูจำนวนเหตุการณ์ เกณฑ์สอบสวน และแนวโน้มสถานการณ์</p>
+          </div>
+        </header>
         <div class="filter card">
-          <b><i class="fa-solid fa-filter"></i> ตัวกรอง</b>
-          <input class="input" type="date" id="startDate" aria-label="วันที่เริ่มต้น" title="วันที่เริ่มต้น">
-          <input class="input" type="date" id="endDate" aria-label="วันที่สิ้นสุด" title="วันที่สิ้นสุด">
-          <select class="input" id="filterProvince" aria-label="จังหวัด" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select>
-          <select class="input" id="filterAmphoe" aria-label="อำเภอ" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select>
-          <select class="input" id="filterTambon" aria-label="ตำบล" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select>
-          <select class="input" id="filterVillage" aria-label="หมู่บ้าน"><option value="">ทุกหมู่บ้าน</option></select>
-          <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
-          <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
-          <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
+          <div class="srrt-dashboard-filter-heading"><b>ตัวกรองข้อมูล</b><span>กำหนดเงื่อนไข แล้วกดค้นหาเพื่ออัปเดตข้อมูล</span></div>
+          <div class="srrt-dashboard-filter-fields">
+            <label class="srrt-dashboard-field"><span>วันที่เริ่มต้น</span><input class="input" type="date" id="startDate" aria-label="วันที่เริ่มต้น" title="วันที่เริ่มต้น"></label>
+            <label class="srrt-dashboard-field"><span>วันที่สิ้นสุด</span><input class="input" type="date" id="endDate" aria-label="วันที่สิ้นสุด" title="วันที่สิ้นสุด"></label>
+            <label class="srrt-dashboard-field"><span>จังหวัด</span><select class="input" id="filterProvince" aria-label="จังหวัด" onchange="updateDashboardAreaFilters('province')"><option value="">ทุกจังหวัด</option></select></label>
+            <label class="srrt-dashboard-field"><span>อำเภอ</span><select class="input" id="filterAmphoe" aria-label="อำเภอ" onchange="updateDashboardAreaFilters('amphoe')"><option value="">ทุกอำเภอ</option></select></label>
+            <label class="srrt-dashboard-field"><span>ตำบล</span><select class="input" id="filterTambon" aria-label="ตำบล" onchange="updateDashboardAreaFilters('tambon')"><option value="">ทุกตำบล</option></select></label>
+            <label class="srrt-dashboard-field"><span>หมู่บ้าน</span><select class="input" id="filterVillage" aria-label="หมู่บ้าน"><option value="">ทุกหมู่บ้าน</option></select></label>
+          </div>
+          <div class="srrt-dashboard-filter-actions">
+            <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
+            <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
+            <button class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
+          </div>
+        </div>
+        <div class="srrt-dashboard-section-heading">
+          <div><p>สรุปสถานการณ์</p><h3>ตัวชี้วัดภาพรวม</h3></div>
+          <span>คำนวณตามข้อมูลและตัวกรองที่เลือก</span>
         </div>
         <div class="grid kpis">
-          <div class="card kpi"><i class="fa-solid fa-bell"></i><div class="num" id="kpiTotal">0</div><div class="label">เหตุการณ์ทั้งหมด</div></div>
-          <div class="card kpi"><i class="fa-solid fa-user-doctor"></i><div class="num" id="kpiCriteria">0</div><div class="label">เข้าเกณฑ์สอบสวนโรค</div></div>
-          <div class="card kpi"><i class="fa-solid fa-shield-virus"></i><div class="num" id="kpiInvestigated">0</div><div class="label">ลงสอบสวนโรคแล้ว</div></div>
-          <div class="card kpi"><i class="fa-solid fa-percent"></i><div class="num" id="kpiRate">0%</div><div class="label">ความครบถ้วนการสอบสวน</div></div>
+          <div class="card kpi"><div class="srrt-dashboard-kpi-label"><i class="fa-solid fa-bell"></i><span>เหตุการณ์ทั้งหมด</span></div><div class="num" id="kpiTotal">0</div><div class="label">จำนวนเหตุการณ์ตามเงื่อนไขที่เลือก</div></div>
+          <div class="card kpi"><div class="srrt-dashboard-kpi-label"><i class="fa-solid fa-user-doctor"></i><span>เข้าเกณฑ์สอบสวนโรค</span></div><div class="num" id="kpiCriteria">0</div><div class="label">เหตุการณ์ที่เข้าเกณฑ์สอบสวน</div></div>
+          <div class="card kpi"><div class="srrt-dashboard-kpi-label"><i class="fa-solid fa-shield-virus"></i><span>ลงสอบสวนโรคแล้ว</span></div><div class="num" id="kpiInvestigated">0</div><div class="label">รายการเข้าเกณฑ์ที่ระบุวันที่ลงสอบสวน</div></div>
+          <div class="card kpi"><div class="srrt-dashboard-kpi-label"><i class="fa-solid fa-percent"></i><span>ความครบถ้วนการสอบสวน</span></div><div class="num" id="kpiRate">0%</div><div class="label">สัดส่วนที่ลงสอบสวนต่อรายการเข้าเกณฑ์</div></div>
         </div>
-        <div class="card insight"><b style="color:#b45309"><i class="fa-solid fa-robot"></i> Smart Insights</b><div id="smartInsight" style="margin-top:8px;line-height:1.8">กำลังโหลดข้อมูล...</div></div>
+        <div class="card insight srrt-dashboard-insight"><div class="srrt-dashboard-insight-heading"><i class="fa-solid fa-robot" aria-hidden="true"></i><b>ข้อมูลสรุปเพื่อการติดตาม</b></div><div id="smartInsight" class="srrt-dashboard-insight-body">กำลังโหลดข้อมูล...</div></div>
+        <div class="srrt-dashboard-section-heading srrt-dashboard-charts-heading">
+          <div><p>แนวโน้มและการกระจาย</p><h3>ภาพรวมตามเวลาและพื้นที่</h3></div>
+          <span>แสดงข้อมูลสถิติจากผลที่เลือก</span>
+        </div>
         <div class="grid charts">
-          <div class="card"><b>จำนวนเหตุการณ์รายหมู่บ้าน</b><div id="barChart" class="chart"></div></div>
-          <div class="card"><b>แนวโน้มรายเดือน</b><div id="lineChart" class="chart"></div></div>
-          <div class="card"><b>สัดส่วนตามกลุ่มโรค</b><div id="pieDisease" class="chart"></div></div>
-          <div class="card"><b>สัดส่วนตามระดับความเสี่ยง</b><div id="pieRisk" class="chart"></div></div>
+          <div class="card srrt-dashboard-chart"><h4>จำนวนเหตุการณ์รายหมู่บ้าน</h4><p>เปรียบเทียบจำนวนเหตุการณ์ตามพื้นที่</p><div id="barChart" class="chart"></div></div>
+          <div class="card srrt-dashboard-chart"><h4>แนวโน้มรายเดือน</h4><p>ติดตามจำนวนเหตุการณ์ในแต่ละเดือน</p><div id="lineChart" class="chart"></div></div>
+          <div class="card srrt-dashboard-chart"><h4>สัดส่วนตามกลุ่มโรค</h4><p>การกระจายของเหตุการณ์แต่ละกลุ่มโรค</p><div id="pieDisease" class="chart"></div></div>
+          <div class="card srrt-dashboard-chart"><h4>สัดส่วนตามระดับความเสี่ยง</h4><p>ภาพรวมระดับความเสี่ยงที่บันทึกไว้</p><div id="pieRisk" class="chart"></div></div>
         </div>
       </div>
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
