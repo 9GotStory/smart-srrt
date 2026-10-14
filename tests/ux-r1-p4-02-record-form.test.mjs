@@ -33,7 +33,7 @@ function fixture(){
   });
   for(const item of readOrderedClientScripts()){
     const code=item.path==='src/web/04-browser-app.html'
-      ?item.code.replace(/^\\s*boot\\(\\);\\s*$/m,''):item.code;
+      ?item.code.replace(/^\s*boot\(\);\s*$/m,''):item.code;
     new vm.Script(code,{filename:item.path}).runInContext(context,{timeout:2000});
   }
   return {context,el};
@@ -42,12 +42,12 @@ function fixture(){
 test('P4-02 one dialog, five anchored sections and accessible form controls',()=>{
   assert.match(markup,/id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordTitle"/);
   assert.match(markup,/id="recordForm" class="srrt-record-form"/);
-  assert.match(markup,/onclick="cancelRecordForm\\(\\)"/);
+  assert.match(markup,/onclick="cancelRecordForm\(\)"/);
   assert.match(markup,/id="recordDraftStatus"[^>]*role="status"/);
   assert.equal((markup.match(/id="recordForm"/g)||[]).length,1);
   for(const name of ['receive','place','verify','investigate','review'])
     assert.match(markup,new RegExp('href="#record-group-'+name+'"'));
-  assert.match(css,/#recordModal \\.srrt-record-section/);
+  assert.match(css,/#recordModal \.srrt-record-section/);
 });
 
 test('P4-02 all 26 persisted field keys render once and preserve original colN mapping',()=>{
@@ -64,8 +64,8 @@ test('P4-02 all 26 persisted field keys render once and preserve original colN m
   assert.equal(new Set(grouped).size,26);
   assert.deepEqual(new Set(grouped),new Set(cols));
   assert.match(built,/id="record-group-review"/);
-  assert.match(records,/data\\['col'\\+f\\[0\\]\\]/);
-  assert.match(records,/Number\\(el\\('editRevision'\\)\\.value\\|\\|0\\)/);
+  assert.match(records,/data\['col'\+f\[0\]\]/);
+  assert.match(records,/Number\(el\('editRevision'\)\.value\|\|0\)/);
 });
 
 test('P4-02 cancel warns only when edited and leaves the modal open on refusal',()=>{
@@ -112,5 +112,5 @@ test('P4-02 save prevents duplicate RPC and keeps revision; logout invalidates p
   vm.runInContext('currentUser=null;token="";discardRecordFormOnLogout()',context);
   assert.equal(el('in6').value,'');
   assert.equal(el('recordModal').classList.contains('open'),false);
-  assert.match(auth,/discardRecordFormOnLogout\\(\\)/);
+  assert.match(auth,/discardRecordFormOnLogout\(\)/);
 });
