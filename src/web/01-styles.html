@@ -360,6 +360,54 @@ body{background:#f4f7fb}
   #eventActionModal .modal-box{padding:17px}
   #eventActionModal .actions .btn{flex:1 1 120px}
 }
+/* UX-R1/P5-01: one semantic AI Reporter table, card presentation on narrow screens. */
+.app #page-reporter .srrt-reporter-guidance{
+  padding:12px 15px;border-left:3px solid #0f766e;border-radius:9px;
+  color:#29495a;background:#edf7f5;font-size:13px;line-height:1.7;margin:12px 0 16px;
+}
+.app #page-reporter .srrt-reporter-filters{
+  display:grid;grid-template-columns:minmax(240px,2fr) minmax(190px,1fr) auto;
+  align-items:end;gap:12px;padding:17px;
+}
+.app #page-reporter .srrt-reporter-filters label{
+  display:flex;flex-direction:column;gap:6px;min-width:0;
+  color:#344b5f;font-size:12px;font-weight:650;
+}
+.app #page-reporter .srrt-reporter-filters .input{min-height:44px;width:100%;margin:0;background:#fff}
+.app #page-reporter .srrt-reporter-result{color:#475569;font-size:13px;line-height:1.6;margin:12px 2px 0}
+.app #page-reporter .srrt-reporter-row td{vertical-align:top;overflow-wrap:anywhere}
+.app #page-reporter .srrt-reporter-row .report-action-btn{white-space:normal;text-align:start;min-height:44px}
+@media(max-width:900px){
+  .app #page-reporter .srrt-reporter-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app #page-reporter .srrt-reporter-filters button{grid-column:1/-1;justify-self:start}
+}
+@media(max-width:640px){
+  .app #page-reporter .srrt-reporter-filters{grid-template-columns:minmax(0,1fr);padding:14px}
+  .app #page-reporter .srrt-reporter-table-wrap{overflow:visible;border:0;background:transparent;box-shadow:none}
+  .app #page-reporter .srrt-reporter-table{display:block;width:100%;border-spacing:0}
+  .app #page-reporter .srrt-reporter-table thead{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+  .app #page-reporter .srrt-reporter-table tbody{display:grid;gap:12px}
+  .app #page-reporter .srrt-reporter-table tr{
+    display:block;background:#fff;border:1px solid #dce7ee;border-radius:14px;
+    overflow:hidden;box-shadow:0 2px 12px rgba(15,23,42,.04);
+  }
+  .app #page-reporter .srrt-reporter-table td{
+    display:grid;grid-template-columns:minmax(110px,37%) minmax(0,1fr);
+    gap:12px;padding:11px 13px;min-width:0;border-bottom:1px solid #edf1f5;
+    text-align:start;white-space:normal;
+  }
+  .app #page-reporter .srrt-reporter-table td:last-child{border-bottom:0}
+  .app #page-reporter .srrt-reporter-table td::before{
+    content:attr(data-label);font-size:12px;font-weight:650;color:#40586c;
+  }
+  .app #page-reporter .srrt-reporter-table .srrt-reporter-empty td{
+    display:block;padding:20px 14px;text-align:center;color:#475569;
+  }
+  .app #page-reporter .srrt-reporter-table .srrt-reporter-empty td::before{content:none}
+}
 
 /* UX-R1 Dashboard UI */
 /* UX-R1/P3-01: Dashboard view only, authored CSS. No hidden business state or JS. */
