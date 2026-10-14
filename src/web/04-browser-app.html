@@ -62,20 +62,24 @@
     el('admin-tab-'+adminWorkspaceKeys[next]).focus()
   }
   async function loadAdmin(){
+    const ctx=adminContext();if(!ctx)return;
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
-    try{const a=await gs('getAnalytics',token);el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){toast(e.message||e)}
+    try{const a=await gs('getAnalytics',ctx.token);if(!adminCurrent(ctx))return;el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    if(!adminCurrent(ctx))return;
     await Promise.allSettled([loadSettings(),loadInstallStatus(),loadMasterDataAdmin(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit(),loadAuditRetentionStatus()])
   }
   async function loadInstallStatus(){
-    try{const s=await gs('getInstallationStatus',token);el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){el('installStatus').textContent=e.message||e}
+    const ctx=adminContext();if(!ctx)return;
+    try{const s=await gs('getInstallationStatus',ctx.token);if(!adminCurrent(ctx))return;el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){if(adminCurrent(ctx))el('installStatus').textContent=e.message||e}
   }
   async function repairSystem(){if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;try{toast(await gs('repairInstallation',token));const b=await gs('getAppBoot',token);settings=b.settings||{};areas=b.areas||[];applyTheme();setupDashboardFilters();loadInstallStatus()}catch(e){toast(e.message||e)}}
 
   async function loadSettings(){
+    const ctx=adminContext();if(!ctx)return;
     try{
-      const rows=await gs('getSystemSettings',token);const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      const rows=await gs('getSystemSettings',ctx.token);if(!adminCurrent(ctx))return;const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
       settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
-    }catch(e){toast(e.message||e)}
+    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
   }
   async function saveSettings(){
     try{
