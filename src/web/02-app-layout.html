@@ -148,7 +148,7 @@
       </div>
       <div id="admin-workspace-settings" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-settings" hidden>
       <div class="card" style="margin-top:16px">
-        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" id="adminSaveSettingsBtn" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
         <div class="settings-grid">
           <div class="setting-group">
             <h4>ข้อมูลเว็บไซต์</h4>
@@ -170,7 +170,7 @@
             <h4>โลโก้ระบบ</h4>
             <div class="logo-preview"><img id="adminLogoPreview" src="" alt="preview"><div><b>อัปโหลดจากหน้าเว็บได้โดยตรง</b><div class="mini">PNG, JPG/JPEG หรือ WEBP ขนาดไม่เกิน 3 MB</div></div></div>
             <input class="input" type="file" id="logoFile" aria-label="เลือกไฟล์โลโก้" accept="image/png,image/jpeg,image/webp" style="width:100%">
-            <button class="btn" style="width:100%;margin-top:10px" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
+            <button class="btn" style="width:100%;margin-top:10px" id="adminUploadLogoBtn" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
             <div id="logoProgress" class="progress">กำลังอัปโหลด...</div>
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
             <h4>AI Reporter</h4>
