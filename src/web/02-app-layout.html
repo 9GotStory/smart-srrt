@@ -97,8 +97,14 @@
 
     <section id="page-reporter" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
-      <div class="help">ระบบสร้างโฟลเดอร์รายงานและ Google Docs Template ให้อัตโนมัติตั้งแต่ติดตั้งครั้งแรก เหลือเพียงใส่ Gemini API Key ผ่านหน้า Admin</div>
-      <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น" style="margin-top:16px"><table aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>รายละเอียด</th><th>รายงาน</th></tr></thead><tbody id="reportBody"></tbody></table></div>
+      <p class="srrt-reporter-guidance">รายงานที่ AI สร้างเป็น <strong>ร่างรายงานสอบสวนโรคเบื้องต้น</strong> ต้องตรวจทานโดยเจ้าหน้าที่ก่อนนำไปใช้ การประเมินความพร้อมเป็นเพียงคำแนะนำ ไม่ใช่การรับรองความถูกต้อง</p>
+      <div class="card srrt-reporter-filters" role="search" aria-label="ค้นหาและกรองรายงานสอบสวนโรคเบื้องต้น">
+        <label for="reportSearch">ค้นหาเหตุการณ์หรือพื้นที่<input class="input" type="search" id="reportSearch" placeholder="โรค เหตุการณ์ วันที่ หรือพื้นที่" autocomplete="off" oninput="renderReporterWorklist()"></label>
+        <label for="reportRegistryFilter">สถานะทะเบียนรายงาน<select class="input" id="reportRegistryFilter" onchange="renderReporterWorklist()"><option value="">ทุกสถานะ</option><option value="registered">มีรายงานในทะเบียน</option><option value="none">ยังไม่มีรายงาน</option><option value="unverified">ยังไม่ยืนยันสถานะ</option></select></label>
+        <button type="button" class="btn light" onclick="resetReporterFilters()">ล้างตัวกรอง</button>
+      </div>
+      <p id="reportResultSummary" class="srrt-reporter-result" role="status" aria-live="polite"></p>
+      <div class="table-wrap srrt-reporter-table-wrap" role="region" tabindex="0" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น" style="margin-top:14px"><table class="srrt-reporter-table" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ความพร้อมข้อมูล</th><th>ทะเบียนรายงาน</th><th>การดำเนินการหลัก</th></tr></thead><tbody id="reportBody"></tbody></table></div>
     </section>
 
     <section id="page-admin" class="section">

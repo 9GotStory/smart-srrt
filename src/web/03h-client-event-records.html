@@ -57,8 +57,52 @@
     renderTables();
   }
 
+
+  // UX-R1/P5-01: display/report filtering never dispatches a report RPC.
+  // Unverified/invalid registry state is not "no report".
+  function reportRegistryDisplay(eventId){
+    const state=reportSummaryState;
+    const s=state&&state.summaries&&state.summaries[eventId];
+    if(!state||state.status!=='ready'||!s)return{kind:'unverified',label:'ยังไม่ยืนยันสถานะทะเบียน'};
+    const count=Number(s.count),invalid=Number(s.invalidCount||0);
+    if(!Number.isSafeInteger(count)||count<0||!Number.isSafeInteger(invalid)||invalid<0||invalid)
+      return{kind:'unverified',label:'ทะเบียนรายงานต้องตรวจสอบ'};
+    return count>0
+      ?{kind:'registered',label:'มีรายงานในทะเบียน '+count+' ฉบับ'}
+      :{kind:'none',label:'ยังไม่มีรายงานในทะเบียน'}
+  }
+  function filteredReporterEntries(){
+    if(!currentUser)return [];
+    const search=String(el('reportSearch').value||'').trim().toLocaleLowerCase('th');
+    const filter=String(el('reportRegistryFilter').value||'');
+    return allData.map((r,i)=>({r,i})).filter(({r})=>{
+      if(filter&&reportRegistryDisplay(String(r.eventId||'')).kind!==filter)return false;
+      if(!search)return true;
+      const searchable=[r.col2,r.col5,r.col6,r.col10,r.col11,r.col12,r.col13,r.col29,
+        locationLabel(r)].map(value=>String(value||'')).join(' ').toLocaleLowerCase('th');
+      return searchable.includes(search)
+    })
+  }
+  function clearReporterFilters(){
+    for(const id of ['reportSearch','reportRegistryFilter'])el(id).value='';
+    el('reportResultSummary').textContent='';
+  }
+  function resetReporterFilters(){
+    for(const id of ['reportSearch','reportRegistryFilter'])el(id).value='';
+    renderReporterWorklist()
+  }
+  function renderReporterWorklist(){
+    if(!currentUser){el('reportBody').innerHTML='';clearReporterFilters();return}
+    const visible=filteredReporterEntries();
+    el('reportResultSummary').textContent='แสดง '+visible.length+' จาก '+allData.length+' เหตุการณ์';
+    el('reportBody').innerHTML=visible.map(({r})=>{
+      const reg=reportRegistryDisplay(String(r.eventId||''));
+      return`<tr class="srrt-reporter-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2||'-')}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="ความพร้อมข้อมูล">${reportReadinessBadge(r)||'<span class="mini">ยังไม่มีผลตรวจความพร้อม</span>'}</td><td data-label="ทะเบียนรายงาน" data-report-summary-event-id="${escapeHtml(r.eventId||'')}">${escapeHtml(reg.label)}</td><td data-label="การดำเนินการหลัก">${roleCanRecord()?reportActionButton(r.eventId||'',false):'<span class="mini">ไม่มีสิทธิ์สร้างหรือเปิดรายงาน</span>'}</td></tr>`
+    }).join('')||'<tr class="srrt-reporter-empty"><td colspan="6">'+(allData.length?'ไม่พบเหตุการณ์ที่ตรงกับตัวกรอง':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>'
+  }
+
   function renderTables(){
-    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();return}
+    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
     const visibleRecords=filteredRecordEntries();
@@ -74,7 +118,7 @@
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       return`<tr class="srrt-record-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2)}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="สถานะเหตุการณ์">${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td data-label="การตรวจสอบ">${escapeHtml(r.col15||'-')}</td><td data-label="เข้าเกณฑ์สอบสวน">${escapeHtml(r.col17||'-')}</td><td data-label="การสอบสวน">${escapeHtml(r.col24||'-')} ${escapeHtml(r.col26||'')}</td><td data-label="ความเสี่ยง">${riskBadge(r.col19)}</td><td data-label="ผู้รับผิดชอบ">${ownerLabel(r)}${ownerControl}</td><td data-label="ผู้บันทึก">${escapeHtml(r.col27||'-')}</td><td data-label="ไฟล์แนบ">${attachmentButton(r,i)}</td><td data-label="จัดการ">${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr class="srrt-record-empty"><td colspan="12">'+(allData.length?'ไม่พบรายการที่ตรงกับเงื่อนไขค้นหา':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>';
-    el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`${reportActionButton(r.eventId||'',false)} ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
+    renderReporterWorklist()
   }
 
 

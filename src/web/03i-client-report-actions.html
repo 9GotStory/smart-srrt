@@ -53,7 +53,12 @@
       if(request!==reportSummaryRequest||session!==token||!currentUser)return;
       reportSummaryState={status:'error',summaries:{}};
       toast('ยังตรวจสอบประวัติรายงานไม่ได้ กรุณาลองรีเฟรชก่อนสร้างรายงาน');
-    }finally{if(request===reportSummaryRequest&&session===token&&currentUser)refreshReportActionButtons()}
+     }finally{
+      if(request===reportSummaryRequest&&session===token&&currentUser){
+        if(typeof renderReporterWorklist==='function')renderReporterWorklist();
+        refreshReportActionButtons()
+      }
+    }
   }
   let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
   let reportCancelPendingJobId=null, reportCancelSubmitting=false;
