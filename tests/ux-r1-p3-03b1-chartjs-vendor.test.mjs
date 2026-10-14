@@ -69,7 +69,8 @@ test('P3-03B1 does not alter current Apps Script Native HTML or its Google Chart
   const html=fs.readFileSync(path.join(ROOT,'src/web/00-document-head.html'),'utf8');
   const native=fs.readFileSync(path.join(ROOT,'tools/native-sources.mjs'),'utf8');
   const workflow=fs.readFileSync(path.join(ROOT,'.github/workflows/tests.yml'),'utf8');
-  assert.match(html,/www\.gstatic\.com\/charts\/loader\.js/);
+  assert.doesNotMatch(html,/www\\.gstatic\\.com\\/charts\\/loader\\.js/);
+  assert.match(html,/SMART_SRRT_CHARTJS_VENDOR_INLINED_AT_BUILD/);
   assert.doesNotMatch(html,/<script[^>]+chart\.umd|chart\.js@/i);
   assert.match(native,/src\/web\/03d-client-dashboard\.html/);
   assert.doesNotMatch(native,/chartjs-vendor/);
