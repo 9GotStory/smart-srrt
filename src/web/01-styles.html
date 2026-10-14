@@ -577,6 +577,67 @@ body{background:#f4f7fb}
   .app #page-dashboard .srrt-dashboard-worklist-heading h3{font-size:16px}
 }
 
+/* UX-R1/P3-03A: optional accessible data view from the existing chart aggregates. */
+.app #page-dashboard .srrt-dashboard-chart-details{
+  margin-top:10px;
+  border-top:1px solid #e3ebf1;
+  padding-top:10px;
+}
+.app #page-dashboard .srrt-dashboard-chart-details summary{
+  cursor:pointer;
+  color:#155e75;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.7;
+  min-height:32px;
+}
+.app #page-dashboard .srrt-dashboard-chart-details summary:focus-visible{
+  outline:3px solid #0e7490;
+  outline-offset:3px;
+  border-radius:5px;
+}
+.app #page-dashboard .srrt-dashboard-chart-data{
+  margin-top:9px;
+  max-width:100%;
+  max-height:300px;
+  overflow:auto;
+  border:1px solid #d9e5ed;
+  border-radius:9px;
+  color:#405769;
+  font-size:12px;
+}
+.app #page-dashboard .srrt-dashboard-data-table{
+  width:100%;
+  min-width:220px;
+  border-collapse:collapse;
+  white-space:normal;
+  font-size:12px;
+}
+.app #page-dashboard .srrt-dashboard-data-table caption{
+  padding:9px 10px;
+  text-align:left;
+  font-weight:650;
+  color:#294c60;
+}
+.app #page-dashboard .srrt-dashboard-data-table th,
+.app #page-dashboard .srrt-dashboard-data-table td{
+  border-bottom:1px solid #e2ebf0;
+  padding:8px 10px;
+  color:#304c5f;
+  background:#fff;
+  vertical-align:top;
+  overflow-wrap:anywhere;
+}
+.app #page-dashboard .srrt-dashboard-data-table thead th{
+  font-weight:700;
+  background:#edf4f7;
+}
+.app #page-dashboard .srrt-dashboard-data-table td:last-child{
+  text-align:right;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}

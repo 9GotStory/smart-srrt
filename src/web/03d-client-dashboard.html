@@ -122,9 +122,43 @@
     draw('pieDisease','PieChart',[['กลุ่มโรค','จำนวน'],...countMap(r=>r.col5)],{pieHole:.42});
     draw('pieRisk','PieChart',[['ความเสี่ยง','จำนวน'],...countMap(r=>r.col19)],{pieHole:.42})
   }
+  // P3-03A: chart accessibility renders ONLY the exact aggregate series passed to the chart.
+  // No direct allData, private EventID, narratives or fresh RPC access is introduced here.
+  function renderDashboardChartData(id,arr){
+    const ids={barChart:'barChartTable',lineChart:'lineChartTable',
+      pieDisease:'pieDiseaseTable',pieRisk:'pieRiskTable'};
+    const target=el(ids[id]);
+    if(!target||typeof document==='undefined'||typeof document.createElement!=='function')return;
+    const rows=Array.isArray(arr)?arr.slice(1).filter(row=>Array.isArray(row)&&row.length>=2)
+      .map(row=>({label:String(row[0]??'-'),value:Number(row[1])}))
+      .filter(row=>Number.isFinite(row.value)&&row.value>=0):[];
+    if(!rows.length||!rows.some(row=>row.value>0)){
+      target.textContent='ไม่มีข้อมูลสำหรับกราฟนี้ในช่วงที่เลือก';
+      return;
+    }
+    const table=document.createElement('table'),caption=document.createElement('caption');
+    table.className='srrt-dashboard-data-table';
+    caption.textContent='ข้อมูลสรุปประกอบกราฟ';
+    table.appendChild(caption);
+    const thead=document.createElement('thead'),headRow=document.createElement('tr');
+    for(const label of [String(arr[0][0]||'รายการ'),String(arr[0][1]||'จำนวน')]){
+      const cell=document.createElement('th');cell.scope='col';cell.textContent=label;
+      headRow.appendChild(cell);
+    }
+    thead.appendChild(headRow);table.appendChild(thead);
+    const tbody=document.createElement('tbody');
+    rows.forEach(item=>{
+      const tr=document.createElement('tr'),name=document.createElement('th'),value=document.createElement('td');
+      name.scope='row';name.textContent=item.label;value.textContent=String(item.value);
+      tr.appendChild(name);tr.appendChild(value);tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    target.replaceChildren(table);
+  }
   function draw(id,type,arr,opt){
     const target=el(id);if(!target)return;
-    if(arr.length<=1){
+    renderDashboardChartData(id,arr);
+    if(arr.length<=1||!arr.slice(1).some(row=>Array.isArray(row)&&Number(row[1])>0)){
       // Do not turn an empty data series into a fictional chart category.
       if(typeof target.replaceChildren==='function'&&typeof document.createElement==='function'){
         const empty=document.createElement('p');empty.className='srrt-dashboard-chart-empty';
