@@ -1,5 +1,28 @@
 <script>
 
+  // P6-02: never accept private Admin results from a previous session.
+  let adminEpoch=0,areaReadSeq=0,userReadSeq=0;
+  const adminBusy={repair:false,archive:false,import:false};
+  function adminContext(){return roleCanManage()?{token,user:currentUser,epoch:adminEpoch}:null}
+  function adminCurrent(ctx){
+    return !!ctx&&!!ctx.token&&ctx.token===token&&ctx.user===currentUser&&
+      ctx.epoch===adminEpoch&&!!roleCanManage()
+  }
+  function resetAdminPrivate(){
+    ++adminEpoch;++areaReadSeq;++userReadSeq;
+    usersCache=[];areaAdminCache=[];masterAdminCache=[];masterTypePolicies=[];
+    if(typeof window!=='undefined')window._contentRows=[];
+    for(const id of ['userBody','areaBody','masterDataBody','contentAdminList','auditBody',
+      'installStatus','auditRetentionStatus','mdPolicyNote']){
+      const node=el(id);if(node)node.innerHTML=''
+    }
+    for(const key of settingFields){
+      const node=el('set_'+key);if(node)node.value=''
+    }
+    for(const id of ['uPassword','userSearch','areaSearch','masterSearch','cUrl','logoFile','areaImportFile']){
+      const node=el(id);if(node)node.value=''
+    }
+  }
   // UX-R1/P6-01: one authenticated in-page Admin workspace, no navigation RPCs.
   const adminWorkspaceKeys=["overview","settings","users","master","areas","content","audit"];
   function applyAdminWorkspace(key){
