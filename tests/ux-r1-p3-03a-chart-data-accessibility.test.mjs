@@ -10,7 +10,7 @@ const layout=read('src/web/02-app-layout.html');
 const css=read('src/styles/dashboard-ui.css');
 const head=read('src/web/00-document-head.html');
 const exportSource=read('src/web/03e-client-dashboard-export.html');
-const from=source.indexOf('  function renderDashboardChartData(id,arr){');
+const from=source.indexOf('  const dashboardChartInstances=new Map();');
 const to=source.indexOf('  function monthRows(){',from);
 assert.ok(from>0&&to>from,'render adapter/Google Charts boundaries are required');
 
