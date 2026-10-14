@@ -257,6 +257,57 @@ body{background:#f4f7fb}
 @media(prefers-reduced-motion:reduce){
   .app .nav button{transition:none}
 }
+/* UX-R1/P4-01: event worklist; one semantic table, mobile card presentation. */
+.app #page-records .srrt-record-filters{
+  display:grid;grid-template-columns:minmax(230px,2fr) repeat(2,minmax(150px,1fr)) auto;
+  gap:12px;align-items:end;margin-top:16px;padding:17px;
+}
+.app #page-records .srrt-record-filters label{
+  display:flex;flex-direction:column;gap:6px;min-width:0;
+  color:#344b5f;font-weight:650;font-size:12px;
+}
+.app #page-records .srrt-record-filters .input{
+  width:100%;min-height:44px;margin:0;background:#fff;
+}
+.app #page-records .srrt-record-result{
+  color:#475569;font-size:13px;line-height:1.6;margin:12px 2px 0;
+}
+.app #page-records .srrt-record-table td{
+  overflow-wrap:anywhere;vertical-align:top;
+}
+.app #page-records .srrt-record-table td:last-child .btn{
+  margin:2px 4px 2px 0;
+}
+@media(max-width:960px){
+  .app #page-records .srrt-record-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .app #page-records .srrt-record-filters{grid-template-columns:minmax(0,1fr);padding:14px}
+  .app #page-records .srrt-record-table-wrap{overflow:visible;border:0;background:transparent;box-shadow:none}
+  .app #page-records .srrt-record-table{display:block;width:100%;border-spacing:0}
+  .app #page-records .srrt-record-table thead{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+  .app #page-records .srrt-record-table tbody{display:grid;gap:12px}
+  .app #page-records .srrt-record-table tr{
+    display:block;background:#fff;border:1px solid #dce7ee;border-radius:14px;
+    overflow:hidden;box-shadow:0 2px 12px rgba(15,23,42,.04);
+  }
+  .app #page-records .srrt-record-table td{
+    display:grid;grid-template-columns:minmax(92px,34%) minmax(0,1fr);
+    gap:12px;padding:11px 13px;border-bottom:1px solid #edf1f5;
+    text-align:start;white-space:normal;min-width:0;
+  }
+  .app #page-records .srrt-record-table td:last-child{border-bottom:0}
+  .app #page-records .srrt-record-table td::before{
+    content:attr(data-label);font-weight:650;color:#40586c;font-size:12px;
+  }
+  .app #page-records .srrt-record-table .srrt-record-empty td{
+    display:block;padding:20px 14px;text-align:center;color:#475569;
+  }
+  .app #page-records .srrt-record-table .srrt-record-empty td::before{content:none}
+}
 
 /* UX-R1 Dashboard UI */
 /* UX-R1/P3-01: Dashboard view only, authored CSS. No hidden business state or JS. */

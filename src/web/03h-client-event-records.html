@@ -35,20 +35,55 @@
     try{toast(await gs('reopenEvent',token,eventId,String(reason).trim(),Number(revision||0)));await loadDashboard()}catch(e){toast(e.message||e)}
   }
 
+
+  // UX-R1/P4-01: filters operate on private, already authorized in-memory rows only.
+  function updateRecordFilterOptions(){
+    const box=el('recordDiseaseFilter'), selected=box.value;
+    const groups=[...new Set(allData.map(r=>String(r.col5||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+    box.innerHTML='<option value="">ทุกกลุ่มโรค</option>'+groups.map(name=>'<option value="'+escapeHtml(name)+'">'+escapeHtml(name)+'</option>').join('');
+    box.value=groups.includes(selected)?selected:'';
+  }
+  function filteredRecordEntries(){
+    if(!currentUser)return [];
+    const search=String(el('recordSearch').value||'').trim().toLocaleLowerCase('th');
+    const status=String(el('recordStatusFilter').value||'');
+    const disease=String(el('recordDiseaseFilter').value||'');
+    return allData.map((r,i)=>({r,i})).filter(({r})=>{
+      if(status&&String(r.recordStatus||'active').toLowerCase()!==status)return false;
+      if(disease&&String(r.col5||'').trim()!==disease)return false;
+      if(!search)return true;
+      const content=[r.col2,r.col5,r.col6,r.col10,r.col11,r.col12,r.col13,
+        r.col14,r.col27,r.col29,r.col30,r.ownerName,r.ownerOrg].map(v=>String(v||'')).join(' ').toLocaleLowerCase('th');
+      return content.includes(search);
+    })
+  }
+  function clearRecordFilters(){
+    for(const id of ['recordSearch','recordStatusFilter','recordDiseaseFilter'])el(id).value='';
+    el('recordDiseaseFilter').innerHTML='<option value="">ทุกกลุ่มโรค</option>';
+    el('recordResultSummary').textContent='';
+  }
+  function resetRecordFilters(){
+    for(const id of ['recordSearch','recordStatusFilter','recordDiseaseFilter'])el(id).value='';
+    renderTables();
+  }
+
   function renderTables(){
-    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';return}
+    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();return}
     const manage=roleCanRecord();
+    updateRecordFilterOptions();
+    const visibleRecords=filteredRecordEntries();
+    el('recordResultSummary').textContent='แสดง '+visibleRecords.length+' จาก '+allData.length+' เหตุการณ์';
     el('eventBody').innerHTML=allData.map((r,i)=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
       const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}${reportActionButton(r.eventId||'',true)} ${reportReadinessBadge(r)}`:'-'}</td></tr>`
     }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
-    el('recordBody').innerHTML=allData.map((r,i)=>{
+    el('recordBody').innerHTML=visibleRecords.map(({r,i})=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
       const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
-      return`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col27||'-')}</td><td>${attachmentButton(r,i)}</td><td>${eventLifecycleActions(r,i)}</td></tr>`
-    }).join('')||'<tr><td colspan="8">ไม่มีข้อมูล</td></tr>';
+      return`<tr class="srrt-record-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2)}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="สถานะเหตุการณ์">${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td data-label="การตรวจสอบ">${escapeHtml(r.col15||'-')}</td><td data-label="เข้าเกณฑ์สอบสวน">${escapeHtml(r.col17||'-')}</td><td data-label="การสอบสวน">${escapeHtml(r.col24||'-')} ${escapeHtml(r.col26||'')}</td><td data-label="ความเสี่ยง">${riskBadge(r.col19)}</td><td data-label="ผู้รับผิดชอบ">${ownerLabel(r)}${ownerControl}</td><td data-label="ผู้บันทึก">${escapeHtml(r.col27||'-')}</td><td data-label="ไฟล์แนบ">${attachmentButton(r,i)}</td><td data-label="จัดการ">${eventLifecycleActions(r,i)}</td></tr>`
+    }).join('')||'<tr class="srrt-record-empty"><td colspan="12">'+(allData.length?'ไม่พบรายการที่ตรงกับเงื่อนไขค้นหา':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>';
     el('reportBody').innerHTML=allData.map((r,i)=>`<tr><td>${escapeHtml(r.col2)}</td><td>${escapeHtml(r.col6||'-')}</td><td>${escapeHtml(locationLabel(r))}</td><td style="white-space:normal;max-width:420px">${escapeHtml(r.col14||'-')}</td><td>${manage?`${reportActionButton(r.eventId||'',false)} ${reportReadinessBadge(r)}`:'-'}</td></tr>`).join('')||'<tr><td colspan="5">ไม่มีข้อมูล</td></tr>'
   }
 

@@ -85,7 +85,14 @@
     <section id="page-records" class="section">
       <div class="panel-head"><h3><i class="fa-solid fa-pen-to-square"></i> บันทึก/แก้ไขข้อมูลเหตุการณ์</h3><button class="btn" onclick="openRecordForm('add')"><i class="fa-solid fa-plus"></i>เพิ่มข้อมูลใหม่</button></div>
       <div class="help">ข้อมูลพื้นที่รองรับถึงระดับชื่อหมู่บ้าน หมู่ที่ และรหัสหมู่บ้าน โดยผู้ดูแลสามารถเพิ่มหรือ Import รายชื่อหมู่บ้านจากหน้า Admin ได้</div>
-      <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์" style="margin-top:14px"><table aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+      <div class="card srrt-record-filters" role="search" aria-label="ค้นหาและกรองรายการเหตุการณ์">
+        <label for="recordSearch">ค้นหาเหตุการณ์หรือพื้นที่<input id="recordSearch" type="search" class="input" autocomplete="off" placeholder="โรค เหตุการณ์ หมู่บ้าน หรือผู้รับผิดชอบ" oninput="renderTables()"></label>
+        <label for="recordStatusFilter">สถานะเหตุการณ์<select id="recordStatusFilter" class="input" onchange="renderTables()"><option value="">ทุกสถานะ</option><option value="active">กำลังดำเนินการ</option><option value="closed">ปิดเหตุการณ์</option></select></label>
+        <label for="recordDiseaseFilter">กลุ่มโรค<select id="recordDiseaseFilter" class="input" onchange="renderTables()"><option value="">ทุกกลุ่มโรค</option></select></label>
+        <button type="button" class="btn light" onclick="resetRecordFilters()">ล้างตัวกรอง</button>
+      </div>
+      <p id="recordResultSummary" class="srrt-record-result" role="status" aria-live="polite"></p>
+      <div class="table-wrap srrt-record-table-wrap" role="region" tabindex="0" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์" style="margin-top:14px"><table class="srrt-record-table" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์สอบสวน</th><th>การสอบสวน</th><th>ความเสี่ยง</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
     </section>
 
     <section id="page-reporter" class="section">
