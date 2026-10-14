@@ -35,12 +35,18 @@
     const status=String(job&&job.status||'unknown');
     const terminal=reportJobTerminal(job);
     const note=el('reportJobStateNote');
-    note.textContent=reportJobStateDescription(job);
-    note.dataset.reportStatus=status;
+    if(note){
+      note.textContent=reportJobStateDescription(job);
+      if(note.dataset)note.dataset.reportStatus=status;
+      else if(typeof note.setAttribute==='function')note.setAttribute('data-report-status',status);
+    }
     const indicator=el('reportTaskIndicator');
-    indicator.setAttribute('aria-busy',String(!terminal));
-    indicator.dataset.reportStatus=status;
-    el('reportResultStatus').setAttribute('aria-busy',String(!terminal));
+    if(indicator){
+      if(typeof indicator.setAttribute==='function')indicator.setAttribute('aria-busy',String(!terminal));
+      if(indicator.dataset)indicator.dataset.reportStatus=status;
+    }
+    const summary=el('reportResultStatus');
+    if(summary&&typeof summary.setAttribute==='function')summary.setAttribute('aria-busy',String(!terminal));
   }
   function showReportGenerationStatus(message,url){
     el('reportResultStatus').textContent=String(message||'');
