@@ -17,6 +17,31 @@
     };
     return steps[job.stage]||'กำลังสร้างรายงานด้วย Gemini 3.8 Flash';
   }
+  // P5-02: presentation is descriptive only; G-32/G-33 remain the authority.
+  function reportJobStateDescription(job){
+    if(!job)return 'ยังไม่มีงานที่ยืนยันสถานะจากระบบ';
+    switch(job.status){
+      case 'completed':return 'ระบบรายงานว่าสร้างเอกสารแล้ว ต้องเปิดและตรวจทานร่างก่อนใช้งาน';
+      case 'cancelled':return 'ระบบยืนยันการยกเลิกงานแล้ว ไม่ใช่รายงานที่สร้างสำเร็จ';
+      case 'failed':return 'งานสร้างรายงานไม่สำเร็จ ตรวจสอบเหตุผลก่อนตัดสินใจดำเนินการใหม่';
+      case 'unknown':return 'ยังไม่สามารถยืนยันผลของงานได้ ห้ามสั่งสร้างรายงานซ้ำจนกว่าจะตรวจสอบสถานะ';
+      case 'cancel_requested':return 'ส่งคำขอยกเลิกแล้ว งานอาจยังดำเนินอยู่จนกว่าจะถึงจุดหยุดที่ปลอดภัย';
+      case 'finalizing':return 'ระบบกำลังบันทึกเอกสารและทะเบียนรายงาน อย่าเริ่มงานซ้ำ';
+      case 'queued':return 'งานอยู่ในคิวรอเริ่ม กรุณาตรวจสถานะต่อจากงานเดิม';
+      default:return 'งานกำลังดำเนินการ การปิดหน้าต่างไม่ได้ยกเลิกงาน และยังไม่ยืนยันว่าเอกสารเสร็จ';
+    }
+  }
+  function updateReportJobStatePresentation(job){
+    const status=String(job&&job.status||'unknown');
+    const terminal=reportJobTerminal(job);
+    const note=el('reportJobStateNote');
+    note.textContent=reportJobStateDescription(job);
+    note.dataset.reportStatus=status;
+    const indicator=el('reportTaskIndicator');
+    indicator.setAttribute('aria-busy',String(!terminal));
+    indicator.dataset.reportStatus=status;
+    el('reportResultStatus').setAttribute('aria-busy',String(!terminal));
+  }
   function showReportGenerationStatus(message,url){
     el('reportResultStatus').textContent=String(message||'');
     const link=el('reportResultLink');
@@ -48,6 +73,7 @@
     const detail=job.message ? ' · '+String(job.message) : '';
     const possibleDoc=job.status==='completed'?job.documentUrl:null;
     showReportGenerationStatus(label+detail,possibleDoc);
+    updateReportJobStatePresentation(job);
     const indicator=el('reportTaskIndicator');
     indicator.style.display='inline-flex';
     el('reportTaskStatus').textContent=label;
@@ -77,6 +103,7 @@
     if(!activeReportJob)return;
     openModal('reportResultModal');
     showReportGenerationStatus(reportStageLabel(activeReportJob)+(activeReportJob.message?' · '+activeReportJob.message:''),activeReportJob.status==='completed'?activeReportJob.documentUrl:null);
+    updateReportJobStatePresentation(activeReportJob);
   }
   function closeReportTaskModal(){
     closeModal('reportResultModal');

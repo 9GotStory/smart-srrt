@@ -71,11 +71,13 @@
   </div>
 </div>
 
-<div class="modal" id="reportHistoryModal"><div class="modal-box">
-  <div class="modal-title"><i class="fa-solid fa-file-lines"></i> รายงานของเหตุการณ์</div>
-  <div id="reportHistorySummary" class="help" style="margin-bottom:10px" aria-live="polite">กำลังโหลดรายงาน...</div>
+<div class="modal" id="reportHistoryModal" role="dialog" aria-modal="true" aria-labelledby="reportHistoryTitle"><div class="modal-box srrt-ai-dialog">
+  <div class="modal-title" id="reportHistoryTitle"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> ประวัติรายงานสอบสวนโรคเบื้องต้น</div>
+  <p id="reportHistoryEventContext" class="srrt-ai-event-context"></p>
+  <div id="reportHistorySummary" class="srrt-ai-summary" role="status" aria-live="polite">กำลังโหลดรายงาน...</div>
   <div id="reportHistoryWarning" class="help" role="status" aria-live="polite"></div>
   <div id="reportHistoryList" class="content-list"></div>
+  <p class="srrt-ai-caution"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> รายงาน AI เป็นเพียงฉบับร่าง ต้องตรวจทานโดยเจ้าหน้าที่ก่อนนำไปใช้งาน เอกสารในทะเบียนไม่ได้หมายถึงได้รับการอนุมัติแล้ว</p>
   <div class="help" style="margin-top:12px">แสดงเฉพาะรายงานที่ลงทะเบียนใน ReportRegistry ตั้งแต่ G-17 เป็นต้นไป เอกสารเก่าที่ไม่มีทะเบียนจะไม่ถูกคาดเดาความเชื่อมโยง รายการนี้ไม่ใช่ระบบอนุมัติหรือระบบเวอร์ชันเอกสาร</div>
   <div class="actions">
     <button class="btn green" type="button" id="reportHistoryNewBtn" style="display:none" onclick="requestNewReportFromHistory()"><i class="fa-solid fa-wand-magic-sparkles"></i> สร้างรายงานฉบับใหม่</button>
@@ -94,11 +96,12 @@
   </div>
 </div>
 
-<button type="button" class="report-task-indicator" id="reportTaskIndicator" onclick="reopenReportTask()" aria-live="polite" aria-label="ดูสถานะงานสร้างรายงาน" style="display:none"><i class="fa-solid fa-file-medical"></i> <span id="reportTaskStatus">กำลังสร้างรายงาน AI</span> <i class="fa-solid fa-chevron-up"></i></button>
+<button type="button" class="report-task-indicator" id="reportTaskIndicator" onclick="reopenReportTask()" aria-live="polite" aria-label="ดูสถานะงานสร้างรายงาน" aria-busy="false" style="display:none"><i class="fa-solid fa-file-medical"></i> <span id="reportTaskStatus">กำลังสร้างรายงาน AI</span> <i class="fa-solid fa-chevron-up"></i></button>
 
-<div class="modal" id="reportResultModal"><div class="modal-box modal-sm">
-  <div class="modal-title"><i class="fa-solid fa-file-medical"></i> ผลการสร้างรายงาน AI</div>
-  <div id="reportResultStatus" class="help" role="status" aria-live="polite">กำลังเตรียมสร้างรายงาน...</div>
+<div class="modal" id="reportResultModal" role="dialog" aria-modal="true" aria-labelledby="reportResultTitle"><div class="modal-box modal-sm srrt-ai-dialog">
+  <div class="modal-title" id="reportResultTitle"><i class="fa-solid fa-file-medical" aria-hidden="true"></i> สถานะงานสร้างรายงาน AI</div>
+  <div id="reportResultStatus" class="srrt-ai-summary" role="status" aria-live="polite">กำลังเตรียมสร้างรายงาน...</div>
+  <p id="reportJobStateNote" class="srrt-ai-state-note" role="status" aria-live="polite">โปรดรอสถานะงานจากระบบ ไม่เริ่มสร้างซ้ำระหว่างตรวจสอบ</p>
   <div class="mini" style="margin-top:12px">รายงาน AI เป็นฉบับร่าง ต้องตรวจทานก่อนใช้จริง หากคำขอหมดเวลาหรือไม่แน่ใจว่าสำเร็จหรือไม่ ให้ตรวจประวัติรายงานก่อนสั่งสร้างใหม่</div>
   <div class="actions">
     <button class="btn light" id="closeReportJobBtn" onclick="closeReportTaskModal()"><i class="fa-solid fa-window-minimize"></i> ปิดหน้าต่าง · ทำงานต่อ</button>
@@ -121,10 +124,11 @@
   </div>
 </div>
 
-<div class="modal" id="reportReadinessModal"><div class="modal-box modal-sm">
-  <div class="modal-title"><i class="fa-solid fa-wand-magic-sparkles"></i> ความพร้อมก่อนสร้างรายงาน AI</div>
+<div class="modal" id="reportReadinessModal" role="dialog" aria-modal="true" aria-labelledby="reportReadinessTitle"><div class="modal-box modal-sm srrt-ai-dialog">
+  <div class="modal-title" id="reportReadinessTitle"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> ตรวจความพร้อมก่อนสร้างรายงาน AI</div>
   <input type="hidden" id="pendingReportEventId">
-  <div id="reportReadinessSummary" class="help" style="margin-bottom:10px"></div>
+  <p id="reportReadinessEventContext" class="srrt-ai-event-context"></p>
+  <div id="reportReadinessSummary" class="srrt-ai-summary" role="status" aria-live="polite"></div>
   <div id="reportReadinessWarnings" class="content-list"></div>
   <div class="help" style="margin-top:10px">คำเตือนนี้เป็นเพียงการตรวจข้อมูลเบื้องต้น ไม่ใช่การรับรองความถูกต้องของรายงาน AI รายงานที่สร้างเป็นฉบับร่าง ต้องให้ผู้รับผิดชอบตรวจทานข้อเท็จจริง การประเมินความเสี่ยง และข้อเสนอ ก่อนนำไปใช้ โดยสามารถเลือกสร้างรายงานต่อแม้ข้อมูลยังไม่ครบได้</div>
   <div class="actions">
