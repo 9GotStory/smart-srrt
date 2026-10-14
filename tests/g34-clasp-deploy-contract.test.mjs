@@ -227,12 +227,12 @@ test('G-34 new Native24 backup gate does not weaken deploy approval, rollback ev
   assert.match(source,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
   assert.match(source,/expectedIndex = native24Partials\.map/);
   assert.match(source,/index\.trim\(\) !== expectedIndex/);
-  assert.match(source,/\"\\$CLASP\" list-deployments > \"\\$WORK\/deployments\.before\.txt\"/);
-  assert.match(source,/\"\\$CLASP\" list-versions > \"\\$WORK\/versions\.before\.txt\"/);
-  assert.match(source,/\"\\$CLASP\" show-file-status/);
+  assert.ok(source.includes('"$CLASP" list-deployments > "$WORK/deployments.before.txt"'));
+  assert.ok(source.includes('"$CLASP" list-versions > "$WORK/versions.before.txt"'));
+  assert.ok(source.includes('"$CLASP" show-file-status'));
   assert.match(source,/PREFLIGHT=PASS; remote source and deployment unchanged/);
   assert.match(source,/SMART_SRRT_CONFIRM_DEPLOY/);
-  assert.match(source,/\"\\$CLASP\" update-deployment \"\\$DEPLOYMENT_ID\"/);
+  assert.ok(source.includes('"$CLASP" update-deployment "$DEPLOYMENT_ID"'));
   assert.doesNotMatch(source,/create-deployment|create-project/);
   const staged=source.match(/const expected = \[([\s\S]*?)\]\.sort\(\);/);
   assert.ok(staged);
