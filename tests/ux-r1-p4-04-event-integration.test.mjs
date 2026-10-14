@@ -132,8 +132,8 @@ test('P4-04 session invalidation after upload RPC suppresses stale UI and refres
   let refreshes=0;
   h.ctx.loadDashboard=async()=>{refreshes++};
   const action=vm.runInContext('uploadAttachment()',h.ctx);
-  await Promise.resolve();await Promise.resolve();
-  assert.equal(h.calls.length,1);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.calls.length,1,'upload RPC should be dispatched before session invalidation');
   assert.equal(h.calls[0][0],'uploadEventAttachment');
   assert.equal(h.calls[0][1],'test-session');
   assert.equal(h.calls[0][2],'E-C');
