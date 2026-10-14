@@ -202,7 +202,7 @@
       <div id="admin-workspace-areas" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-areas" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" aria-label="เลือกไฟล์นำเข้าข้อมูลพื้นที่" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
-        <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน</div>
+        <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน — ระบบจะแสดงจำนวนแถวให้ยืนยันก่อนนำเข้าจริง</div>
         <input class="input" id="areaSearch" aria-label="ค้นหาข้อมูลพื้นที่ระดับหมู่บ้าน" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><table aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
       </div>
