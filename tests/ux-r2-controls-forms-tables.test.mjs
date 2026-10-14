@@ -25,7 +25,7 @@ test('R2-02B labels all 26 existing incident fields without rewriting their cont
 
 test('R2-02B preserves 7 data tables and adds semantic keyboard scroll regions',()=>{
   assert.equal((layout.match(/<table\b/g)||[]).length,7,'unexpected new/removal of table');
-  assert.equal((layout.match(/class="table-wrap" role="region" tabindex="0" aria-label=/g)||[]).length,7);
+  assert.equal((layout.match(/class="table-wrap(?: [^"]*)?" role="region" tabindex="0" aria-label=/g)||[]).length,7);
   const ids=['eventBody','recordBody','reportBody','masterDataBody','areaBody','userBody','auditBody'];
   for(const id of ids){
     const before=layout.slice(0,layout.indexOf('<tbody id="'+id+'"'));
