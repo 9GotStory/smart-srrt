@@ -1,16 +1,35 @@
-<div class="modal" id="loginModal"><div class="modal-box modal-sm">
-  <div class="modal-title"><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</div>
-  <label class="srrt-field-label" for="loginEmail">อีเมลเข้าสู่ระบบ</label>\n  <input class="input" id="loginEmail" placeholder="Email" style="width:100%;margin-bottom:10px">
-  <label class="srrt-field-label" for="loginPassword">รหัสผ่าน</label>\n  <input class="input" id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:10px">
-  <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button>
-  <button class="btn light" style="width:100%;margin-top:8px" onclick="closeModal('loginModal')">ปิด</button>
-  <hr><b>สมัครผู้ใช้ใหม่</b>
-  <label class="srrt-field-label" for="regName">ชื่อและนามสกุลผู้สมัคร</label>\n  <input class="input" id="regName" placeholder="ชื่อ-สกุล" style="width:100%;margin:8px 0">
-  <label class="srrt-field-label" for="regEmail">อีเมลผู้สมัคร</label>\n  <input class="input" id="regEmail" placeholder="Email" style="width:100%;margin-bottom:8px">
-  <label class="srrt-field-label" for="regPass">รหัสผ่านที่ใช้สมัคร</label>\n  <input class="input" id="regPass" type="password" placeholder="Password อย่างน้อย 4 ตัว" style="width:100%;margin-bottom:8px">
-  <label class="srrt-field-label" for="regOrg">หน่วยงานผู้สมัคร</label>\n  <input class="input" id="regOrg" placeholder="หน่วยงาน" style="width:100%;margin-bottom:8px">
-  <button class="btn secondary" style="width:100%" onclick="register()">สมัครใช้งาน</button>
-</div></div>
+<div class="modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="authDialogTitle" aria-describedby="authDialogIntro">
+  <div class="modal-box modal-sm srrt-auth-dialog">
+    <div class="modal-title" id="authDialogTitle"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> เข้าสู่ระบบ Smart SRRT</div>
+    <p id="authDialogIntro" class="srrt-auth-intro">เข้าสู่ระบบเพื่อบันทึกเหตุการณ์และใช้งานตามสิทธิ์ที่ได้รับ หากยังไม่มีบัญชี สามารถขอสมัครได้เมื่อหน่วยงานเปิดรับสมัคร</p>
+    <div class="srrt-auth-mode" aria-label="เลือกวิธีเข้าถึงระบบ">
+      <button type="button" id="authLoginModeBtn" class="srrt-auth-mode-btn" aria-pressed="true" onclick="setAuthMode('login')">เข้าสู่ระบบ</button>
+      <button type="button" id="authRegisterModeBtn" class="srrt-auth-mode-btn" aria-pressed="false" onclick="setAuthMode('register')" hidden>สมัครผู้ใช้ใหม่</button>
+    </div>
+    <form id="authLoginForm" class="srrt-auth-form" onsubmit="event.preventDefault();doLogin()" novalidate>
+      <label class="srrt-field-label" for="loginEmail">อีเมลเข้าสู่ระบบ</label>
+      <input class="input" id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email" placeholder="you@example.org" maxlength="254" required>
+      <label class="srrt-field-label" for="loginPassword">รหัสผ่าน</label>
+      <input class="input" id="loginPassword" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+      <p id="authLoginStatus" class="srrt-auth-status" role="status" aria-live="polite"></p>
+      <button type="submit" class="btn srrt-auth-submit" id="authLoginSubmitBtn">เข้าสู่ระบบ</button>
+    </form>
+    <form id="authRegisterForm" class="srrt-auth-form" onsubmit="event.preventDefault();register()" novalidate hidden>
+      <p class="srrt-auth-pending-note">ผู้สมัครจะได้รับบัญชีสถานะรออนุมัติ (<strong>pending</strong>) และยังเข้าสู่ระบบไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ</p>
+      <label class="srrt-field-label" for="regName">ชื่อและนามสกุลผู้สมัคร</label>
+      <input class="input" id="regName" name="name" autocomplete="name" maxlength="200" required placeholder="ชื่อ-นามสกุล">
+      <label class="srrt-field-label" for="regEmail">อีเมลผู้สมัคร</label>
+      <input class="input" id="regEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required placeholder="you@example.org">
+      <label class="srrt-field-label" for="regPass">รหัสผ่านที่ใช้สมัคร</label>
+      <input class="input" id="regPass" name="new-password" type="password" autocomplete="new-password" required placeholder="ตั้งรหัสผ่านตามนโยบายความปลอดภัย">
+      <label class="srrt-field-label" for="regOrg">หน่วยงานผู้สมัคร</label>
+      <input class="input" id="regOrg" name="organization" autocomplete="organization" maxlength="200" placeholder="หน่วยงาน (ไม่บังคับ)">
+      <p id="authRegisterStatus" class="srrt-auth-status" role="status" aria-live="polite"></p>
+      <button type="submit" class="btn secondary srrt-auth-submit" id="authRegisterSubmitBtn">ส่งคำขอสมัครใช้งาน</button>
+    </form>
+    <div class="srrt-auth-actions"><button type="button" id="authCloseBtn" class="btn light" onclick="closeAuthDialog()">กลับไปหน้า Dashboard</button></div>
+  </div>
+</div>
 
 <div class="modal" id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordTitle"><div class="modal-box srrt-record-dialog"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision">
   <p class="srrt-record-intro">บันทึกข้อมูลตามหัวข้อได้อย่างอิสระ ตรวจทานรายละเอียดก่อนบันทึก</p>
