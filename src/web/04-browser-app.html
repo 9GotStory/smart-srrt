@@ -23,6 +23,7 @@
     }
   }
   function resetAdminFormState(){
+    if(typeof clearAdminDialogFocusState==='function')clearAdminDialogFocusState();
     for(const kind of Object.keys(adminFormSavePending)){
       const buttonId=adminFormButtonIds[kind];
       const btn=buttonId?el(buttonId):null;

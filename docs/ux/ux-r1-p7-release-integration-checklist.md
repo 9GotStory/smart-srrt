@@ -57,7 +57,7 @@ All cases start **NOT RUN**. Use synthetic/approved test-only events; do not upl
 | Admin | Seven workspaces, Manager vs Admin/Staff, read races after Logout, saved form errors, explicit repair/import/archive confirmation | NOT RUN |
 | Public Library | Anonymous published-only cards, search/filter/empty state, safe external link opening and draft privacy | NOT RUN |
 | Authentication | Login error/rate limit, disabled registration, pending approval, Enter-submit, close/logout during in-flight request, password clear | NOT RUN |
-| All 14 dialogs | Title announced, Tab/Shift+Tab focus trap, Escape/Cancel, focus return, scroll lock, nesting and mobile clipping | NOT RUN |
+| All 14 dialogs | Title announced, Tab/Shift+Tab focus trap, Escape/Cancel, focus return, scroll lock, nesting and mobile clipping; P7-02 adds scoped source-level keyboard guards for Login + four Admin dialogs only | NOT RUN |
 | Browser Console | No uncaught errors, no secrets or health narrative in logs, actual Apps Script HTML Service behavior | NOT RUN |
 
 Only mark `PASS` when a real Browser check at the recorded TEST source version supports it. Use the detailed [P4 checklist](./ux-r1-p4-event-uat.md) and [P5 checklist](./ux-r1-p5-reporter-uat.md) as additional cases.
