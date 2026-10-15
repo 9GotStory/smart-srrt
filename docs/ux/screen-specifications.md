@@ -1,8 +1,8 @@
 # Smart SRRT — UX-R1 Screen Specifications & Acceptance Matrix
 
-> **Status:** PROPOSED / DESIGN ONLY. This is a map of all existing user-facing surfaces, not a declaration that the redesign has shipped.
-> **Verified source baseline:** `main@1c5e9e2bf0dbb04e6d82fff049d5b4a5123c74bf`, 11 October 2026.
-> **Existing screens:** five top-level `page-*` sections in `src/web/02-app-layout.html`; 13 modal containers in `src/web/03-modals.html`.
+> **Status:** UX design baseline; P2–P6 source implementation has been merged. P7 integration and live Browser acceptance are not yet complete. This document does not authorize TEST or Production deployment.
+> **Original design-review source:** `main@1c5e9e2bf0dbb04e6d82fff049d5b4a5123c74bf`, 11 October 2026. **P7 integration baseline:** `main@4a4f81b0716ba30bb55410c38e2884b6c79843d0`, 15 October 2026.
+> **Existing screens:** five top-level `page-*` sections in `src/web/02-app-layout.html`; **14** modal containers in `src/web/03-modals.html` (including lifecycle `eventActionModal`).
 > **Behavior authority:** `src/web/04-browser-app.html`, `docs/features.md`, current tests, server-side RBAC and G-33 UX rules.
 > See [Redesign plan](./ui-ux-redesign-plan.md) and [Design system](./design-system.md).
 
@@ -123,7 +123,7 @@ Groups are visual; do not change underlying `col2 ... col30` mapping or server s
 - **Closed-system banner:** current `closedBox` means recording/report actions closed while Dashboard remains readable; preserve precise communication.
 - **Status feedback:** accessible toast/status and action-specific inline error; failures must not be rendered as success.
 
-## 8. Existing modal inventory — all 13 surfaces
+## 8. Current modal inventory — all 14 surfaces
 
 The following IDs are observed in `src/web/03-modals.html`. All must be reviewed, even if the visible HTML is moved to shared components later.
 
@@ -133,6 +133,7 @@ The following IDs are observed in `src/web/03-modals.html`. All must be reviewed
 | `recordModal` | Add/edit event; multi-section field navigation and unsaved changes |
 | `ownerModal` | Assign/reassign owner; only eligible active users and expectedRevision |
 | `attachmentModal` | Add/view/remove files, upload progress, document privacy |
+| `eventActionModal` | Explicit event close/reopen/void confirmation, reason and expectedRevision; never mutate on dismissal |
 | `reportHistoryModal` | Read-only history, latest report and optional explicit new report path |
 | `reportNewConfirmModal` | High-friction deliberate new report confirmation; no silent recreation |
 | `reportResultModal` | Job progress, minimize/restore, cancel request, result link only after verified registration |
@@ -143,7 +144,7 @@ The following IDs are observed in `src/web/03-modals.html`. All must be reviewed
 | `areaModal` | Village/area fields, code and status |
 | `contentModal` | Announcement/guideline categories, description, URL, draft/published |
 
-**Common dialog acceptance:** semantic dialog title, keyboard entry, focus trap and return, Escape behavior defined per pending operation, nested dialog z-index test, no overlay scroll-through, no auto-mutating close, readable mobile height/scroll region and confirmation copy matched to server action. Include floating `reportTaskIndicator` as a **separate global control** (not a fourteenth modal).
+**Common dialog acceptance (source semantics vs browser verification):** semantic dialog title, keyboard entry, focus trap and return, Escape behavior defined per pending operation, nested dialog z-index test, no overlay scroll-through, no auto-mutating close, readable mobile height/scroll region and confirmation copy matched to server action. Named dialog markup is necessary, **not evidence that focus trap, Escape, contrast or screen-reader behaviors PASS**; these remain Browser UAT gates. Include floating `reportTaskIndicator` as a **separate global control** (not a fourteenth modal).
 
 ## 9. Proposed UI component/test coverage mapping
 

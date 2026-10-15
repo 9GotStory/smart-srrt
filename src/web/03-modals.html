@@ -156,50 +156,50 @@
   </div>
 </div></div>
 
-<div class="modal" id="userModal"><div class="modal-box modal-sm">
-  <div class="modal-title">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
-  <label>ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
-  <label>Role</label><select class="input" id="uRole" style="width:100%;margin-bottom:8px"><option>Super Admin</option><option>Manager</option><option>Admin</option><option>Staff</option></select>
-  <label>Status</label><select class="input" id="uStatus" style="width:100%;margin-bottom:8px"><option>active</option><option>pending</option><option>blocked</option></select>
-  <label>หน่วยงาน</label><input class="input" id="uOrg" style="width:100%;margin-bottom:8px">
-  <label>ตำบล</label><input class="input" id="uTambon" style="width:100%;margin-bottom:8px">
-  <label>อำเภอ</label><input class="input" id="uAmphoe" style="width:100%;margin-bottom:8px">
-  <label>จังหวัด</label><input class="input" id="uProvince" style="width:100%;margin-bottom:8px">
-  <label>เปลี่ยนรหัสผ่านใหม่ (ไม่กรอก = ไม่เปลี่ยน)</label><input class="input" id="uPassword" type="password" style="width:100%;margin-bottom:8px">
+<div class="modal" id="userModal" role="dialog" aria-modal="true" aria-labelledby="adminUserTitle"><div class="modal-box modal-sm">
+  <div class="modal-title" id="adminUserTitle">แก้ไขผู้ใช้งาน</div><input type="hidden" id="uId">
+  <label for="uName">ชื่อ</label><input class="input" id="uName" style="width:100%;margin-bottom:8px">
+  <label for="uRole">Role</label><select class="input" id="uRole" style="width:100%;margin-bottom:8px"><option>Super Admin</option><option>Manager</option><option>Admin</option><option>Staff</option></select>
+  <label for="uStatus">Status</label><select class="input" id="uStatus" style="width:100%;margin-bottom:8px"><option>active</option><option>pending</option><option>blocked</option></select>
+  <label for="uOrg">หน่วยงาน</label><input class="input" id="uOrg" style="width:100%;margin-bottom:8px">
+  <label for="uTambon">ตำบล</label><input class="input" id="uTambon" style="width:100%;margin-bottom:8px">
+  <label for="uAmphoe">อำเภอ</label><input class="input" id="uAmphoe" style="width:100%;margin-bottom:8px">
+  <label for="uProvince">จังหวัด</label><input class="input" id="uProvince" style="width:100%;margin-bottom:8px">
+  <label for="uPassword">เปลี่ยนรหัสผ่านใหม่ (ไม่กรอก = ไม่เปลี่ยน)</label><input class="input" id="uPassword" type="password" style="width:100%;margin-bottom:8px">
   <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" id="adminSaveUserBtn" onclick="saveUser()">บันทึกผู้ใช้</button></div>
 </div></div>
 
-<div class="modal" id="masterDataModal"><div class="modal-box modal-sm">
-  <div class="modal-title"><i class="fa-solid fa-list-check"></i> ข้อมูลมาตรฐาน</div>
+<div class="modal" id="masterDataModal" role="dialog" aria-modal="true" aria-labelledby="adminMasterTitle"><div class="modal-box modal-sm">
+  <div class="modal-title" id="adminMasterTitle"><i class="fa-solid fa-list-check"></i> ข้อมูลมาตรฐาน</div>
   <input type="hidden" id="mdMode"><input type="hidden" id="mdOriginalType"><input type="hidden" id="mdOriginalValue">
-  <label>Type</label><select class="input" id="mdType" style="width:100%;margin-bottom:8px"></select>
-  <label>Value</label><input class="input" id="mdValue" maxlength="120" style="width:100%;margin-bottom:8px">
-  <label>Label</label><input class="input" id="mdLabel" maxlength="160" style="width:100%;margin-bottom:8px">
-  <label>ลำดับ</label><input class="input" id="mdSort" type="number" min="1" max="9999" step="1" style="width:100%;margin-bottom:8px">
-  <label>สถานะ</label><select class="input" id="mdActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+  <label for="mdType">Type</label><select class="input" id="mdType" style="width:100%;margin-bottom:8px"></select>
+  <label for="mdValue">Value</label><input class="input" id="mdValue" maxlength="120" style="width:100%;margin-bottom:8px">
+  <label for="mdLabel">Label</label><input class="input" id="mdLabel" maxlength="160" style="width:100%;margin-bottom:8px">
+  <label for="mdSort">ลำดับ</label><input class="input" id="mdSort" type="number" min="1" max="9999" step="1" style="width:100%;margin-bottom:8px">
+  <label for="mdActive">สถานะ</label><select class="input" id="mdActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
   <div id="mdPolicyNote" class="help" style="margin-bottom:8px"></div>
   <div class="actions"><button class="btn light" onclick="closeModal('masterDataModal')">ปิด</button><button class="btn green" id="adminSaveMasterBtn" onclick="saveMasterDataAdminItem()">บันทึก</button></div>
 </div></div>
 
-<div class="modal" id="areaModal"><div class="modal-box modal-sm">
-  <div class="modal-title">ข้อมูลหมู่บ้าน</div><input type="hidden" id="aId">
-  <label>จังหวัด</label><input class="input" id="aProvince" style="width:100%;margin-bottom:8px">
-  <label>อำเภอ</label><input class="input" id="aAmphoe" style="width:100%;margin-bottom:8px">
-  <label>ตำบล</label><input class="input" id="aTambon" style="width:100%;margin-bottom:8px">
-  <label>หมู่ที่</label><input class="input" id="aMoo" style="width:100%;margin-bottom:8px">
-  <label>ชื่อหมู่บ้าน</label><input class="input" id="aVillage" style="width:100%;margin-bottom:8px">
-  <label>รหัสหมู่บ้าน</label><input class="input" id="aVillageCode" style="width:100%;margin-bottom:8px">
-  <label>สถานะ</label><select class="input" id="aActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
+<div class="modal" id="areaModal" role="dialog" aria-modal="true" aria-labelledby="adminAreaTitle"><div class="modal-box modal-sm">
+  <div class="modal-title" id="adminAreaTitle">ข้อมูลหมู่บ้าน</div><input type="hidden" id="aId">
+  <label for="aProvince">จังหวัด</label><input class="input" id="aProvince" style="width:100%;margin-bottom:8px">
+  <label for="aAmphoe">อำเภอ</label><input class="input" id="aAmphoe" style="width:100%;margin-bottom:8px">
+  <label for="aTambon">ตำบล</label><input class="input" id="aTambon" style="width:100%;margin-bottom:8px">
+  <label for="aMoo">หมู่ที่</label><input class="input" id="aMoo" style="width:100%;margin-bottom:8px">
+  <label for="aVillage">ชื่อหมู่บ้าน</label><input class="input" id="aVillage" style="width:100%;margin-bottom:8px">
+  <label for="aVillageCode">รหัสหมู่บ้าน</label><input class="input" id="aVillageCode" style="width:100%;margin-bottom:8px">
+  <label for="aActive">สถานะ</label><select class="input" id="aActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
   <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" id="adminSaveAreaBtn" onclick="saveAreaItem()">บันทึก</button></div>
 </div></div>
 
-<div class="modal" id="contentModal"><div class="modal-box modal-sm">
-  <div class="modal-title">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
-  <label>หมวดหมู่</label><select class="input" id="cCategory" style="width:100%;margin-bottom:8px"></select>
-  <label>หัวข้อ</label><input class="input" id="cTitle" style="width:100%;margin-bottom:8px">
-  <label>รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
-  <label>URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
-  <label>Status</label><select class="input" id="cStatus" style="width:100%;margin-bottom:8px"><option>published</option><option>draft</option></select>
+<div class="modal" id="contentModal" role="dialog" aria-modal="true" aria-labelledby="adminContentTitle"><div class="modal-box modal-sm">
+  <div class="modal-title" id="adminContentTitle">จัดการประกาศ/คู่มือ</div><input type="hidden" id="cId">
+  <label for="cCategory">หมวดหมู่</label><select class="input" id="cCategory" style="width:100%;margin-bottom:8px"></select>
+  <label for="cTitle">หัวข้อ</label><input class="input" id="cTitle" style="width:100%;margin-bottom:8px">
+  <label for="cDesc">รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
+  <label for="cUrl">URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
+  <label for="cStatus">Status</label><select class="input" id="cStatus" style="width:100%;margin-bottom:8px"><option>published</option><option>draft</option></select>
   <div class="actions"><button class="btn light" onclick="closeModal('contentModal')">ปิด</button><button class="btn green" id="adminSaveContentBtn" onclick="saveContentItem()">บันทึก</button></div>
 </div></div>
 
