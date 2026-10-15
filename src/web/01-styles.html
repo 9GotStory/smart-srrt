@@ -589,6 +589,29 @@ body{background:#f4f7fb}
   #loginModal .srrt-auth-mode{gap:4px}
   #loginModal .srrt-auth-mode-btn{padding:9px;font-size:12px}
 }
+/* UX-R1/P7-02: keyboard focus and scroll bounds for four Admin edit dialogs and Auth. */
+#loginModal .modal-box,
+#userModal .modal-box,
+#masterDataModal .modal-box,
+#areaModal .modal-box,
+#contentModal .modal-box{
+  max-height:min(92dvh,850px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+#userModal :is(button,input,select,textarea):focus-visible,
+#masterDataModal :is(button,input,select,textarea):focus-visible,
+#areaModal :is(button,input,select,textarea):focus-visible,
+#contentModal :is(button,input,select,textarea):focus-visible{
+  outline:3px solid #0ea5e9;
+  outline-offset:2px;
+}
+@media(max-width:560px){
+  #userModal .modal-box,#masterDataModal .modal-box,
+  #areaModal .modal-box,#contentModal .modal-box{padding:16px}
+  #userModal .actions .btn,#masterDataModal .actions .btn,
+  #areaModal .actions .btn,#contentModal .actions .btn{min-height:44px}
+}
 
 /* UX-R1 Dashboard UI */
 /* UX-R1/P3-01: Dashboard view only, authored CSS. No hidden business state or JS. */
