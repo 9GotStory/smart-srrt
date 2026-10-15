@@ -39,14 +39,17 @@ function fixture(){
   return {context,el};
 }
 
-test('P4-02 one dialog, five anchored sections and accessible form controls',()=>{
+test('P4-02 one dialog, five accessible tabs and preserved Record controls',()=>{
   assert.match(markup,/id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordTitle"/);
   assert.match(markup,/id="recordForm" class="srrt-record-form"/);
   assert.match(markup,/onclick="cancelRecordForm\(\)"/);
   assert.match(markup,/id="recordDraftStatus"[^>]*role="status"/);
   assert.equal((markup.match(/id="recordForm"/g)||[]).length,1);
-  for(const name of ['receive','place','verify','investigate','review'])
-    assert.ok(markup.includes(`<button type="button" onclick="jumpRecordGroup('${name}')" aria-controls="record-group-${name}">`),name);
+  assert.match(markup,/class="srrt-record-tabs" role="tablist"/);
+  for(const name of ['receive','place','verify','investigate','review']){
+    assert.ok(markup.includes(`role="tab" id="record-tab-${name}" aria-controls="record-group-${name}"`),name);
+    assert.ok(markup.includes(`onclick="selectRecordTab('${name}')"`),name);
+  }
   assert.match(css,/#recordModal \.srrt-record-section/);
 });
 

@@ -33,9 +33,13 @@
 
 <div class="modal" id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordTitle"><div class="modal-box srrt-record-dialog"><div class="modal-title" id="recordTitle">บันทึกข้อมูล</div><input type="hidden" id="formMode"><input type="hidden" id="editEventId"><input type="hidden" id="editRevision">
   <p class="srrt-record-intro">บันทึกข้อมูลตามหัวข้อได้อย่างอิสระ ตรวจทานรายละเอียดก่อนบันทึก</p>
-  <nav class="srrt-record-anchor-nav" aria-label="ไปยังหัวข้อแบบบันทึก">
-    <button type="button" onclick="jumpRecordGroup('receive')" aria-controls="record-group-receive">รับแจ้ง</button><button type="button" onclick="jumpRecordGroup('place')" aria-controls="record-group-place">สถานที่</button><button type="button" onclick="jumpRecordGroup('verify')" aria-controls="record-group-verify">ตรวจสอบ</button><button type="button" onclick="jumpRecordGroup('investigate')" aria-controls="record-group-investigate">สอบสวน</button><button type="button" onclick="jumpRecordGroup('review')" aria-controls="record-group-review">ตรวจทาน</button>
-  </nav>
+  <div class="srrt-record-tabs" role="tablist" aria-label="หัวข้อข้อมูลเหตุการณ์" onkeydown="handleRecordTabKeys(event)">
+    <button type="button" role="tab" id="record-tab-receive" aria-controls="record-group-receive" aria-selected="true" tabindex="0" onclick="selectRecordTab('receive')">รับแจ้ง</button>
+    <button type="button" role="tab" id="record-tab-place" aria-controls="record-group-place" aria-selected="false" tabindex="-1" onclick="selectRecordTab('place')">สถานที่</button>
+    <button type="button" role="tab" id="record-tab-verify" aria-controls="record-group-verify" aria-selected="false" tabindex="-1" onclick="selectRecordTab('verify')">ตรวจสอบ</button>
+    <button type="button" role="tab" id="record-tab-investigate" aria-controls="record-group-investigate" aria-selected="false" tabindex="-1" onclick="selectRecordTab('investigate')">สอบสวน</button>
+    <button type="button" role="tab" id="record-tab-review" aria-controls="record-group-review" aria-selected="false" tabindex="-1" onclick="selectRecordTab('review')">ตรวจทาน</button>
+  </div>
   <div id="recordForm" class="srrt-record-form" oninput="updateRecordDraftState()" onchange="updateRecordDraftState()"></div>
   <div class="actions srrt-record-actions"><span id="recordDraftStatus" class="srrt-record-draft-status" role="status" aria-live="polite"></span><button type="button" class="btn light" id="cancelRecordBtn" onclick="cancelRecordForm()">ยกเลิก</button><button type="button" class="btn green" id="saveRecordBtn" onclick="saveRecord()"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> บันทึก</button></div>
 </div></div>
