@@ -105,6 +105,12 @@ test('P7-02 nested specialized confirmation wins keyboard events over underlying
   // Specialized Event action handler consumes Escape, not our Admin handler.
   assert.equal(h.press('Escape'),true);
   assert.equal(h.node('areaModal').classList.contains('open'),true);
+  // Preserve specialized handling even when its markup is earlier in DOM order.
+  h.node('eventActionModal').classList.add('open');
+  h.setStack('eventActionModal','areaModal');
+  assert.equal(h.press('Tab'),false);
+  assert.equal(h.press('Escape'),true);
+  assert.equal(h.node('areaModal').classList.contains('open'),true);
   assert.equal(h.calls.length,0);
 });
 test('P7-02 Login Escape routes through auth cancellation and erases secrets',()=>{
