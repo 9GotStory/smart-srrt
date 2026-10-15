@@ -235,7 +235,23 @@
       </div>
     </section>
 
-    <section id="page-library" class="section"><div class="panel-head"><h3><i class="fa-solid fa-book-medical"></i> ประกาศ แนวทาง และคู่มือ</h3></div><div id="libraryList" class="content-list"></div></section>
+    <section id="page-library" class="section">
+      <header class="srrt-library-heading">
+        <h2><i class="fa-solid fa-book-medical" aria-hidden="true"></i> ประกาศ แนวทาง และคู่มือ</h2>
+        <p>ค้นหาประกาศ เอกสารอ้างอิง และแนวทางปฏิบัติที่เผยแพร่สำหรับบุคลากรและประชาชน</p>
+      </header>
+      <div class="srrt-library-filters" role="search" aria-label="ค้นหาประกาศและคู่มือ">
+        <label for="librarySearch">ค้นหาเอกสาร
+          <input class="input" id="librarySearch" type="search" placeholder="ชื่อเอกสาร รายละเอียด หรือหมวดหมู่" autocomplete="off" oninput="renderLibrary()">
+        </label>
+        <label for="libraryCategory">หมวดหมู่
+          <select class="input" id="libraryCategory" onchange="renderLibrary()"><option value="">ทุกหมวดหมู่</option></select>
+        </label>
+        <button class="btn light" type="button" id="libraryResetBtn" onclick="resetLibraryFilters()">ล้างตัวกรอง</button>
+      </div>
+      <p id="libraryResults" class="srrt-library-result" role="status" aria-live="polite"></p>
+      <div id="libraryList" class="srrt-library-grid" aria-label="รายการประกาศและคู่มือ"></div>
+    </section>
   </main>
 </div>
 

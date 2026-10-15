@@ -403,7 +403,63 @@
 
   async function loadAudit(){
     const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
-  function renderLibrary(){el('libraryList').innerHTML=(currentContent||[]).map(c=>`<div class="content-item"><h4><i class="fa-solid fa-file-lines"></i> ${escapeHtml(c.title)}</h4><p>${escapeHtml(c.category)}<br>${escapeHtml(c.description||'')}</p>${c.url?`<a href="${escapeHtml(c.url)}" target="_blank">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square"></i></a>`:''}</div>`).join('')||'<div class="card">ยังไม่มีประกาศ/คู่มือที่เผยแพร่</div>'}
+
+  // P6-04: getAppBoot.content comes from the server's published-only list.
+  // Defensively exclude explicitly draft records without requiring a new API.
+  function publicLibraryItems(){
+    return (Array.isArray(currentContent)?currentContent:[]).filter(c=>c&&
+      String(c.status==null?'published':c.status).trim().toLowerCase()==='published')
+  }
+  function safeLibraryUrl(raw){
+    const input=String(raw||'').trim();
+    if(!input)return '';
+    try{
+      const parsed=new URL(input);
+      if(!['https:','http:'].includes(parsed.protocol)||!parsed.hostname||
+         parsed.username||parsed.password)return '';
+      return parsed.href
+    }catch(_){return ''}
+  }
+  function resetLibraryFilters(){
+    el('librarySearch').value='';
+    el('libraryCategory').value='';
+    renderLibrary()
+  }
+  function renderLibrary(){
+    const published=publicLibraryItems(),categorySelect=el('libraryCategory');
+    const categories=[...new Set(published.map(c=>String(c.category||'').trim()).filter(Boolean))]
+      .sort((a,b)=>a.localeCompare(b,'th'));
+    const selected=String(categorySelect.value||'');
+    const selectedAvailable=selected&&categories.includes(selected);
+    categorySelect.innerHTML='<option value="">ทุกหมวดหมู่</option>'+
+      categories.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+    categorySelect.value=selectedAvailable?selected:'';
+    const q=String(el('librarySearch').value||'').trim().toLocaleLowerCase('th');
+    const filter=categorySelect.value;
+    const visible=published.filter(item=>{
+      if(filter&&String(item.category||'').trim()!==filter)return false;
+      if(!q)return true;
+      const haystack=[item.title,item.description,item.category]
+        .map(value=>String(value||'')).join(' ').toLocaleLowerCase('th');
+      return haystack.includes(q)
+    });
+    el('libraryResults').textContent='แสดง '+visible.length+' จาก '+published.length+' รายการที่เผยแพร่';
+    const empty=!published.length?'ยังไม่มีประกาศหรือคู่มือที่เผยแพร่':
+      'ไม่พบเอกสารที่ตรงกับคำค้นหาหรือหมวดหมู่ ลองปรับตัวกรองอีกครั้ง';
+    el('libraryList').innerHTML=visible.map(item=>{
+      const title=String(item.title||'เอกสารไม่มีชื่อ');
+      const url=safeLibraryUrl(item.url);
+      const link=url
+        ?`<a class="srrt-library-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="เปิดเอกสารภายนอก: ${escapeHtml(title)}">เปิดเอกสาร <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`
+        :'<span class="srrt-library-no-link">ไม่มีลิงก์เอกสารที่เปิดได้</span>';
+      return `<article class="srrt-library-card">
+        <div class="srrt-library-card-category"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeHtml(item.category||'ไม่ระบุหมวดหมู่')}</div>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(item.description||'ไม่มีรายละเอียดเพิ่มเติม')}</p>
+        <div class="srrt-library-card-footer">${link}</div>
+      </article>`
+    }).join('')||`<div class="srrt-library-empty" role="status"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><p>${empty}</p></div>`
+  }
 
   boot();
 </script>
