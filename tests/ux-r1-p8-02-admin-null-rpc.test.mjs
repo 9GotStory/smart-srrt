@@ -28,7 +28,7 @@ function fixture(){
   const context=vm.createContext({
     document:{readyState:'loading',getElementById:el,addEventListener(){},querySelectorAll(){return[]},querySelector(){return null}},
     localStorage:{getItem(){return null},setItem(){},removeItem(){}},
-    google:{script:{run:{}}},console,setTimeout(){},clearTimeout(){},confirm:()=>false
+    google:{script:{run:{}}},window:{_contentRows:[]},console,setTimeout(){},clearTimeout(){},confirm:()=>false
   });
   for(const {path,code} of readOrderedClientScripts()){
     new vm.Script(path==='src/web/04-browser-app.html'
