@@ -155,6 +155,18 @@
   function recordDraftChanged(){
     return recordDraftValues()!==recordDraftSnapshot;
   }
+  // P7-04: GAS HtmlService has <base target="_top">; fragment <a> links
+  // escape the userCodeAppPanel iframe. Scroll inside this open modal only.
+  function jumpRecordGroup(group){
+    if(!['receive','place','verify','investigate','review'].includes(group))return;
+    const modal=el('recordModal'),section=el('record-group-'+group);
+    if(!modal||!modal.classList.contains('open')||!section||!modal.contains(section))return;
+    const modalTop=modal.getBoundingClientRect().top;
+    const sectionTop=section.getBoundingClientRect().top;
+    modal.scrollTop=Math.max(0,modal.scrollTop+sectionTop-modalTop-16);
+    const heading=el('record-heading-'+group);
+    if(heading&&typeof heading.focus==='function')heading.focus({preventScroll:true});
+  }
   function updateRecordDraftState(){
     const status=el('recordDraftStatus');
     if(status)status.textContent=recordDraftChanged()?'มีข้อมูลแก้ไขที่ยังไม่บันทึก':'ยังไม่มีการเปลี่ยนแปลง';
@@ -190,9 +202,9 @@
     if(keys.length!==fields.length||new Set(keys).size!==fields.length||
        keys.some(key=>!controlByKey.has(key)))throw Error('P4-02 record field group mapping mismatch');
     el('recordForm').innerHTML=recordFieldGroups.map(group=>
-      `<section class="srrt-record-section" id="record-group-${group.id}" aria-labelledby="record-heading-${group.id}"><h3 id="record-heading-${group.id}">${group.title}</h3><div class="form-grid">${group.keys.map(key=>controlByKey.get(key)).join('')}</div></section>`
+      `<section class="srrt-record-section" id="record-group-${group.id}" aria-labelledby="record-heading-${group.id}"><h3 id="record-heading-${group.id}" tabindex="-1" aria-labelledby="record-heading-${group.id}">${group.title}</h3><div class="form-grid">${group.keys.map(key=>controlByKey.get(key)).join('')}</div></section>`
     ).join('')+
-      '<section class="srrt-record-section srrt-record-review" id="record-group-review" aria-labelledby="record-heading-review"><h3 id="record-heading-review">5. ตรวจทานก่อนบันทึก</h3><p id="recordReviewSummary" class="help"></p></section>';
+      '<section class="srrt-record-section srrt-record-review" id="record-group-review" aria-labelledby="record-heading-review"><h3 id="record-heading-review" tabindex="-1" aria-labelledby="record-heading-review">5. ตรวจทานก่อนบันทึก</h3><p id="recordReviewSummary" class="help"></p></section>';
     refreshRecordAreaOptions();
     recordDraftSnapshot=recordDraftValues();
     updateRecordDraftState();

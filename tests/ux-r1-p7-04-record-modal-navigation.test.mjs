@@ -59,7 +59,7 @@ test('P7-04 record section actions are buttons, not iframe-escaping href fragmen
   assert.match(head,/<base target="_top">/);
   assert.doesNotMatch(markup,/<a\s+href="#record-group-/);
   for(const group of groups){
-    assert.match(markup,new RegExp('<button type="button" onclick="jumpRecordGroup\\(\\\''+group+'\\\'\\)"[^>]*>'));
+    assert.ok(markup.includes(`<button type="button" onclick="jumpRecordGroup('${group}')" aria-controls="record-group-${group}">`),group);
     assert.match(source,new RegExp('id="record-group-'+group+'"'));
   }
   assert.equal((markup.match(/onclick="jumpRecordGroup\('/g)||[]).length,5);
