@@ -52,7 +52,7 @@ All cases start **NOT RUN**. Use synthetic/approved test-only events; do not upl
 | Records | EventID/Revision, 26 fields in 5 anchored sections, legacy values, stale revision/save errors and unsaved cancel | NOT RUN |
 | Lifecycle | Close/reopen/void with deliberate reason, cancel, RBAC, closed-state actions, new Revision | NOT RUN |
 | Owner + files | Correct event/Revision, active assignees, upload max 5MB, download/remove, stale response after Logout | NOT RUN |
-| AI Reporter | Registry count verified vs unknown, one contextual G-33 button, readiness advisory, explicit history-only regeneration/consent | NOT RUN |
+| AI Reporter | ReportRegistry append-only verified count vs unknown, one contextual G-33 button, readiness advisory, explicit history-only regeneration/consent; preserve ReportID and SourceRevision | NOT RUN |
 | AI Job | queued/running/finalizing/unknown/cancel-requested/cancelled/completed, recovery without duplicate Job/ReportID | NOT RUN |
 | Admin | Seven workspaces, Manager vs Admin/Staff, read races after Logout, saved form errors, explicit repair/import/archive confirmation | NOT RUN |
 | Public Library | Anonymous published-only cards, search/filter/empty state, safe external link opening and draft privacy | NOT RUN |
