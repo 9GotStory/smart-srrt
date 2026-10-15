@@ -102,7 +102,7 @@ test('P7-04 all sections work and invalid/closed/outside targets are no-ops',()=
 });
 
 test('P7-04 accessibility and Record save/revision scope remain unchanged',()=>{
-  assert.match(source,/tabindex="-1" aria-labelledby="record-heading-/);
+  assert.match(source,/id="record-heading-\\${group.id}" tabindex="-1"/);
   assert.match(source,/Number\(el\('editRevision'\)\.value\|\|0\)/);
   assert.match(source,/function cancelRecordForm\(\)/);
   assert.match(source,/function recordDraftChanged\(\)/);

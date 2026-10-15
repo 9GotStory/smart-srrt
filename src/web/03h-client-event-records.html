@@ -202,9 +202,9 @@
     if(keys.length!==fields.length||new Set(keys).size!==fields.length||
        keys.some(key=>!controlByKey.has(key)))throw Error('P4-02 record field group mapping mismatch');
     el('recordForm').innerHTML=recordFieldGroups.map(group=>
-      `<section class="srrt-record-section" id="record-group-${group.id}" aria-labelledby="record-heading-${group.id}"><h3 id="record-heading-${group.id}" tabindex="-1" aria-labelledby="record-heading-${group.id}">${group.title}</h3><div class="form-grid">${group.keys.map(key=>controlByKey.get(key)).join('')}</div></section>`
+      `<section class="srrt-record-section" id="record-group-${group.id}" aria-labelledby="record-heading-${group.id}"><h3 id="record-heading-${group.id}" tabindex="-1">${group.title}</h3><div class="form-grid">${group.keys.map(key=>controlByKey.get(key)).join('')}</div></section>`
     ).join('')+
-      '<section class="srrt-record-section srrt-record-review" id="record-group-review" aria-labelledby="record-heading-review"><h3 id="record-heading-review" tabindex="-1" aria-labelledby="record-heading-review">5. ตรวจทานก่อนบันทึก</h3><p id="recordReviewSummary" class="help"></p></section>';
+      '<section class="srrt-record-section srrt-record-review" id="record-group-review" aria-labelledby="record-heading-review"><h3 id="record-heading-review" tabindex="-1">5. ตรวจทานก่อนบันทึก</h3><p id="recordReviewSummary" class="help"></p></section>';
     refreshRecordAreaOptions();
     recordDraftSnapshot=recordDraftValues();
     updateRecordDraftState();
