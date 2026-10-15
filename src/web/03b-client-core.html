@@ -66,7 +66,9 @@
     // If a nested specialized confirmation is active, let its own code handle keys.
     if(typeof document.querySelectorAll==='function'){
       const open=[...document.querySelectorAll('.modal.open')];
-      if(open.length&&open[open.length-1]!==dialog)return
+      // Never override an open Record, Event or AI confirmation, regardless of DOM order.
+      if(open.some(other=>!keyboardDialogIds.includes(other.id))||
+         (open.length&&open[open.length-1]!==dialog))return
     }
     if(event.key==='Escape'){
       event.preventDefault();
