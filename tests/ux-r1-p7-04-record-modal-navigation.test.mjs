@@ -46,6 +46,7 @@ function fixture(){
   modal.classList.add('open');
   modal.scrollTop=100;
   modal.getBoundingClientRect=()=>({top:20});
+  element('recordForm').contains=node=>groups.some(g=>node===element('record-group-'+g));
   modal.contains=node=>groups.some(g=>node===element('record-group-'+g));
   for(const group of groups){
     const section=element('record-group-'+group);
@@ -61,45 +62,46 @@ test('P7-04 record section actions are buttons, not iframe-escaping href fragmen
   const h=fixture();
   vm.runInContext('buildRecordForm()',h.context);
   const actualForm=h.element('recordForm').innerHTML;
+  assert.match(markup,/role="tablist"/);
   for(const group of groups){
-    assert.ok(markup.includes(`<button type="button" onclick="jumpRecordGroup('${group}')" aria-controls="record-group-${group}">`),group);
+    assert.ok(markup.includes('role="tab" id="record-tab-'+group+'"'),group);
+    assert.ok(markup.includes('onclick="selectRecordTab(\''+group+'\')"'),group);
     assert.ok(actualForm.includes('id="record-group-'+group+'"'),group+' generated section');
   }
-  assert.equal((markup.match(/onclick="jumpRecordGroup\('/g)||[]).length,5);
-  assert.match(css,/#recordModal \.srrt-record-anchor-nav button\{/);
-  assert.ok(generated.includes('#recordModal .srrt-record-anchor-nav button{'));
+  assert.equal((markup.match(/onclick="selectRecordTab\('/g)||[]).length,5);
+  assert.match(css,/#recordModal \.srrt-record-tabs button\{/);
+  assert.ok(generated.includes('#recordModal .srrt-record-tabs button{'));
 });
 
-test('P7-04 section jump scrolls only Record modal and focuses target heading',()=>{
+test('P7-04 Record tab selection remains in modal and preserves unsaved data',()=>{
   const h=fixture();
   const before=h.element('in6').value='Synthetic unsaved draft';
   const oldToken=vm.runInContext('token',h.context);
-  vm.runInContext('jumpRecordGroup("receive")',h.context);
-  assert.equal(h.modal.scrollTop,364); // 100 + (300 - 20) - 16
-  assert.equal(h.active().id,'record-heading-receive');
-  assert.equal(h.active().options.preventScroll,true);
+  vm.runInContext('selectRecordTab("receive",true)',h.context);
+  assert.equal(h.modal.scrollTop,0);
+  assert.equal(h.active().id,'record-tab-receive');
   assert.equal(h.element('in6').value,before);
   assert.equal(vm.runInContext('token',h.context),oldToken);
   assert.equal(h.navigated(),false);
 });
 
-test('P7-04 all sections work and invalid/closed/outside targets are no-ops',()=>{
+test('P7-04 five tabs have no iframe routing and invalid/closed/outside targets no-op',()=>{
   const h=fixture();
   for(const group of groups){
     h.modal.scrollTop=100;
-    vm.runInContext('jumpRecordGroup('+JSON.stringify(group)+')',h.context);
-    assert.equal(h.modal.scrollTop,364,group);
-    assert.equal(h.active().id,'record-heading-'+group);
+    vm.runInContext('selectRecordTab('+JSON.stringify(group)+',true)',h.context);
+    assert.equal(h.modal.scrollTop,0,group);
+    assert.equal(h.active().id,'record-tab-'+group);
   }
   h.modal.scrollTop=100;
-  vm.runInContext('jumpRecordGroup("unknown")',h.context);
+  vm.runInContext('selectRecordTab("unknown")',h.context);
   assert.equal(h.modal.scrollTop,100);
   h.modal.classList.remove('open');
-  vm.runInContext('jumpRecordGroup("receive")',h.context);
+  vm.runInContext('selectRecordTab("receive")',h.context);
   assert.equal(h.modal.scrollTop,100);
   h.modal.classList.add('open');
-  h.modal.contains=()=>false;
-  vm.runInContext('jumpRecordGroup("receive")',h.context);
+  h.element('recordForm').contains=()=>false;
+  vm.runInContext('selectRecordTab("receive")',h.context);
   assert.equal(h.modal.scrollTop,100);
   assert.equal(h.navigated(),false);
 });
