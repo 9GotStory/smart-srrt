@@ -49,6 +49,7 @@ function fixture(){
   ctx.toast=v=>toasts.push(String(v));
   ctx.loadDashboard=async()=>{};
   ctx.recoverReportJob=async()=>{};
+  ctx.destroyDashboardCharts=()=>{}; // Isolated DOM has no Chart.js canvas APIs.
   return {ctx,el,calls,toasts,saved,getFocused:()=>focused}
 }
 function setting(h,allow){
