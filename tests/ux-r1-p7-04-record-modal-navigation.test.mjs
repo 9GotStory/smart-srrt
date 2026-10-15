@@ -58,9 +58,12 @@ function fixture(){
 test('P7-04 record section actions are buttons, not iframe-escaping href fragments',()=>{
   assert.match(head,/<base target="_top">/);
   assert.doesNotMatch(markup,/<a\s+href="#record-group-/);
+  const h=fixture();
+  vm.runInContext('buildRecordForm()',h.context);
+  const actualForm=h.element('recordForm').innerHTML;
   for(const group of groups){
     assert.ok(markup.includes(`<button type="button" onclick="jumpRecordGroup('${group}')" aria-controls="record-group-${group}">`),group);
-    assert.match(source,new RegExp('id="record-group-'+group+'"'));
+    assert.ok(actualForm.includes('id="record-group-'+group+'"'),group+' generated section');
   }
   assert.equal((markup.match(/onclick="jumpRecordGroup\('/g)||[]).length,5);
   assert.match(css,/#recordModal \.srrt-record-anchor-nav button\{/);
