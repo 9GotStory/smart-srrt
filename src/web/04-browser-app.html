@@ -106,6 +106,12 @@
     switchAdminWorkspace(adminWorkspaceKeys[next]);
     el('admin-tab-'+adminWorkspaceKeys[next]).focus()
   }
+  // P8-02: unexpected null from an Admin RPC is an error, never "zero records".
+  // Keep the last verified cache and make the API contract failure actionable.
+  function requireAdminRows_(rows,section){
+    if(!Array.isArray(rows))throw new Error('โหลด'+section+'ไม่สำเร็จ: ข้อมูลตอบกลับจาก Server ไม่ใช่รายการ กรุณาตรวจสอบ Apps Script Executions');
+    return rows;
+  }
   async function loadAdmin(){
     const ctx=adminContext();if(!ctx)return;
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
@@ -137,7 +143,7 @@
   async function loadSettings(){
     const ctx=adminContext();if(!ctx)return;
     try{
-      const rows=await gs('getSystemSettings',ctx.token);if(!adminCurrent(ctx))return;const m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      const response=await gs('getSystemSettings',ctx.token);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'การตั้งค่าระบบ'),m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
       settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
     }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
   }
@@ -176,7 +182,7 @@
 
   async function loadAreasAdmin(){
     const ctx=adminContext();if(!ctx)return;const seq=++areaReadSeq;
-    try{const values=await gs('listAreas',ctx.token,el('areaSearch').value);if(!adminCurrent(ctx)||seq!==areaReadSeq)return;areaAdminCache=values;el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===areaReadSeq)toast(e.message||e)}
+    try{const values=await gs('listAreas',ctx.token,el('areaSearch').value);if(!adminCurrent(ctx)||seq!==areaReadSeq)return;areaAdminCache=requireAdminRows_(values,'ข้อมูลพื้นที่');el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===areaReadSeq)toast(e.message||e)}
   }
   function openAreaForm(i){
     const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
@@ -247,7 +253,7 @@
 
   async function loadUsers(){
     const ctx=adminContext();if(!ctx)return;const seq=++userReadSeq;
-    try{const values=await gs('listUsers',ctx.token,el('userSearch').value);if(!adminCurrent(ctx)||seq!==userReadSeq)return;usersCache=values;el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===userReadSeq)toast(e.message||e)}
+    try{const values=await gs('listUsers',ctx.token,el('userSearch').value);if(!adminCurrent(ctx)||seq!==userReadSeq)return;usersCache=requireAdminRows_(values,'ผู้ใช้งาน');el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===userReadSeq)toast(e.message||e)}
   }
   function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
   async function saveUser(){
@@ -268,7 +274,10 @@
     const ctx=adminContext();if(!ctx)return;
     try{
       const result=await gs('getMasterDataAdmin',ctx.token);if(!adminCurrent(ctx))return;
-      masterAdminCache=result.items||[];masterTypePolicies=result.types||[];
+      if(!result||typeof result!=='object')throw new Error('โหลดข้อมูลมาตรฐานไม่สำเร็จ: Server ไม่ได้ส่งข้อมูลที่ถูกต้อง');
+      const items=requireAdminRows_(result.items,'รายการข้อมูลมาตรฐาน');
+      const policies=requireAdminRows_(result.types,'ประเภทข้อมูลมาตรฐาน');
+      masterAdminCache=items;masterTypePolicies=policies;
       const filter=el('masterTypeFilter'),current=filter.value;
       filter.innerHTML='<option value="">ทั้งหมด</option>'+masterTypePolicies.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
       filter.value=current;
@@ -337,7 +346,7 @@
   }
 
   async function loadContentAdmin(){
-    const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listContent',ctx.token);if(!adminCurrent(ctx))return;el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
+    const ctx=adminContext();if(!ctx)return;try{const response=await gs('listContent',ctx.token);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'ประกาศและคู่มือ');el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
   function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
   function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
   async function saveContentItem(){
@@ -403,7 +412,7 @@
   }
 
   async function loadAudit(){
-    const ctx=adminContext();if(!ctx)return;try{const rows=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
+    const ctx=adminContext();if(!ctx)return;try{const response=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'Audit Logs');el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
 
   // P6-04: getAppBoot.content comes from the server's published-only list.
   // Defensively exclude explicitly draft records without requiring a new API.

@@ -1,3 +1,25 @@
+// P8-02: google.script.run cannot transport Date objects, including nested fields.
+// Normalize only explicitly selected Admin DTO keys, after server-side RBAC checks.
+function adminRpcSafeRows_(rows) {
+  return rows.map(function(item) {
+    var safe = {};
+    Object.keys(item).forEach(function(key) {
+      var value = item[key];
+      if (Object.prototype.toString.call(value) === '[object Date]') {
+        if (!isFinite(value.getTime())) throw new Error('Admin RPC timestamp ไม่ถูกต้อง');
+        safe[key] = value.toISOString();
+      } else if (value === null || value === undefined) {
+        safe[key] = '';
+      } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        safe[key] = value;
+      } else {
+        throw new Error('Admin RPC พบชนิดข้อมูลที่ไม่สามารถส่งไปยัง Browser');
+      }
+    });
+    return safe;
+  });
+}
+
 function getInstallationStatus(sessionToken) {
   requireAuth_(sessionToken, 'settings');
   var ss = getDb_();
@@ -31,7 +53,7 @@ function repairInstallation(sessionToken) {
 function listContent(sessionToken) {
   requireAuth_(sessionToken, 'master');
   var rows = getSheet_(CONFIG.SHEETS.CONTENT).getDataRange().getValues().slice(1);
-  return rows.map(function(r){return {id:r[0], category:r[1], title:r[2], description:r[3], url:r[4], fileId:r[5], status:r[6], sort:r[7]};});
+  return adminRpcSafeRows_(rows.map(function(r){return {id:r[0], category:r[1], title:r[2], description:r[3], url:r[4], fileId:r[5], status:r[6], sort:r[7]};}));
 }
 
 function saveContent(sessionToken, item) {
@@ -70,7 +92,7 @@ function saveContent(sessionToken, item) {
 function getSystemSettings(sessionToken) {
   requireAuth_(sessionToken, 'settings');
   var rows = getSheet_(CONFIG.SHEETS.SETTINGS).getDataRange().getValues().slice(1);
-  return rows.map(function(r){return {key:r[0], value:r[1], description:r[2], updatedAt:r[3], updatedBy:r[4]};});
+  return adminRpcSafeRows_(rows.map(function(r){return {key:r[0], value:r[1], description:r[2], updatedAt:r[3], updatedBy:r[4]};}));
 }
 
 function saveSystemSettings(sessionToken, settingsArray) {
