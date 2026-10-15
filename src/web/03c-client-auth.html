@@ -1,4 +1,56 @@
 <script>
+
+  // UX-R1/P6-05: authentication UI is advisory; GS authentication/RBAC is authoritative.
+  let authRequestEpoch=0,authLoginPending=false,authRegisterPending=false,authReturnFocus=null;
+  function canSelfRegister(){
+    return String(settings&&settings.ALLOW_SELF_REGISTER||'false').trim().toLowerCase()==='true'
+  }
+  function syncAuthRegistration(){
+    const enabled=canSelfRegister(),button=el('authRegisterModeBtn'),form=el('authRegisterForm');
+    if(button)button.hidden=!enabled;
+    if(!enabled&&form&&!form.hidden)setAuthMode('login')
+  }
+  function setAuthStatus(id,message){
+    const control=el(id);if(control)control.textContent=String(message||'')
+  }
+  function resetAuthFields(){
+    for(const id of ['loginEmail','loginPassword','regName','regEmail','regPass','regOrg']){
+      const field=el(id);if(field)field.value=''
+    }
+    setAuthStatus('authLoginStatus','');
+    setAuthStatus('authRegisterStatus','')
+  }
+  function resetAuthPending(){
+    authLoginPending=false;authRegisterPending=false;
+    for(const id of ['authLoginSubmitBtn','authRegisterSubmitBtn']){
+      const button=el(id);if(button)button.disabled=false
+    }
+  }
+  function setAuthMode(mode){
+    if(authLoginPending||authRegisterPending)return;
+    const selected=mode==='register'&&canSelfRegister()?'register':'login';
+    const login=el('authLoginForm'),registration=el('authRegisterForm');
+    if(login)login.hidden=selected!=='login';
+    if(registration)registration.hidden=selected!=='register';
+    for(const [id,type] of [['authLoginModeBtn','login'],['authRegisterModeBtn','register']]){
+      const button=el(id);if(button&&typeof button.setAttribute==='function')
+        button.setAttribute('aria-pressed',String(type===selected))
+    }
+    setAuthStatus('authLoginStatus','');
+    setAuthStatus('authRegisterStatus','');
+    const input=el(selected==='login'?'loginEmail':'regName');
+    if(input&&typeof input.focus==='function')input.focus()
+  }
+  function authResultCurrent(epoch,startToken,startUser){
+    return epoch===authRequestEpoch&&token===startToken&&currentUser===startUser
+  }
+  function closeAuthDialog(){
+    ++authRequestEpoch;resetAuthPending();resetAuthFields();
+    closeModal('loginModal');
+    const opener=authReturnFocus;authReturnFocus=null;
+    if(opener&&typeof opener.focus==='function')opener.focus()
+  }
+
   function showPage(page,btn){
     if(page==='admin'&&!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับจัดการระบบ');return}
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
@@ -24,12 +76,15 @@
   }
 
   async function boot(){
+    const startToken=token,startEpoch=authRequestEpoch,startUser=currentUser;
     try{
-      const b=await gs('getAppBoot',token);settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
-      applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
+      const b=await gs('getAppBoot',startToken);
+      if(!authResultCurrent(startEpoch,startToken,startUser))return;
+      settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
+      syncAuthRegistration();applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
       if(currentUser)void recoverReportJob();
       await loadDashboard()
-    }catch(e){toast(e.message||e)}
+    }catch(e){if(authResultCurrent(startEpoch,startToken,startUser))toast(e.message||e)}
   }
 
   function updateAuthBox(){
@@ -45,13 +100,39 @@
     if(el('publicAggregateNotice'))el('publicAggregateNotice').style.display=currentUser?'none':'block';
   }
 
-  function openLogin(){openModal('loginModal')}
+  function openLogin(){
+    ++authRequestEpoch;resetAuthPending();resetAuthFields();
+    authReturnFocus=typeof document!=='undefined'?document.activeElement:null;
+    syncAuthRegistration();setAuthMode('login');openModal('loginModal');
+    const input=el('loginEmail');if(input&&typeof input.focus==='function')input.focus()
+  }
   async function doLogin(){
+    if(authLoginPending||authRegisterPending||currentUser)return;
+    const email=String(el('loginEmail').value||'').trim();
+    const password=String(el('loginPassword').value||'');
+    if(!email||!password){setAuthStatus('authLoginStatus','กรุณากรอกอีเมลและรหัสผ่าน');return}
+    const startToken=token,startUser=currentUser,epoch=++authRequestEpoch;
+    authLoginPending=true;el('authLoginSubmitBtn').disabled=true;
+    setAuthStatus('authLoginStatus','กำลังตรวจสอบบัญชีผู้ใช้งาน');
     try{
-      const r=await gs('login',{email:el('loginEmail').value,password:el('loginPassword').value});
-      if(!r.ok){toast(r.message);return}
-      token=r.token;localStorage.setItem('SRRT_TOKEN',token);currentUser=r.user;closeModal('loginModal');updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');void recoverReportJob();await loadDashboard()
-    }catch(e){toast(e.message||e)}
+      const r=await gs('login',{email,password});
+      if(!authResultCurrent(epoch,startToken,startUser))return;
+      if(!r||!r.ok||!r.token||!r.user){
+        el('loginPassword').value='';
+        setAuthStatus('authLoginStatus',r&&r.message||'ไม่สามารถเข้าสู่ระบบได้');
+        return
+      }
+      token=r.token;currentUser=r.user;localStorage.setItem('SRRT_TOKEN',token);
+      closeAuthDialog();updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');
+      void recoverReportJob();await loadDashboard()
+    }catch(e){
+      if(authResultCurrent(epoch,startToken,startUser)){
+        el('loginPassword').value='';
+        setAuthStatus('authLoginStatus',e.message||e)
+      }
+    }finally{
+      if(epoch===authRequestEpoch){authLoginPending=false;el('authLoginSubmitBtn').disabled=false}
+    }
   }
   async function doLogout(){
     // G-33/R1: invalidate the local session synchronously at logout entry so no
@@ -59,6 +140,13 @@
     // still pass its session guard after the user chose logout. The previous
     // token survives only inside the server-side logout RPC below.
     const logoutToken=token;
+    // The G-33 isolated logout harness extracts only this function.
+    // Guard optional Auth UI state while preserving synchronous invalidation in Native24.
+    if(typeof authRequestEpoch!=='undefined')++authRequestEpoch;
+    if(typeof resetAuthPending==='function')resetAuthPending();
+    if(typeof resetAuthFields==='function')resetAuthFields();
+    closeModal('loginModal');
+    if(typeof authReturnFocus!=='undefined')authReturnFocus=null;
     ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;pendingReportRegenerationConsentId='';++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
     for(const id of ['reportHistoryEventContext','reportHistorySummary','reportHistoryWarning','reportReadinessEventContext','reportReadinessSummary','reportJobStateNote']){
       el(id).textContent='';
@@ -73,6 +161,30 @@
     if(token)return;
     await loadDashboard()
   }
-  async function register(){try{toast(await gs('registerUser',{name:el('regName').value,email:el('regEmail').value,password:el('regPass').value,org:el('regOrg').value}))}catch(e){toast(e.message||e)}}
+  async function register(){
+    if(authRegisterPending||authLoginPending||currentUser)return;
+    if(!canSelfRegister()){setAuthStatus('authRegisterStatus','ระบบปิดรับสมัครผู้ใช้ใหม่');return}
+    const name=String(el('regName').value||'').trim(),email=String(el('regEmail').value||'').trim(),
+      password=String(el('regPass').value||''),org=String(el('regOrg').value||'').trim();
+    if(!name||!email||!password){
+      setAuthStatus('authRegisterStatus','กรุณากรอกชื่อ อีเมล และรหัสผ่าน');return
+    }
+    const startToken=token,startUser=currentUser,epoch=++authRequestEpoch;
+    authRegisterPending=true;el('authRegisterSubmitBtn').disabled=true;
+    setAuthStatus('authRegisterStatus','กำลังส่งคำขอสมัครใช้งาน');
+    try{
+      const message=await gs('registerUser',{name,email,password,org});
+      if(!authResultCurrent(epoch,startToken,startUser))return;
+      el('regPass').value='';
+      setAuthStatus('authRegisterStatus',String(message||'ส่งคำขอแล้ว')+' — รอผู้ดูแลระบบอนุมัติบัญชี');
+    }catch(e){
+      if(authResultCurrent(epoch,startToken,startUser)){
+        el('regPass').value='';
+        setAuthStatus('authRegisterStatus',e.message||e)
+      }
+    }finally{
+      if(epoch===authRequestEpoch){authRegisterPending=false;el('authRegisterSubmitBtn').disabled=false}
+    }
+  }
 
 </script>

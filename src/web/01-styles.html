@@ -552,6 +552,43 @@ body{background:#f4f7fb}
   .app #page-library .srrt-library-grid{grid-template-columns:minmax(0,1fr)}
   .app #page-library .srrt-library-card{padding:16px}
 }
+/* UX-R1/P6-05: clear, keyboard-accessible, session-safe Login and Registration. */
+#loginModal .srrt-auth-dialog{max-width:470px;padding:24px}
+#loginModal .srrt-auth-intro{
+  color:#475569;font-size:13px;line-height:1.7;margin:8px 0 15px;
+}
+#loginModal .srrt-auth-mode{
+  display:flex;gap:8px;padding:5px;background:#f1f5f9;border:1px solid #e2e8f0;
+  border-radius:12px;margin-bottom:18px;
+}
+#loginModal .srrt-auth-mode-btn{
+  flex:1;min-height:44px;border:1px solid transparent;border-radius:9px;
+  background:transparent;color:#334155;font:inherit;font-size:13px;font-weight:700;cursor:pointer;
+}
+#loginModal .srrt-auth-mode-btn[aria-pressed="true"]{
+  background:#fff;color:#115e59;border-color:#cbd5e1;
+}
+#loginModal .srrt-auth-form[hidden],#loginModal .srrt-auth-mode-btn[hidden]{display:none!important}
+#loginModal .srrt-auth-form .input{
+  width:100%;min-height:44px;margin-bottom:12px;background:#fff;
+}
+#loginModal .srrt-auth-status{min-height:21px;margin:5px 0 11px;color:#9a3412;font-size:13px;line-height:1.6}
+#loginModal .srrt-auth-submit{width:100%;min-height:46px}
+#loginModal .srrt-auth-pending-note{
+  color:#4a4c5a;background:#eff6ff;border-radius:10px;padding:10px 12px;
+  font-size:12px;line-height:1.7;margin:0 0 14px;
+}
+#loginModal .srrt-auth-actions{margin-top:12px}
+#loginModal .srrt-auth-actions .btn{width:100%}
+#loginModal button:focus-visible,#loginModal .input:focus-visible{
+  outline:3px solid #0ea5e9;outline-offset:2px;
+}
+#loginModal .srrt-auth-dialog .modal-title{line-height:1.45}
+@media(max-width:560px){
+  #loginModal .srrt-auth-dialog{padding:16px}
+  #loginModal .srrt-auth-mode{gap:4px}
+  #loginModal .srrt-auth-mode-btn{padding:9px;font-size:12px}
+}
 
 /* UX-R1 Dashboard UI */
 /* UX-R1/P3-01: Dashboard view only, authored CSS. No hidden business state or JS. */
