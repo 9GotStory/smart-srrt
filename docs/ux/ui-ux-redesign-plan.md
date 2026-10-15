@@ -48,7 +48,7 @@ Source of truth is `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-a
 | UX-R1/P4 — Events/forms | Record list, sections, validation, owner, attachment, lifecycle dialogs | EventID/revision, RBAC, mutation consent and warning tests; keyboard form path |
 | UX-R1/P5 — AI report | List, action states, readiness/history, job indicator, cancellation/unknown state | G-17/G-26/G-27/G-32/G-33 regression checks; **no live Gemini** in automated checks |
 | UX-R1/P6 — Admin/auth/library | Seven admin subsections, login/register, library, supporting dialogs | RBAC, file-import, settings, audit/retention action safety; public-only isolation |
-| UX-R1/P7 — Integration/release | Full CSS/JS and 13-file parity, security/accessibility/responsive regression, release guide, rollback verification | ChatGPT Technical Review (including author-assisted limitations); PO merge authorization; separate staging and production deployment authorizations |
+| UX-R1/P7 — Integration/release | Full Native24 parity (7 GS + 16 HTML + Index), security/accessibility/responsive regression, 14-dialog inventory, release guide and rollback prerequisites | ChatGPT Technical Review (including author-assisted limitations); PO merge authorization; **separate** TEST deployment, Browser UAT, and Production authorizations |
 
 **Recommended delivery order:** P1 → P2 shared shell → P3 dashboard → P4 event management → P5 AI reporter → P6 remaining surfaces → P7 integration. Split each implementation phase into reviewable PRs; do not deploy after each PR by default.
 
