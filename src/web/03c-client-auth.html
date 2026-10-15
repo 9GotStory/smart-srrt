@@ -140,8 +140,13 @@
     // still pass its session guard after the user chose logout. The previous
     // token survives only inside the server-side logout RPC below.
     const logoutToken=token;
-    ++authRequestEpoch;resetAuthPending();resetAuthFields();
-    closeModal('loginModal');authReturnFocus=null;
+    // The G-33 isolated logout harness extracts only this function.
+    // Guard optional Auth UI state while preserving synchronous invalidation in Native24.
+    if(typeof authRequestEpoch!=='undefined')++authRequestEpoch;
+    if(typeof resetAuthPending==='function')resetAuthPending();
+    if(typeof resetAuthFields==='function')resetAuthFields();
+    closeModal('loginModal');
+    if(typeof authReturnFocus!=='undefined')authReturnFocus=null;
     ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;pendingReportRegenerationConsentId='';++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
     for(const id of ['reportHistoryEventContext','reportHistorySummary','reportHistoryWarning','reportReadinessEventContext','reportReadinessSummary','reportJobStateNote']){
       el(id).textContent='';
