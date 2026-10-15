@@ -315,13 +315,13 @@ body{background:#f4f7fb}
   display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 15px;margin-bottom:8px;
   border-bottom:1px solid #e2e8f0;
 }
-#recordModal .srrt-record-anchor-nav a{
+#recordModal .srrt-record-anchor-nav button{
   display:inline-flex;align-items:center;padding:9px 12px;min-height:44px;
   border:1px solid #d6e3e8;border-radius:10px;background:#f8fafc;
-  color:#115e59;font-size:12px;font-weight:650;text-decoration:none;
+  color:#115e59;font-size:12px;font-weight:650;font-family:inherit;cursor:pointer;
 }
-#recordModal .srrt-record-anchor-nav a:hover{background:#eaf6f3}
-#recordModal .srrt-record-anchor-nav a:focus-visible,
+#recordModal .srrt-record-anchor-nav button:hover{background:#eaf6f3}
+#recordModal .srrt-record-anchor-nav button:focus-visible,
 #recordModal .srrt-record-actions button:focus-visible{
   outline:3px solid #0ea5e9;outline-offset:2px;
 }
@@ -336,7 +336,7 @@ body{background:#f4f7fb}
 @media(max-width:640px){
   #recordModal .srrt-record-dialog{padding:16px}
   #recordModal .srrt-record-anchor-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-  #recordModal .srrt-record-anchor-nav a{justify-content:center;text-align:center}
+  #recordModal .srrt-record-anchor-nav button{justify-content:center;text-align:center}
   #recordModal .srrt-record-section{padding:15px 0}
   #recordModal .srrt-record-actions .btn{flex:1 1 110px}
   #recordModal .srrt-record-draft-status{flex:1 0 100%}

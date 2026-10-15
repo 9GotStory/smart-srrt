@@ -46,7 +46,7 @@ test('P4-02 one dialog, five anchored sections and accessible form controls',()=
   assert.match(markup,/id="recordDraftStatus"[^>]*role="status"/);
   assert.equal((markup.match(/id="recordForm"/g)||[]).length,1);
   for(const name of ['receive','place','verify','investigate','review'])
-    assert.match(markup,new RegExp('href="#record-group-'+name+'"'));
+    assert.ok(markup.includes(`<button type="button" onclick="jumpRecordGroup('${name}')" aria-controls="record-group-${name}">`),name);
   assert.match(css,/#recordModal \.srrt-record-section/);
 });
 
