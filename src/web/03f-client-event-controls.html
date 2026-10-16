@@ -250,6 +250,7 @@
   }
   async function openAttachmentModal(i){
     if(!currentUser){openLogin();return}
+    if(attachmentUploadPending){toast('กำลังแนบไฟล์ กรุณารอให้คำสั่งปัจจุบันเสร็จก่อน');return}
     const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
     const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
     el('attachmentEventId').value=r.eventId;
@@ -257,6 +258,12 @@
     el('attachmentClosed').value=closed?'1':'0';
     el('attachmentFile').value='';
     el('attachmentDescription').value='';
+    const uploadKey='attachment:upload:'+token+':'+r.eventId+':'+Number(r.revision||1);
+    const uploadUnknown=uiUnverifiedActionKeys.has(uploadKey);
+    el('uploadAttachmentBtn').disabled=uploadUnknown;
+    el('uploadAttachmentBtn').setAttribute('aria-busy','false');
+    uiSetSectionState(null,'attachmentUploadStatus',uploadUnknown?'unknown':'idle',
+      uploadUnknown?'ยังยืนยันผลอัปโหลดก่อนหน้าไม่ได้ กรุณาตรวจสอบไฟล์แนบก่อนส่งอีกครั้ง':'');
     el('attachmentEventContext').textContent=String(r.col6||'เหตุการณ์')+' — Revision '+String(r.revision||1);
     el('attachmentListStatus').textContent='กำลังโหลดเอกสารแนบ';
     el('attachmentUploadPanel').style.display=roleCanRecord()&&!closed?'block':'none';
@@ -366,8 +373,14 @@
             'อ่านไฟล์ไม่สำเร็จ กรุณาตรวจสอบแล้วลองใหม่',{
               canEnable:()=>!!roleCanRecord()&&el('attachmentClosed').value!=='1'
             });
-        else uiInvalidateAction(lease)
-      }else uiInvalidateAction(lease);
+        else {
+          uiInvalidateAction(lease);
+          if(dispatched&&!confirmed)uiUnverifiedActionKeys.add(lease.key);
+        }
+      }else {
+        uiInvalidateAction(lease);
+        if(dispatched&&!confirmed)uiUnverifiedActionKeys.add(lease.key);
+      }
     }
   }
   async function downloadAttachment(attachmentId){
