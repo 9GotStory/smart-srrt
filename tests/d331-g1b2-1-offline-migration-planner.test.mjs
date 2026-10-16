@@ -196,7 +196,7 @@ test('planner and comparison never return any secrets or original context',()=>{
   s.tables.DengueFollowups.headers[0]='PATIENT_NAME_DO_NOT_ECHO';
   const r=plan(a,s);
   const string=JSON.stringify(r);
-  assert.doesNotMatch(string,/PATIENT_NAME_DO_NOT_ECHO|TARGET_ID|password/i);
+  assert.doesNotMatch(string,/PATIENT_NAME_DO_NOT_ECHO|PRIVATE_SPREADSHEET|PRIVATE_SCRIPT|password/i);
   assert.equal(r.source,'UNTRUSTED_SYNTHETIC_PREVIEW');
 });
 test('simulated partial interruption never creates, deletes or restores data',()=>{
