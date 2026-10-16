@@ -48,7 +48,7 @@ test('UUID check accepts canonical v4 and rejects prototypes/legacy event IDs',(
 
 test('revision must be a positive integer and is independently compared',()=>{
   const a=api();
-  for(const value of [0,-1,1.5,'1',NaN,Infinity,null]) {
+  for(const value of [0,-1,1.5,'1',NaN,Infinity,null,2**53,Number.MAX_SAFE_INTEGER+2]) {
     assert.throws(()=>a.d331RequireRevision_(value),/D331_INVALID_REVISION/);
   }
   assert.equal(a.d331CheckRevision_(4,4),true);
@@ -150,8 +150,13 @@ test('RBAC and owner/area/event guard fail closed for every missing boundary',()
   for(const [p,e,cap,write] of [
     [null,event(),'dengue.case.read',false],
     [principal({active:false}),event(),'dengue.case.read',false],
+    [principal({userId:''}),event({ownerUserId:''}),'dengue.case.read',false],
+    [principal({userId:'  '}),event({ownerUserId:'  '}),'dengue.case.read',false],
+    [principal({userId:' u1 '}),event({ownerUserId:' u1 '}),'dengue.case.read',false],
     [principal({capabilities:['view']}),event(),'dengue.case.read',false],
     [principal({allowedAreaIds:[]}),event(),'dengue.case.read',false],
+    [principal({allowedAreaIds:['  ']}),event({areaId:'  '}),'dengue.case.read',false],
+    [principal(),event(),'dengue.survey.write',undefined],
     [principal({allowedEventIds:[]}),event(),'dengue.case.read',false],
     [principal(),event({eligibleDisease:false}),'dengue.case.read',false],
     [principal(),event({recordStatus:'void'}),'dengue.case.read',false],
@@ -169,6 +174,10 @@ test('explicit child relationship checks reject foreign EventID/PlanID',()=>{
   assert.equal(a.d331BindChild_(U,{eventId:U,planId:V},plan),true);
   for(const [c,p] of [
     [{eventId:W,planId:V},plan],
+    [{eventId:U,planId:V},null],
+    [{eventId:U,planId:V},undefined],
+    [{eventId:U},plan],
+    [{eventId:U,planId:''},plan],
     [{eventId:U,planId:W},plan],
     [{eventId:U,planId:V},{eventId:W,planId:V}],
     [{eventId:U,planId:V},{eventId:U,planId:'TEST'}]
@@ -198,9 +207,12 @@ test('injected ambiguous write remains UNKNOWN and is never blind-retried',()=>{
   assert.equal(a.d331RequestDecision_(result,request).decision,'reconcile');
   assert.throws(()=>a.d331LedgerTransition_(result,'COMMIT'),/D331_RECONCILIATION_REQUIRED/);
   assert.throws(()=>a.d331LedgerTransition_(result,'RECONCILED_COMMIT'),/D331_RECONCILIATION_REQUIRED/);
-  const reconciled=a.d331LedgerTransition_(result,'RECONCILED_COMMIT','AUTHORITATIVE_MATCH');
-  assert.equal(reconciled.phase,'COMMITTED');
-  assert.equal(a.d331RequestDecision_(reconciled,request).decision,'replay');
+  assert.throws(()=>a.d331LedgerTransition_(result,'RECONCILED_COMMIT','AUTHORITATIVE_MATCH'),/D331_RECONCILIATION_REQUIRED/);
+  assert.throws(()=>a.d331LedgerTransition_(reserved,'COMMIT','AUTHORITATIVE_MATCH'),/D331_RECONCILIATION_REQUIRED/);
+  assert.equal(a.d331RequestDecision_(result,request).decision,'reconcile');
+  // G1-A cannot manufacture COMMITTED. An external future durable writer
+  // is required to verify authoritative state at a later, gated phase.
+  assert.equal(a.d331RequestDecision_({...request,phase:'COMMITTED'},request).decision,'replay');
 });
 
 test('legacy fixture remap preserves known FK and rejects missing or duplicate IDs',()=>{
