@@ -116,6 +116,7 @@ test('typed PlanID/SurveyID/FollowupID scope binding fails closed',()=>{
   assert.throws(()=>a.d331BindScopedEntity_(U,parentSurvey,{EventID:V,SurveyID:W},'SurveyID','SurveyID'),/D331_FOREIGN_CHILD/);
   assert.throws(()=>a.d331BindScopedEntity_(U,{EventID:W,FollowupID:V},{EventID:U,FollowupID:V},'FollowupID','FollowupID'),/D331_FOREIGN_CHILD/);
   assert.throws(()=>a.d331BindScopedEntity_(U,parentSurvey,{EventID:U,SurveyID:W},'__proto__','SurveyID'),/D331_FOREIGN_CHILD/);
+  assert.throws(()=>a.d331BindScopedEntity_(U,{EventID:U,PlanID:W},{EventID:U,SurveyID:W},'PlanID','SurveyID'),/D331_FOREIGN_CHILD/);
 });
 
 test('schema version, enumerations and aggregation scope are validated',()=>{
@@ -157,6 +158,9 @@ test('RBAC and owner/area/event guard fail closed for every missing boundary',()
     [principal({allowedAreaIds:[]}),event(),'dengue.case.read',false],
     [principal({allowedAreaIds:['  ']}),event({areaId:'  '}),'dengue.case.read',false],
     [principal(),event(),'dengue.survey.write',undefined],
+    [principal({capabilities:['dengue.case.write']}),event(),'dengue.case.write',false],
+    [principal(),event(),'dengue.case.read',true],
+    [principal(),event(),'dengue.case.export',false],
     [principal({allowedEventIds:[]}),event(),'dengue.case.read',false],
     [principal(),event({eligibleDisease:false}),'dengue.case.read',false],
     [principal(),event({recordStatus:'void'}),'dengue.case.read',false],
@@ -195,6 +199,10 @@ test('request ledger forbids replay with changed digest, identity or operation',
     assert.throws(()=>a.d331RequestDecision_({...request,phase:'COMMITTED'},other),/D331_IDEMPOTENCY_CONFLICT/);
   }
   assert.throws(()=>a.d331RequestDecision_({...request,phase:'FAILED'},request),/D331_INVALID_LEDGER_STATE/);
+  for (const invalid of [{...request,principalId:' '},{...request,principalId:' u1'},
+    {...request,operation:'dengue.case.read'},{...request,operation:'dengue..write'}]) {
+    assert.throws(()=>a.d331RequestDecision_(null,invalid),/D331_INVALID_REQUEST/);
+  }
 });
 
 test('injected ambiguous write remains UNKNOWN and is never blind-retried',()=>{
