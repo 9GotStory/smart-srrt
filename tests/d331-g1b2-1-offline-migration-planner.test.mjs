@@ -252,7 +252,7 @@ test('invalid simulated failure position and forged executable plan are denied',
       /D331_B2_INVALID_SIMULATION/);
   }
   assert.throws(()=>a.d331B2SimulateInterruption_({...p,canApply:true},0),
-    /D331_B2_INVALID_SIMULATION/);
+    /D331_B2_INVALID_PLAN/);
 });
 test('comparison refuses caller-forged executable plan',()=>{
   const a=api(),s=snapshot(a),p=plan(a,s);
@@ -261,6 +261,37 @@ test('comparison refuses caller-forged executable plan',()=>{
       /D331_B2_INVALID_PLAN/);
   }
 });
+test('comparison rejects all forged writable flags rather than silently accepting them',()=>{
+  const a=api(),s=snapshot(a),p=plan(a,s),fresh=preview(a,s);
+  for(const field of ['candidateDDLApproved','canReadLive','canBackup','canApply',
+    'canRestore','canEnable','operationExecuted']){
+    const forged={...p,[field]:true};
+    assert.throws(()=>a.d331B2ComparePlan_(forged,fresh),/D331_B2_INVALID_PLAN/);
+  }
+  assert.throws(()=>a.d331B2ComparePlan_({...p,plannerVersion:100},fresh),/D331_B2_INVALID_PLAN/);
+  assert.throws(()=>a.d331B2ComparePlan_({...p,source:'VERIFIED_LIVE'},fresh),/D331_B2_INVALID_PLAN/);
+});
+test('failure simulation rejects forged flags and malicious descriptive operations',()=>{
+  const a=api(),p=plan(a,snapshot(a,missingNames));
+  for(const field of ['candidateDDLApproved','canReadLive','canBackup',
+    'canApply','canRestore','canEnable','operationExecuted']){
+    assert.throws(()=>a.d331B2SimulateInterruption_({...p,[field]:true},0),
+      /D331_B2_INVALID_PLAN/);
+  }
+  for(const candidateSteps of [
+    [{kind:'APPLY_TABLE',table:'DengueCases',executed:false}],
+    [{kind:'DESCRIBE_MISSING_TABLE',table:'DengueCases',executed:true}],
+    [{kind:'DESCRIBE_MISSING_TABLE',table:'UNKNOWN',executed:false}],
+    [{kind:'DESCRIBE_MISSING_TABLE',table:'DengueCases',executed:false},
+     {kind:'DESCRIBE_MISSING_TABLE',table:'DengueCases',executed:false}],
+    [{kind:'DESCRIBE_MISSING_TABLE',table:'DengueCases',executed:false,
+      sheetId:'SECRET_TARGET'}]
+  ]){
+    assert.throws(()=>a.d331B2SimulateInterruption_({...p,candidateSteps},0),
+      /D331_B2_INVALID_PLAN/);
+  }
+});
+
 test('NO schema apply, backup, restore, permission or clinical SLA helpers are defined',()=>{
   const a=api();
   for(const symbol of ['d331B2Apply_','d331B2Backup_','d331B2Restore_',
