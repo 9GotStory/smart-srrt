@@ -181,9 +181,15 @@ function native24BackupFixture(options={}) {
     for(const name of nativeFiles){
       if(name===options.missing)continue;
       let content='// known pre-existing Native24 source\n';
-      if(name==='00-g1a-foundation.gs') content=options.badD331
-        ? 'var D331_G1A_ENABLED = true;\n'
-        : 'var D331_G1A_ENABLED = false;\n';
+      if(name==='00-g1a-foundation.gs') {
+        // The legitimate remote Native25 bytes must exactly match the
+        // separately checked-out source at the approved main SHA.
+        content=fs.readFileSync(path.join(ROOT,'src/dengue/00-g1a-foundation.gs'),'utf8');
+        if(options.badD331)content=content.replace(
+          'var D331_G1A_ENABLED = false;',
+          'var D331_G1A_ENABLED = true;');
+        if(options.d331Tail)content+=options.d331Tail;
+      }
       if(name==='00-bootstrap.gs')content=options.badEntrypoints
         ? 'function doGet(e) {}\n'
         : 'function doGet(e) {}\nfunction include(filename) {}\n';
@@ -258,11 +264,17 @@ test('G-34 N1-A accepts only exact inert Native25 backup and rejects unsafe vari
   for(const bad of [
     {extra:'rogue.gs'},
     {badD331:true},
+    {d331Tail:'\nD331_G1A_ENABLED = true;\n'},
+    {d331Tail:"\nSpreadsheetApp['openById']('SYNTHETIC-NOT-REAL');\n"},
+    {d331Tail:'\ngetDb_();\n'},
+    {d331Tail:'\n// unrelated source drift must also stop\n'},
     {v8:false},
     {indexDuplicate:true}
   ]){
     const r=native24BackupFixture({...bad,layout25:true});
     assert.notEqual(r.status,0,JSON.stringify(bad));
     assert.doesNotMatch(r.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
+    if(bad.badD331||bad.d331Tail)assert.match(
+      r.stderr,/Native25 D331 source differs from exact approved main bytes/);
   }
 });
