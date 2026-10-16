@@ -8,6 +8,8 @@ export const GAS_SERVER_SOURCES = Object.freeze([
   'src/server/04-admin-and-audit.gs',
   'src/server/05-reports-and-models.gs',
   'src/server/06-gemini-and-prompts.gs',
+  // D331 N1-A: inert pure foundation only; G1-B1/B2 remain offline-only.
+  'src/dengue/00-g1a-foundation.gs',
 ]);
 
 export const GAS_HTML_SOURCES = Object.freeze([
