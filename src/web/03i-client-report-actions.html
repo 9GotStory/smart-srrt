@@ -69,6 +69,7 @@
   }
   let activeReportJob=null, reportPollTimer=null, reportPollBusy=false;
   let reportCancelPendingJobId=null, reportCancelSubmitting=false;
+  let reportCancelUnverifiedJobId=null; // P9-04: ambiguous cancel must not be blindly reissued
   function reportActionState(eventId,compact){
     const job=activeReportJob&&!reportJobTerminal(activeReportJob)?activeReportJob:null;
     const matching=!!job&&String(job.eventId)===String(eventId);
