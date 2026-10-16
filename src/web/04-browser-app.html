@@ -58,6 +58,7 @@
     const read={key,ctx,version:(adminReadVersions[key]||0)+1};
     adminReadVersions[key]=read.version;
     uiSetSectionState(null,adminReadStatusIds[key],'loading','กำลังโหลดข้อมูล...');
+    const status=el(adminReadStatusIds[key]);if(status&&typeof status.setAttribute==='function')status.setAttribute('aria-busy','true');
     return read;
   }
   function adminReadCurrent(read){
@@ -66,6 +67,7 @@
   function adminReadFinish(read,state,message){
     if(!adminReadCurrent(read))return false;
     uiSetSectionState(null,adminReadStatusIds[read.key],state,message);
+    const status=el(adminReadStatusIds[read.key]);if(status&&typeof status.setAttribute==='function'){status.setAttribute('aria-busy','false');status.setAttribute('data-ui-state',state)}
     return true;
   }
 
@@ -81,7 +83,7 @@
     resetAdminFormState();
     ++adminEpoch;++areaReadSeq;++userReadSeq;
     for(const key of Object.keys(adminReadVersions))++adminReadVersions[key];
-    for(const id of Object.values(adminReadStatusIds)){const node=el(id);if(node){node.textContent='';node.hidden=true}}
+    for(const id of Object.values(adminReadStatusIds)){const node=el(id);if(node){node.textContent='';node.hidden=true;if(typeof node.setAttribute==='function')node.setAttribute('aria-busy','false')}}
     usersCache=[];areaAdminCache=[];masterAdminCache=[];masterTypePolicies=[];
     if(typeof window!=='undefined')window._contentRows=[];
     for(const id of ['userBody','areaBody','masterDataBody','contentAdminList','auditBody',
