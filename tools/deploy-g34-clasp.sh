@@ -51,7 +51,7 @@ const [remote, local] = process.argv.slice(2);
 const scriptId = process.env.SMART_SRRT_SCRIPT_ID;
 const ordered = ['00-bootstrap.gs', '01-schema-and-db.gs', '02-auth-and-attachments.gs',
   '03-events-and-dashboard.gs', '04-admin-and-audit.gs', '05-reports-and-models.gs',
-  '06-gemini-and-prompts.gs'];
+  '06-gemini-and-prompts.gs', '00-g1a-foundation.gs'];
 const base = {scriptId, scriptExtensions:['.gs'], htmlExtensions:['.html']};
 fs.writeFileSync(remote, JSON.stringify({...base, rootDir:'.'}, null, 2)+'\n');
 fs.writeFileSync(local, JSON.stringify({...base, rootDir:'stage', filePushOrder:ordered.map(x=>'stage/'+x)}, null, 2)+'\n');
@@ -147,7 +147,8 @@ const [stage, oldManifest] = process.argv.slice(2);
 const expected = [
   '00-bootstrap.gs','01-schema-and-db.gs','02-auth-and-attachments.gs',
   '03-events-and-dashboard.gs','04-admin-and-audit.gs','05-reports-and-models.gs',
-  '06-gemini-and-prompts.gs','00-document-head.html','01-styles.html',
+  '06-gemini-and-prompts.gs','00-g1a-foundation.gs',
+  '00-document-head.html','01-styles.html',
   '02-app-layout.html','03-modals.html','03a-dashboard-mobile.html',
   '03b-client-core.html','03c-client-auth.html','03d-client-dashboard.html',
   '03e-client-dashboard-export.html','03f-client-event-controls.html',
@@ -160,7 +161,7 @@ if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Wrong sta
 if(!fs.readFileSync(path.join(stage,'appsscript.json')).equals(fs.readFileSync(oldManifest))) {
   throw new Error('Manifest was modified in the staged package');
 }
-console.log('STAGE=PASS (24 files + preserved manifest; ordered script files)');
+console.log('STAGE=PASS (25 files + preserved manifest; ordered script files)');
 NODE
 (cd "$WORK" && "$CLASP" show-file-status > "$WORK/files.before.txt") || fail 'Cannot inspect proposed clasp file push.'
 
