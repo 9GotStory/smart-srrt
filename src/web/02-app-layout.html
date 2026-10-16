@@ -112,6 +112,7 @@
         <label for="reportRegistryFilter">สถานะทะเบียนรายงาน<select class="input" id="reportRegistryFilter" onchange="renderReporterWorklist()"><option value="">ทุกสถานะ</option><option value="registered">มีรายงานในทะเบียน</option><option value="none">ยังไม่มีรายงาน</option><option value="unverified">ยังไม่ยืนยันสถานะ</option></select></label>
         <button type="button" class="btn light" onclick="resetReporterFilters()">ล้างตัวกรอง</button>
       </div>
+      <p id="reportRegistryLoadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
       <p id="reportResultSummary" class="srrt-reporter-result" role="status" aria-live="polite"></p>
       <div class="table-wrap srrt-reporter-table-wrap" role="region" tabindex="0" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น" style="margin-top:14px"><table class="srrt-reporter-table" aria-label="ตารางสถานะและรายงานสอบสวนโรคเบื้องต้น"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>ความพร้อมข้อมูล</th><th>ทะเบียนรายงาน</th><th>สถานะงาน AI</th><th>การดำเนินการหลัก</th></tr></thead><tbody id="reportBody"></tbody></table></div>
     </section>
@@ -142,6 +143,7 @@
         </select>
       </label>
       <div id="admin-workspace-overview" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-overview">
+      <p id="adminAnalyticsStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
       <div class="grid kpis">
         <div class="card kpi"><i class="fa-solid fa-users"></i><div class="num" id="akUsers">0</div><div class="label">ผู้ใช้ทั้งหมด</div></div>
         <div class="card kpi"><i class="fa-solid fa-user-check"></i><div class="num" id="akActive">0</div><div class="label">ผู้ใช้ Active</div></div>
@@ -151,6 +153,7 @@
 
       <div class="card">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-screwdriver-wrench"></i> สถานะการติดตั้ง</h3><button class="btn orange" onclick="repairSystem()"><i class="fa-solid fa-wand-magic-sparkles"></i>ตรวจสอบ/ซ่อมระบบอัตโนมัติ</button></div>
+        <p id="adminInstallReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <div id="installStatus" class="help">กำลังตรวจสอบ...</div>
       </div>
 
@@ -158,6 +161,7 @@
       <div id="admin-workspace-settings" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-settings" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" id="adminSaveSettingsBtn" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
+        <p id="adminSettingsReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <div class="settings-grid">
           <div class="setting-group">
             <h4>ข้อมูลเว็บไซต์</h4>
@@ -199,6 +203,7 @@
           <h3><i class="fa-solid fa-list-check"></i> จัดการข้อมูลมาตรฐาน (MasterData)</h3>
           <button class="btn" onclick="openMasterDataForm()"><i class="fa-solid fa-plus"></i> เพิ่มค่า</button>
         </div>
+        <p id="adminMasterReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <div class="help">จัดการได้เฉพาะ Type ที่ระบบรองรับ ค่า criteria และ verify_status เป็นค่าควบคุมของระบบ จึงไม่สามารถเพิ่ม Value ใหม่หรือปิดใช้งานได้</div>
         <div class="form-grid" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);margin:12px 0">
           <div class="fg"><label for="masterTypeFilter">กรองตาม Type</label><select id="masterTypeFilter" onchange="renderMasterDataAdmin()"><option value="">ทั้งหมด</option></select></div>
@@ -212,6 +217,8 @@
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" aria-label="เลือกไฟล์นำเข้าข้อมูลพื้นที่" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
         <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน — ระบบจะแสดงจำนวนแถวให้ยืนยันก่อนนำเข้าจริง</div>
+        <p id="adminAreasReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
+        <p id="adminImportStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <input class="input" id="areaSearch" aria-label="ค้นหาข้อมูลพื้นที่ระดับหมู่บ้าน" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><table aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
       </div>
@@ -220,13 +227,14 @@
       <div id="admin-workspace-users" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-users" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3>จัดการผู้ใช้งาน</h3><button class="btn" onclick="loadUsers()"><i class="fa-solid fa-rotate"></i>โหลดผู้ใช้</button></div>
+        <p id="adminUsersReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <input class="input" id="userSearch" aria-label="ค้นหาผู้ใช้งาน" placeholder="ค้นหาชื่อ/อีเมล/หน่วยงาน" oninput="loadUsers()" style="width:100%;margin-bottom:12px">
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><table aria-label="ตารางจัดการบัญชีผู้ใช้งาน"><thead><tr><th>ชื่อ</th><th>Email</th><th>Role</th><th>Status</th><th>หน่วยงาน</th><th>พื้นที่</th><th>จัดการ</th></tr></thead><tbody id="userBody"></tbody></table></div>
       </div>
 
       </div>
       <div id="admin-workspace-content" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-content" hidden>
-        <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><div id="contentAdminList"></div></div>
+        <div class="card"><div class="panel-head" style="margin-top:0"><h3>ประกาศ/แนวทาง/คู่มือ</h3><button class="btn" onclick="openContentForm()"><i class="fa-solid fa-plus"></i>เพิ่ม</button></div><p id="adminContentReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p><div id="contentAdminList"></div></div>
       </div>
       <div id="admin-workspace-audit" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
         <div class="card">
@@ -238,6 +246,8 @@
       <button class="btn secondary" id="archiveAuditBtn" onclick="archiveAuditNow()"><i class="fa-solid fa-box-archive"></i> Archive รายการเก่า</button>
     </div>
   </div>
+  <p id="adminAuditReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
+  <p id="adminArchiveStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
   <div id="auditRetentionStatus" class="help" style="margin-bottom:12px">กำลังโหลดนโยบาย Audit retention...</div>
   <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางประวัติการดำเนินงาน"><table aria-label="ตารางประวัติการดำเนินงาน"><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>Action</th><th>Target</th></tr></thead><tbody id="auditBody"></tbody></table></div>
 </div>
