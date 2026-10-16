@@ -302,7 +302,12 @@
     const ctx=adminContext();
     if(!ctx){toast('สิทธิ์ไม่เพียงพอ');input.value='';return}
     if(adminBusy.import){toast('กำลังนำเข้าข้อมูลพื้นที่');return}
+    const lease=uiBeginAction('admin:import:'+ctx.token+':'+ctx.epoch,{
+      statusId:'adminImportStatus',pendingText:'กำลังอ่านและตรวจสอบไฟล์ข้อมูลพื้นที่...'
+    });
+    if(!lease)return;
     adminBusy.import=true;
+    let sent=false,confirmed=false,cancelled=false,done=0,total=0;
     try{
       const data=await file.arrayBuffer();
       if(!adminCurrent(ctx))return;
@@ -317,16 +322,32 @@
         villageCode:r['รหัสหมู่บ้าน']||r['villageCode']||r['VillageCode']||''
       })).filter(x=>x.province&&x.amphoe&&x.tambon&&x.moo&&x.village);
       if(!mapped.length)throw new Error('ไม่พบคอลัมน์ข้อมูลพื้นที่ที่รองรับ');
-      if(!confirm('ตรวจพบข้อมูลพื้นที่ '+mapped.length+' แถว จาก '+rows.length+' แถว ยืนยันนำเข้าหรือไม่?'))return;
+      if(!confirm('ตรวจพบข้อมูลพื้นที่ '+mapped.length+' แถว จาก '+rows.length+' แถว ยืนยันนำเข้าหรือไม่?')){cancelled=true;return}
       if(!adminCurrent(ctx))return;
+      total=Math.ceil(mapped.length/200);
       for(let i=0;i<mapped.length;i+=200){
+        sent=true;
         const msg=await gs('importAreas',ctx.token,mapped.slice(i,i+200));
         if(!adminCurrent(ctx))return;
+        ++done;
+        uiSetSectionState(null,'adminImportStatus','loading','นำเข้าข้อมูลชุด '+done+' จาก '+total+' ชุดแล้ว');
         toast(msg)
       }
+      confirmed=true;
       if(adminCurrent(ctx))await refreshAreas()
-    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
-    finally{adminBusy.import=false;input.value=''}
+    }catch(e){
+      if(adminCurrent(ctx))toast(sent?
+        'ไม่สามารถยืนยันผล Import ทุกชุดได้ กรุณาตรวจสอบข้อมูลจริงก่อนนำเข้าอีกครั้ง':
+        String(e.message||e))
+    }finally{
+      adminBusy.import=false;input.value='';
+      if(adminCurrent(ctx))
+        uiFinishAction(lease,cancelled?'idle':confirmed?'success':sent?'unknown':'error',
+          cancelled?'':confirmed?'นำเข้าข้อมูลครบ '+done+' จาก '+total+' ชุดแล้ว':
+          sent?'Import ไม่แน่ชัด: ยืนยันแล้ว '+done+' จาก '+total+' ชุด กรุณาตรวจสอบก่อนส่งซ้ำ':
+          'อ่าน/ตรวจสอบไฟล์ไม่สำเร็จ');
+      else uiInvalidateAction(lease);
+    }
   }
 
   async function loadUsers(){
