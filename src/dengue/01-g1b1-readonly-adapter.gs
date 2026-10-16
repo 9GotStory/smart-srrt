@@ -47,7 +47,7 @@ function d331B1ValidHeaders_(headers) {
  * readTableHeaders(knownTableName), readTableRowCount(knownTableName).
  * A future live reader MUST have an independently approved operator gate.
  */
-function d331B1ReadSnapshot_(reader) {
+function d331B1ReadPreview_(reader) {
   d331B1RequireContracts_();
   if (!reader || typeof reader.listTableNames !== 'function' ||
       typeof reader.readModuleVersion !== 'function' ||
@@ -80,7 +80,9 @@ function d331B1ReadSnapshot_(reader) {
       // Never return raw record values or other spreadsheet content.
       tables[name] = {headers:headers.slice(),rowCount:count};
     });
-    return {moduleSchemaVersion:version,tables:tables};
+    // Convert and discard raw headers before crossing the reader boundary.
+    // Neither this function nor its caller may return untrusted header text.
+    return d331B1PreviewSchema_({moduleSchemaVersion:version,tables:tables});
   } catch (ignore) {
     // Never return underlying error text: it may reveal spreadsheet cells,
     // database IDs, patient names or environment paths.
@@ -150,7 +152,7 @@ function d331B1PreviewSchema_(snapshot) {
 }
 
 function d331B1PreviewFromReader_(reader) {
-  return d331B1PreviewSchema_(d331B1ReadSnapshot_(reader));
+  return d331B1ReadPreview_(reader);
 }
 
 /**
@@ -160,7 +162,7 @@ function d331B1PreviewFromReader_(reader) {
  * The area evidence MUST be resolved by future trusted server code; this pure
  * proposal does not authorize access even with a syntactically valid proof.
  */
-function d331B1ProjectEvent_(mainRow, areaEvidence) {
+function d331B1ProjectEvent_(mainRow) {
   d331B1RequireContracts_();
   if (!Array.isArray(mainRow) || mainRow.length < 39) {
     throw new Error('D331_B1_INVALID_EVENT');
@@ -179,12 +181,8 @@ function d331B1ProjectEvent_(mainRow, areaEvidence) {
   var owner = mainRow[38];
   if (typeof owner !== 'string' || owner.length > 128 ||
       owner !== owner.trim()) throw new Error('D331_B1_INVALID_EVENT');
-  // The evidence object is only trusted when it was produced by an approved
-  // future server adapter. In G1-B1 it NEVER grants area access or eligibility.
-  var validAreaEvidence = !!(areaEvidence && areaEvidence.verified === true &&
-    areaEvidence.eventId === id && typeof areaEvidence.areaId === 'string' &&
-    areaEvidence.areaId.trim() === areaEvidence.areaId && !!areaEvidence.areaId &&
-    areaEvidence.areaId.length <= 128);
+  // There is NO trusted area evidence resolver in G1-B1. Unverified caller
+  // inputs cannot produce a positive authorization or evidence signal.
   return {
     eventId:id,
     revision:revision,
@@ -192,7 +190,7 @@ function d331B1ProjectEvent_(mainRow, areaEvidence) {
     ownerUserId:owner,
     areaId:null,
     eligibleDisease:false,
-    areaEvidenceAvailable:validAreaEvidence,
+    areaEvidenceAvailable:false,
     authorizationReady:false
   };
 }
