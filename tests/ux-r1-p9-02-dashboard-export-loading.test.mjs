@@ -131,3 +131,25 @@ test('P9-02 Export/Capture status and export link remain outside dashboard image
     'dashboardResetBtn','dashboardReporterRefreshBtn','dashboardExcelBtn','dashboardServerExportBtn'])
     assert.equal((layout.match(new RegExp('id="'+id+'"','g'))||[]).length,1,id);
 });
+
+test('P9-02 PNG capture locks repeated clicks, discards stale session, and never downloads private pixels',async()=>{
+  const h=fixture(),image=deferred();
+  const frames=[];
+  h.ctx.html2canvas=target=>{
+    frames.push(target);
+    return image.promise;
+  };
+  h.el('page-dashboard').setAttribute('data-dashboard-state','ready');
+  h.ctx.dashboardChartInstances.set('synthetic-chart',{stop(){},update(){}});
+  const first=vm.runInContext('captureDashboard()',h.ctx);
+  assert.equal(h.el('dashboardCaptureBtn').disabled,true);
+  assert.match(h.el('dashboardCaptureBtn').textContent,/กำลังสร้างภาพ/);
+  const second=vm.runInContext('captureDashboard()',h.ctx);
+  assert.equal(frames.length,1);
+  h.ctx.token='NEW-AUTH';
+  h.ctx.dashboardLoadRequest++;
+  image.resolve({toDataURL:()=>{throw Error('stale must not encode')}});
+  await Promise.all([first,second]);
+  assert.equal(h.downloads.length,0);
+  assert.equal(h.el('dashboardCaptureBtn').getAttribute('aria-busy'),'false');
+});
