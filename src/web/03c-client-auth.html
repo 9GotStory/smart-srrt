@@ -2,6 +2,7 @@
 
   // UX-R1/P6-05: authentication UI is advisory; GS authentication/RBAC is authoritative.
   let authRequestEpoch=0,authLoginPending=false,authRegisterPending=false,authReturnFocus=null;
+  let authLoginLease=null,authRegisterLease=null,authLogoutPending=false;
   function canSelfRegister(){
     return String(settings&&settings.ALLOW_SELF_REGISTER||'false').trim().toLowerCase()==='true'
   }
@@ -21,6 +22,8 @@
     setAuthStatus('authRegisterStatus','')
   }
   function resetAuthPending(){
+    if(authLoginLease){uiInvalidateAction(authLoginLease);authLoginLease=null}
+    if(authRegisterLease){uiInvalidateAction(authRegisterLease);authRegisterLease=null}
     authLoginPending=false;authRegisterPending=false;
     for(const id of ['authLoginSubmitBtn','authRegisterSubmitBtn']){
       const button=el(id);if(button)button.disabled=false
@@ -77,14 +80,27 @@
 
   async function boot(){
     const startToken=token,startEpoch=authRequestEpoch,startUser=currentUser;
+    const lease=uiBeginAction('app:boot',{statusId:'appBootStatus',pendingText:'กำลังเตรียมระบบและโหลดข้อมูล...'});
+    if(!lease)return;
+    const retry=el('appBootRetryBtn');if(retry)retry.hidden=true;
+    let failed=false;
     try{
       const b=await gs('getAppBoot',startToken);
       if(!authResultCurrent(startEpoch,startToken,startUser))return;
+      if(!b||typeof b!=='object')throw new Error('Invalid application bootstrap response');
       settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
       syncAuthRegistration();applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
       if(currentUser)void recoverReportJob();
       await loadDashboard()
-    }catch(e){if(authResultCurrent(startEpoch,startToken,startUser))toast(e.message||e)}
+    }catch(e){
+      if(authResultCurrent(startEpoch,startToken,startUser)){failed=true;toast(e.message||e)}
+    }finally{
+      if(authResultCurrent(startEpoch,startToken,startUser)){
+        uiFinishAction(lease,failed?'error':'ready',
+          failed?'ไม่สามารถเริ่มต้นระบบได้ กรุณาลองโหลดใหม่':'');
+        if(retry)retry.hidden=!failed;
+      }else uiInvalidateAction(lease)
+    }
   }
 
   function updateAuthBox(){
@@ -112,8 +128,10 @@
     const password=String(el('loginPassword').value||'');
     if(!email||!password){setAuthStatus('authLoginStatus','กรุณากรอกอีเมลและรหัสผ่าน');return}
     const startToken=token,startUser=currentUser,epoch=++authRequestEpoch;
-    authLoginPending=true;el('authLoginSubmitBtn').disabled=true;
-    setAuthStatus('authLoginStatus','กำลังตรวจสอบบัญชีผู้ใช้งาน');
+    const lease=uiBeginAction('auth:login',{buttonId:'authLoginSubmitBtn',
+      statusId:'authLoginStatus',pendingText:'กำลังตรวจสอบบัญชีผู้ใช้งาน...'});
+    if(!lease)return;
+    authLoginLease=lease;authLoginPending=true;
     try{
       const r=await gs('login',{email,password});
       if(!authResultCurrent(epoch,startToken,startUser))return;
@@ -131,10 +149,20 @@
         setAuthStatus('authLoginStatus',e.message||e)
       }
     }finally{
-      if(epoch===authRequestEpoch){authLoginPending=false;el('authLoginSubmitBtn').disabled=false}
+      if(epoch===authRequestEpoch){
+        authLoginPending=false;
+        if(authLoginLease===lease){
+          const message=el('authLoginStatus').textContent;
+          uiFinishAction(lease,message?'error':'ready',message);
+          authLoginLease=null;
+        }
+        el('authLoginSubmitBtn').disabled=false;
+      }
     }
   }
   async function doLogout(){
+    if(typeof authLogoutPending!=='undefined'&&authLogoutPending)return;
+    if(typeof authLogoutPending!=='undefined')authLogoutPending=true;
     // G-33/R1: invalidate the local session synchronously at logout entry so no
     // in-flight readiness, create, warning-continuation or recovery callback can
     // still pass its session guard after the user chose logout. The previous
@@ -145,6 +173,7 @@
     if(typeof authRequestEpoch!=='undefined')++authRequestEpoch;
     if(typeof resetAuthPending==='function')resetAuthPending();
     if(typeof resetAuthFields==='function')resetAuthFields();
+    if(typeof uiInvalidateAllActions==='function')uiInvalidateAllActions();
     closeModal('loginModal');
     if(typeof authReturnFocus!=='undefined')authReturnFocus=null;
     ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;pendingReportRegenerationConsentId='';++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
@@ -156,10 +185,19 @@
     token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;if(typeof resetAdminWorkspace==='function')resetAdminWorkspace();if(typeof resetAdminPrivate==='function')resetAdminPrivate();if(typeof invalidateEventActionUi==='function')invalidateEventActionUi();discardRecordFormOnLogout();renderTables();
     if(typeof destroyDashboardCharts==='function')destroyDashboardCharts(true);
     updateAuthBox();if(typeof setDashboardViewState==='function')setDashboardViewState('loading');toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));
-    try{await gs('logout',logoutToken)}catch(e){}
-    // A newer login may have started while the logout RPC was in flight; never clobber it.
-    if(token)return;
-    await loadDashboard()
+    const logoutLease=typeof uiBeginAction==='function'
+      ?uiBeginAction('auth:logout',{statusId:'sessionActivityStatus',pendingText:'กำลังยืนยันการออกจากระบบ...'}):null;
+    let confirmed=true;
+    try{
+      try{await gs('logout',logoutToken)}catch(e){confirmed=false}
+      // A newer login may have started while the logout RPC was in flight; never clobber it.
+      if(token)return;
+      await loadDashboard();
+    }finally{
+      if(logoutLease)uiFinishAction(logoutLease,confirmed?'success':'error',token?''
+        :confirmed?'ออกจากระบบเรียบร้อยแล้ว':'ออกจากระบบในเบราว์เซอร์แล้ว แต่ยังยืนยันผลกับเซิร์ฟเวอร์ไม่ได้');
+      if(typeof authLogoutPending!=='undefined')authLogoutPending=false;
+    }
   }
   async function register(){
     if(authRegisterPending||authLoginPending||currentUser)return;
@@ -170,8 +208,10 @@
       setAuthStatus('authRegisterStatus','กรุณากรอกชื่อ อีเมล และรหัสผ่าน');return
     }
     const startToken=token,startUser=currentUser,epoch=++authRequestEpoch;
-    authRegisterPending=true;el('authRegisterSubmitBtn').disabled=true;
-    setAuthStatus('authRegisterStatus','กำลังส่งคำขอสมัครใช้งาน');
+    const lease=uiBeginAction('auth:register',{buttonId:'authRegisterSubmitBtn',
+      statusId:'authRegisterStatus',pendingText:'กำลังส่งคำขอสมัครใช้งาน...'});
+    if(!lease)return;
+    authRegisterLease=lease;authRegisterPending=true;
     try{
       const message=await gs('registerUser',{name,email,password,org});
       if(!authResultCurrent(epoch,startToken,startUser))return;
@@ -183,7 +223,15 @@
         setAuthStatus('authRegisterStatus',e.message||e)
       }
     }finally{
-      if(epoch===authRequestEpoch){authRegisterPending=false;el('authRegisterSubmitBtn').disabled=false}
+      if(epoch===authRequestEpoch){
+        authRegisterPending=false;
+        if(authRegisterLease===lease){
+          const message=el('authRegisterStatus').textContent;
+          uiFinishAction(lease,message&&message.includes('รอผู้ดูแลระบบ')?'success':message?'error':'ready',message);
+          authRegisterLease=null;
+        }
+        el('authRegisterSubmitBtn').disabled=false;
+      }
     }
   }
 

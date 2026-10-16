@@ -1,17 +1,59 @@
 <script>
   function exportClientExcel(){
     if(!currentUser){toast('กรุณาเข้าสู่ระบบเพื่อ Export ข้อมูล');return}
-    const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx')
+    const page=el('page-dashboard');
+    if(page&&['loading','error'].includes(page.getAttribute('data-dashboard-state'))){
+      toast('กรุณารอให้ Dashboard โหลดข้อมูลเสร็จก่อนส่งออก');return
+    }
+    const lease=uiBeginAction('dashboard:localExcel',
+      {buttonId:'dashboardExcelBtn',statusId:'dashboardExportStatus',pendingText:'กำลังเตรียมไฟล์ Excel...'});
+    if(!lease)return;
+    try{
+      const rows=allData.map(r=>({'วันรับแจ้ง':r.col2,'โรค/เหตุการณ์':r.col6,'ชื่อหมู่บ้าน':r.col29,'หมู่':r.col10,'รหัสหมู่บ้าน':r.col30,'ตำบล':r.col11,'อำเภอ':r.col12,'จังหวัด':r.col13,'รายละเอียด':r.col14,'เข้าเกณฑ์':r.col17,'ความเสี่ยง':r.col19,'วันที่ลงสอบสวน':r.col26}));
+      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'SRRT_Data');
+      XLSX.writeFile(wb,(settings.APP_NAME||'Smart_SRRT')+'_Export.xlsx');
+      uiFinishAction(lease,'success','ส่งไฟล์ Excel ไปยังเบราว์เซอร์แล้ว');
+    }catch(e){
+      uiFinishAction(lease,'error','ไม่สามารถเตรียมไฟล์ Excel ได้ กรุณาตรวจสอบและลองใหม่');
+      toast('ส่งออก Excel ไม่สำเร็จ: '+(e.message||e))
+    }
   }
-  async function exportServerFile(format){try{const r=await gs('exportData',token,format);window.open(r.url,'_blank');toast(r.message)}catch(e){toast(e.message||e)}}
+  async function exportServerFile(format){
+    if(!currentUser||!token){toast('กรุณาเข้าสู่ระบบเพื่อ Export ข้อมูล');return}
+    const session=token,user=currentUser;
+    const lease=uiBeginAction('dashboard:serverExport:'+format,
+      {buttonId:'dashboardServerExportBtn',statusId:'dashboardExportStatus',pendingText:'กำลังสร้างไฟล์ใน Google Drive...'});
+    if(!lease)return;
+    const link=el('dashboardExportLink');
+    if(link){link.hidden=true;link.removeAttribute('href')}
+    let state='unknown',message='ยังไม่สามารถยืนยันผลการสร้างไฟล์ได้ กรุณาตรวจสอบ Google Drive ก่อนส่งคำขอใหม่';
+    try{
+      const result=await gs('exportData',session,format);
+      if(token!==session||currentUser!==user)return;
+      const url=String(result&&result.url||'');
+      if(!/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url))
+        throw new Error('ไม่พบลิงก์ไฟล์ Export ที่ถูกต้อง');
+      if(link){link.href=url;link.hidden=false}
+      // This click-safe link is retained because browsers may block async popups.
+      state='success';message='สร้างไฟล์ Export สำเร็จ เลือก “เปิดไฟล์ที่สร้าง” เพื่อดูใน Google Drive';
+      toast(result.message||'สร้างไฟล์ Export แล้ว')
+    }catch(e){
+      if(token===session&&currentUser===user)toast('ยังยืนยันการสร้างไฟล์ Export ไม่ได้ โปรดตรวจ Google Drive ก่อนทำซ้ำ')
+    }finally{
+      if(token===session&&currentUser===user)uiFinishAction(lease,state,message);
+      else uiInvalidateAction(lease)
+    }
+  }
   async function captureDashboard(){
     const page=el('page-dashboard'),captureButton=el('dashboardCaptureBtn');
     if(!page||['loading','error'].includes(page.getAttribute('data-dashboard-state'))||
       (captureButton&&captureButton.disabled)){toast('กรุณารอให้ Dashboard โหลดเสร็จ');return}
+    const lease=uiBeginAction('dashboard:capture',
+      {buttonId:'dashboardCaptureBtn',statusId:'dashboardCaptureStatus',pendingText:'กำลังสร้างภาพ Dashboard...'});
+    if(!lease)return;
     const request=dashboardLoadRequest,session=token,hasUser=!!currentUser;
+    let outcome='ready',note='';
     try{
-      if(captureButton)captureButton.disabled=true;
       // Chart.js uses canvas. Stop animations and render the exact complete frame
       // before html2canvas clones the aggregate-only captureArea.
       for(const chart of dashboardChartInstances.values()){
@@ -29,9 +71,17 @@
       a.download=(settings.APP_NAME||'Smart_SRRT')+'_Dashboard.png';
       a.href=canvas.toDataURL('image/png');
       a.click();
-    }catch(e){toast('ไม่สามารถบันทึกภาพ Dashboard ได้: '+(e.message||e))}
-    finally{if(captureButton)captureButton.disabled=
-      ['loading','error'].includes(page.getAttribute('data-dashboard-state'));}
+    }catch(e){
+      if(session===token&&hasUser===!!currentUser){
+        outcome='error';note='ไม่สามารถบันทึกภาพ Dashboard ได้ กรุณาลองใหม่';
+        toast('ไม่สามารถบันทึกภาพ Dashboard ได้: '+(e.message||e))
+      }
+    }finally{
+      if(session===token&&hasUser===!!currentUser)
+        uiFinishAction(lease,outcome,note,{canEnable:()=>!
+          ['loading','error'].includes(page.getAttribute('data-dashboard-state'))});
+      else uiInvalidateAction(lease)
+    }
   }
 
 </script>
