@@ -180,13 +180,20 @@ function d331RequestDecision_(existing, request) {
   }
   throw new Error('D331_INVALID_LEDGER_STATE');
 }
-function d331LedgerTransition_(entry, action) {
+function d331LedgerTransition_(entry, action, proof) {
+  // Pure transition contract: the future caller must provide verified evidence
+  // from an authoritative business row before declaring durable COMMITTED.
   if (!entry || !d331IsUuid_(entry.requestId)) throw new Error('D331_INVALID_LEDGER_STATE');
+  d331RequestDecision_(null, entry); // validate principal/operation/digest.
   var next;
-  if (entry.phase === 'PENDING' && action === 'COMMIT') next = 'COMMITTED';
-  else if (entry.phase === 'PENDING' && action === 'AMBIGUOUS') next = 'UNKNOWN';
-  else if (entry.phase === 'UNKNOWN' && action === 'RECONCILED_COMMIT') next = 'COMMITTED';
-  else throw new Error('D331_RECONCILIATION_REQUIRED');
+  if (entry.phase === 'PENDING' && action === 'COMMIT' && proof === 'AUTHORITATIVE_MATCH') {
+    next = 'COMMITTED';
+  } else if (entry.phase === 'PENDING' && action === 'AMBIGUOUS') {
+    next = 'UNKNOWN';
+  } else if (entry.phase === 'UNKNOWN' && action === 'RECONCILED_COMMIT' &&
+             proof === 'AUTHORITATIVE_MATCH') {
+    next = 'COMMITTED';
+  } else throw new Error('D331_RECONCILIATION_REQUIRED');
   return { requestId: entry.requestId, principalId: entry.principalId,
     operation: entry.operation, payloadDigest: entry.payloadDigest, phase: next };
 }
