@@ -78,11 +78,14 @@ function d331CountPair_(inspected, positive) {
   }
   return { inspected: inspected, positive: positive, percent: inspected ? 100 * positive / inspected : null };
 }
-function d331AggregateCounts_(pairs) {
-  if (!Array.isArray(pairs)) throw new Error('D331_INVALID_COUNTS');
+function d331AggregateCounts_(pairs, expectedScopeKey) {
+  // Aggregation must never mix rounds, areas, or other non-comparable scopes.
+  if (!Array.isArray(pairs) || typeof expectedScopeKey !== 'string' ||
+      !expectedScopeKey) throw new Error('D331_INVALID_COUNTS');
   var inspected = 0, positive = 0;
   pairs.forEach(function (pair) {
-    var validated = d331CountPair_(pair && pair.inspected, pair && pair.positive);
+    if (!pair || pair.scopeKey !== expectedScopeKey) throw new Error('D331_MIXED_SCOPE');
+    var validated = d331CountPair_(pair.inspected, pair.positive);
     inspected += validated.inspected;
     positive += validated.positive;
     if (!Number.isSafeInteger(inspected) || !Number.isSafeInteger(positive)) {
@@ -95,12 +98,13 @@ function d331FeatureGuard_() {
   // Must not be activated as a side effect of schema inspection or boot.
   if (D331_G1A_ENABLED !== true) throw new Error('D331_FEATURE_DISABLED');
 }
-function d331InspectHeaders_(actual) {
+function d331InspectHeaders_(actual, actualVersion) {
   // Pure function: caller provides an offline object, never a Spreadsheet.
   if (!actual || typeof actual !== 'object' || Array.isArray(actual)) {
     throw new Error('D331_INVALID_SCHEMA_INPUT');
   }
   var problems = [];
+  if (actualVersion !== D331_G1A_SCHEMA_VERSION) problems.push('SCHEMA_VERSION_MISMATCH');
   Object.keys(D331_G1A_SCHEMAS).forEach(function (name) {
     var wanted = D331_G1A_SCHEMAS[name], got = actual[name];
     if (!Array.isArray(got)) { problems.push(name + ':MISSING'); return; }
@@ -150,6 +154,28 @@ function d331Authorize_(principal, event, capability, isWrite) {
         (Array.isArray(principal.allowedEventIds) &&
          principal.allowedEventIds.indexOf(event.eventId) >= 0))) {
     throw new Error('D331_FORBIDDEN');
+  }
+  return true;
+}
+function d331RequireEnum_(value, allowed) {
+  if (!Array.isArray(allowed) || !allowed.length ||
+      allowed.some(function(v) { return typeof v !== 'string' || !v; }) ||
+      typeof value !== 'string' || allowed.indexOf(value) < 0) {
+    throw new Error('D331_INVALID_ENUM');
+  }
+  return value;
+}
+function d331BindScopedEntity_(eventId, parent, child, parentIdKey, childFkKey) {
+  // Internal contract only: trusted caller fixes key names (never from a browser).
+  d331RequireUuid_(eventId);
+  if (!parent || !child || typeof parentIdKey !== 'string' ||
+      typeof childFkKey !== 'string' ||
+      !/^(PlanID|SurveyID|FollowupID)$/.test(parentIdKey) ||
+      !/^(PlanID|SurveyID|FollowupID)$/.test(childFkKey) ||
+      !d331IsUuid_(parent[parentIdKey]) ||
+      parent.EventID !== eventId || child.EventID !== eventId ||
+      child[childFkKey] !== parent[parentIdKey]) {
+    throw new Error('D331_FOREIGN_CHILD');
   }
   return true;
 }
