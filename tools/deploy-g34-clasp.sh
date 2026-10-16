@@ -136,11 +136,15 @@ if (isNative24 || isNative25) {
   }
 }
 if (isNative25) {
-  const d331 = fs.readFileSync(path.join(root, '00-g1a-foundation.gs'), 'utf8');
-  // Fast-fail known unsafe source layouts before any source push or deployment.
-  if (!/^var D331_G1A_ENABLED = false;$/m.test(d331) ||
-      /\b(?:SpreadsheetApp|DriveApp|PropertiesService|LockService|ScriptApp|UrlFetchApp)\s*\./.test(d331)) {
-    throw new Error('Native25 D331 feature flag or service boundary not safe');
+  // The bash preflight already pinned the tracked, clean current checkout to an
+  // exact Product Owner approved main commit. Its canonical G1-A source is the
+  // closed-world allowlist for this release. A prior Native25 with different
+  // bytes must be reviewed and explicitly allowlisted in a future revision;
+  // do NOT try to infer its safety from syntax or presence of a flag line.
+  const approved = fs.readFileSync(path.join(process.cwd(), 'src/dengue/00-g1a-foundation.gs'));
+  const backedUp = fs.readFileSync(path.join(root, '00-g1a-foundation.gs'));
+  if (!backedUp.equals(approved)) {
+    throw new Error('Native25 D331 source differs from exact approved main bytes; STOP before push');
   }
 }
 const layoutLabel=isNative25?'BACKED_UP_NATIVE_25_LAYOUT=PASS':
