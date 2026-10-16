@@ -27,7 +27,7 @@ function d331RequireUuid_(value) {
 }
 function d331RequireRevision_(revision) {
   if (typeof revision !== 'number' || !isFinite(revision) ||
-      revision < 1 || Math.floor(revision) !== revision) {
+      revision < 1 || !Number.isSafeInteger(revision)) {
     throw new Error('D331_INVALID_REVISION');
   }
   return revision;
@@ -141,16 +141,20 @@ function d331Authorize_(principal, event, capability, isWrite) {
   // The future GAS RPC must load both principal and event from trusted SERVER state.
   // Never take principal, owner, area or capabilities from browser payload.
   if (!principal || principal.active !== true || typeof principal.userId !== 'string' ||
+      !principal.userId.trim() || principal.userId !== principal.userId.trim() ||
+      typeof isWrite !== 'boolean' ||
       !event || !d331IsUuid_(event.eventId) || !Array.isArray(principal.capabilities) ||
       typeof capability !== 'string' || !/^dengue\.[a-z.]+$/.test(capability) ||
       principal.capabilities.indexOf(capability) < 0) throw new Error('D331_FORBIDDEN');
   if (event.eligibleDisease !== true ||
       (event.recordStatus !== 'active' && event.recordStatus !== 'closed') ||
       (isWrite === true && event.recordStatus !== 'active')) throw new Error('D331_FORBIDDEN');
-  if (typeof event.areaId !== 'string' || !event.areaId ||
+  if (typeof event.areaId !== 'string' || !event.areaId.trim() ||
+      event.areaId !== event.areaId.trim() ||
       !Array.isArray(principal.allowedAreaIds) ||
       principal.allowedAreaIds.indexOf(event.areaId) < 0) throw new Error('D331_FORBIDDEN');
-  if (!(event.ownerUserId === principal.userId ||
+  if (!((typeof event.ownerUserId === 'string' && !!event.ownerUserId.trim() &&
+          event.ownerUserId === principal.userId) ||
         (Array.isArray(principal.allowedEventIds) &&
          principal.allowedEventIds.indexOf(event.eventId) >= 0))) {
     throw new Error('D331_FORBIDDEN');
@@ -182,10 +186,14 @@ function d331BindScopedEntity_(eventId, parent, child, parentIdKey, childFkKey) 
 function d331BindChild_(eventId, child, plan) {
   d331RequireUuid_(eventId);
   if (!child || child.eventId !== eventId) throw new Error('D331_FOREIGN_CHILD');
-  if (plan !== undefined && plan !== null) {
-    if (!d331IsUuid_(plan.planId) || plan.eventId !== eventId ||
-        child.planId !== plan.planId) throw new Error('D331_FOREIGN_CHILD');
-  }
+  // Cases and simple event children may have no PlanID. Once a PlanID field
+  // exists, the authoritative plan is mandatory (never optional by omission).
+  var hasPlanFk = Object.prototype.hasOwnProperty.call(child, 'planId');
+  var suppliedPlan = plan !== undefined && plan !== null;
+  if (hasPlanFk !== suppliedPlan) throw new Error('D331_FOREIGN_CHILD');
+  if (hasPlanFk &&
+      (!d331IsUuid_(plan.planId) || plan.eventId !== eventId ||
+       child.planId !== plan.planId)) throw new Error('D331_FOREIGN_CHILD');
   return true;
 }
 function d331RequestDecision_(existing, request) {
@@ -206,22 +214,18 @@ function d331RequestDecision_(existing, request) {
   }
   throw new Error('D331_INVALID_LEDGER_STATE');
 }
-function d331LedgerTransition_(entry, action, proof) {
-  // Pure transition contract: the future caller must provide verified evidence
-  // from an authoritative business row before declaring durable COMMITTED.
+function d331LedgerTransition_(entry, action) {
+  // G1-A models only safe ambiguity handling. A string/DTO passed by a caller
+  // is NOT authoritative business-row evidence. COMMITTED transitions are
+  // deliberately unavailable until a separately approved G1-B trusted
+  // ledger writer reconciles against a real persisted business row.
   if (!entry || !d331IsUuid_(entry.requestId)) throw new Error('D331_INVALID_LEDGER_STATE');
   d331RequestDecision_(null, entry); // validate principal/operation/digest.
-  var next;
-  if (entry.phase === 'PENDING' && action === 'COMMIT' && proof === 'AUTHORITATIVE_MATCH') {
-    next = 'COMMITTED';
-  } else if (entry.phase === 'PENDING' && action === 'AMBIGUOUS') {
-    next = 'UNKNOWN';
-  } else if (entry.phase === 'UNKNOWN' && action === 'RECONCILED_COMMIT' &&
-             proof === 'AUTHORITATIVE_MATCH') {
-    next = 'COMMITTED';
-  } else throw new Error('D331_RECONCILIATION_REQUIRED');
+  if (entry.phase !== 'PENDING' || action !== 'AMBIGUOUS') {
+    throw new Error('D331_RECONCILIATION_REQUIRED');
+  }
   return { requestId: entry.requestId, principalId: entry.principalId,
-    operation: entry.operation, payloadDigest: entry.payloadDigest, phase: next };
+    operation: entry.operation, payloadDigest: entry.payloadDigest, phase: 'UNKNOWN' };
 }
 function d331SyntheticIdMap_(legacyIds, uuidFactory) {
   // For offline prototype fixture IDs ONLY. Does not touch MainData or expose a migration RPC.
