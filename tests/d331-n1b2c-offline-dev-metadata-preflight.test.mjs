@@ -82,7 +82,8 @@ test('synthetic positive evidence checks locally but DOES NOT attest actual Goog
   const result=evaluate(sample());
   assert.deepEqual(result,{localEvidenceStructure:'PASS',claimedEnvironment:'DEV',
     actualCloudIdentity:'NOT_VERIFIED',authorizationForLiveOperations:'HOLD'});
-  assert.equal(Object.keys(result).some(x=>/id|owner|email|patient/i.test(x)),true); // status keys only
+  assert.deepEqual(Object.keys(result).sort(),['actualCloudIdentity',
+    'authorizationForLiveOperations','claimedEnvironment','localEvidenceStructure']);
   assert.equal(JSON.stringify(result).includes('DEV-SHEET'),false);
 });
 test('reject missing/wrong source SHA, unknown fields, malformed timestamps and stale capture',()=>{
