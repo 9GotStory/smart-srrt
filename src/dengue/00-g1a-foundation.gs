@@ -144,7 +144,9 @@ function d331Authorize_(principal, event, capability, isWrite) {
       !principal.userId.trim() || principal.userId !== principal.userId.trim() ||
       typeof isWrite !== 'boolean' ||
       !event || !d331IsUuid_(event.eventId) || !Array.isArray(principal.capabilities) ||
-      typeof capability !== 'string' || !/^dengue\.[a-z.]+$/.test(capability) ||
+      typeof capability !== 'string' ||
+      !/^dengue(?:\.[a-z]+)+\.(read|write)$/.test(capability) ||
+      isWrite !== /\.write$/.test(capability) ||
       principal.capabilities.indexOf(capability) < 0) throw new Error('D331_FORBIDDEN');
   if (event.eligibleDisease !== true ||
       (event.recordStatus !== 'active' && event.recordStatus !== 'closed') ||
@@ -176,6 +178,7 @@ function d331BindScopedEntity_(eventId, parent, child, parentIdKey, childFkKey) 
       typeof childFkKey !== 'string' ||
       !/^(PlanID|SurveyID|FollowupID)$/.test(parentIdKey) ||
       !/^(PlanID|SurveyID|FollowupID)$/.test(childFkKey) ||
+      parentIdKey !== childFkKey ||
       !d331IsUuid_(parent[parentIdKey]) ||
       parent.EventID !== eventId || child.EventID !== eventId ||
       child[childFkKey] !== parent[parentIdKey]) {
@@ -198,8 +201,10 @@ function d331BindChild_(eventId, child, plan) {
 }
 function d331RequestDecision_(existing, request) {
   if (!request || !d331IsUuid_(request.requestId) || !d331IsUuid_(request.eventId) ||
-      typeof request.principalId !== 'string' || !request.principalId ||
-      typeof request.operation !== 'string' || !/^dengue\.[a-z.]+$/.test(request.operation) ||
+      typeof request.principalId !== 'string' || !request.principalId.trim() ||
+      request.principalId !== request.principalId.trim() ||
+      typeof request.operation !== 'string' ||
+      !/^dengue(?:\.[a-z]+)+\.write$/.test(request.operation) ||
       typeof request.payloadDigest !== 'string' || !/^[0-9a-f]{64}$/i.test(request.payloadDigest)) {
     throw new Error('D331_INVALID_REQUEST');
   }
