@@ -15,7 +15,7 @@
     el('reportHistoryEventContext').textContent=String(event.col6||'เหตุการณ์')+' · '+String(event.col2||'ไม่ระบุวันรับแจ้ง');
     el('reportHistoryNewBtn').style.display='none';
     el('reportHistoryWarning').textContent='';
-    el('reportHistorySummary').textContent='กำลังโหลดประวัติรายงาน...';
+    uiSetSectionState('reportHistoryList','reportHistorySummary','loading','กำลังโหลดประวัติรายงาน...');
     el('reportHistoryList').innerHTML='';
     openModal('reportHistoryModal');
     try {
@@ -35,6 +35,7 @@
         ?'ข้อมูลเหตุการณ์มีการปรับปรุงหลังสร้างรายงานล่าสุด คุณยังเปิดอ่านรายงานเดิมได้':'';
       el('reportHistoryNewBtn').style.display=entries.length&&!Number(result.invalidCount||0)&&!reportUnknownNeedsVerification&&
         !(activeReportJob&&(!reportJobTerminal(activeReportJob)||activeReportJob.status==='unknown'))?'inline-flex':'none';
+      uiSetSectionState('reportHistoryList',null,entries.length?'ready':'empty');
       el('reportHistoryList').innerHTML=entries.length?entries.map((r,i)=>{
         const url=String(r.documentURL||'');
         const link=/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(url)
@@ -49,7 +50,7 @@
       }).join(''):'<div class="help">ยังไม่มีรายงานที่ลงทะเบียนสำหรับเหตุการณ์นี้</div>';
     }catch(e){
       if(request!==reportHistoryRequest||token!==authToken)return;
-      el('reportHistorySummary').textContent='ไม่สามารถโหลดประวัติรายงานได้';
+      uiSetSectionState('reportHistoryList','reportHistorySummary','error','ไม่สามารถโหลดประวัติรายงานได้');
       el('reportHistoryWarning').textContent='';
       el('reportHistoryNewBtn').style.display='none';
       el('reportHistoryList').textContent=String(e.message||e);
