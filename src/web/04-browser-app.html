@@ -177,17 +177,36 @@
     const ctx=adminContext();if(!ctx||adminBusy.repair)return;
     if(!confirm('ตรวจสอบและสร้างชีท/โฟลเดอร์/Template ที่ขาดโดยไม่ลบข้อมูลเดิม?'))return;
     if(!adminCurrent(ctx))return;
+    const lease=uiBeginAction('admin:repair:'+ctx.token+':'+ctx.epoch,{
+      buttonId:'adminRepairBtn',statusId:'adminRepairStatus',
+      pendingText:'กำลังตรวจสอบ/ซ่อมโครงสร้างระบบ โปรดอย่าส่งคำสั่งซ้ำ'
+    });
+    if(!lease)return;
     adminBusy.repair=true;
+    let dispatched=false,confirmed=false;
     try{
+      dispatched=true;
       const message=await gs('repairInstallation',ctx.token);
+      confirmed=true;
       if(!adminCurrent(ctx))return;
       toast(message);
-      const b=await gs('getAppBoot',ctx.token);
-      if(!adminCurrent(ctx))return;
-      settings=b.settings||{};areas=b.areas||[];
-      applyTheme();setupDashboardFilters();await loadInstallStatus()
-    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
-    finally{adminBusy.repair=false}
+      try{
+        const b=await gs('getAppBoot',ctx.token);
+        if(!adminCurrent(ctx))return;
+        settings=b.settings||{};areas=b.areas||[];
+        applyTheme();setupDashboardFilters();await loadInstallStatus()
+      }catch(_){if(adminCurrent(ctx))toast('ซ่อมระบบสำเร็จ แต่ยังโหลดข้อมูลสถานะใหม่ไม่ได้')}
+    }catch(e){if(adminCurrent(ctx))toast('ยังยืนยันผลการซ่อมระบบไม่ได้ กรุณาตรวจสถานะระบบก่อนดำเนินการใหม่')}
+    finally{
+      adminBusy.repair=false;
+      if(adminCurrent(ctx))
+        uiFinishAction(lease,confirmed?'success':dispatched?'unknown':'error',
+          confirmed?'ยืนยันคำสั่งซ่อมระบบสำเร็จ':
+            'ไม่สามารถยืนยันผลซ่อมระบบ ห้ามส่งซ้ำก่อนตรวจสถานะจริง',{
+              canEnable:()=>adminCurrent(ctx)
+            });
+      else uiInvalidateAction(lease);
+    }
   }
 
   async function loadSettings(){
@@ -461,20 +480,32 @@
     const ctx=adminContext();if(!ctx||adminBusy.archive)return;
     if(!confirm('ยืนยัน Archive Audit ที่เก่ากว่า retention policy? ระบบจะคัดลอกไปไฟล์ Archive และตรวจสอบก่อนนำออกจาก AuditLogs'))return;
     if(!adminCurrent(ctx))return;
-    const btn=el('archiveAuditBtn');adminBusy.archive=true;
+    const lease=uiBeginAction('admin:archive:'+ctx.token+':'+ctx.epoch,{
+      buttonId:'archiveAuditBtn',statusId:'adminArchiveStatus',
+      pendingText:'กำลัง Archive และตรวจสอบความถูกต้อง ห้ามส่งซ้ำ'
+    });
+    if(!lease)return;
+    adminBusy.archive=true;
+    let dispatched=false,confirmed=false;
     try{
-      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลัง Archive';
+      dispatched=true;
       const r=await gs('archiveAuditLogs',ctx.token);
+      confirmed=true;
       if(!adminCurrent(ctx))return;
       toast(`Archive สำเร็จ ${Number(r.removedFromActiveRows||0)} รายการ`);
-      await Promise.all([loadAudit(),loadAuditRetentionStatus()])
-    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
-    finally{
+      try{await Promise.all([loadAudit(),loadAuditRetentionStatus()])}
+      catch(_){if(adminCurrent(ctx))toast('Archive สำเร็จ แต่รีเฟรชสถานะไม่สำเร็จ')}
+    }catch(e){
+      if(adminCurrent(ctx))toast('ยังยืนยันผล Archive ไม่ได้ กรุณาตรวจสอบรายการและไฟล์ Archive ก่อนดำเนินการซ้ำ')
+    }finally{
       adminBusy.archive=false;
-      if(adminCurrent(ctx)){
-        btn.disabled=false;
-        btn.innerHTML='<i class="fa-solid fa-box-archive"></i> Archive รายการเก่า'
-      }
+      if(adminCurrent(ctx))
+        uiFinishAction(lease,confirmed?'success':dispatched?'unknown':'error',
+          confirmed?'Archive ยืนยันสำเร็จ':
+            'ผล Archive ยังไม่แน่ชัด ห้ามสั่งซ้ำก่อนตรวจสอบข้อมูลจริง',{
+              canEnable:()=>adminCurrent(ctx)
+            });
+      else uiInvalidateAction(lease)
     }
   }
 
