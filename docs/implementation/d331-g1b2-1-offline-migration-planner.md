@@ -18,7 +18,7 @@ The caller is *untrusted*. A string reading `ISOLATED_TEST` is NOT sufficient at
 - `d331B2BuildPlan_(preview,context)` validates the sanitized G1-B1 shape, fixed table names, schema version, safe integer counts, recognized finding codes and mutually consistent summary counts. It emits **only** fixed blocker codes, aggregate metadata, and candidate `DESCRIBE_MISSING_TABLE` steps; **never** instructions that execute sheet changes.
 - Every plan emits `status:'HOLD'`, `candidateDDLApproved:false`, `canReadLive:false`, `canBackup:false`, `canApply:false`, `canRestore:false`, `canEnable:false`, and `operationExecuted:false`. Clean candidate headers never authorize migration.
 - `d331B2ComparisonKey_` is only a deterministic **synthetic change-detector based on whitelisted metadata**. It is **not a cryptographic digest, signed preflight, versioned lock, environment attestation or evidence of authority**.
-- `d331B2ComparePlan_(plan, freshPreview)` flags stale snapshots for human review, and returns `canApply:false` even if unchanged.
+- `d331B2ComparePlan_(plan, freshPreview)` flags stale snapshots for human review, and returns `canApply:false` even if unchanged. Both this function and fault injection now run `d331B2RequireHoldPlan_`, rejecting caller-forged writable flags (`canEnable`, `canBackup`, `canRestore`, `operationExecuted`, `candidateDDLApproved`, etc.) and invalid/non-descriptive candidate steps. The validator itself is **not** identity attestation.
 - `d331B2SimulateInterruption_(plan,atStep)` models UNKNOWN outcomes at 0..N **descriptive** steps and requires manual reconciliation. It **does not run** any write, create, delete, backup or restore.
 - A future B2-2/B2-3 integration needs a separately authorized, exact-target, operator-attested **live** preflight, migration version/DDL approval, strict Script Lock and header/schema-version recheck, verifiable TEST backup, bounded audit and recovery. Never rely on this pure helper's output as permission.
 
@@ -36,7 +36,7 @@ npm test
 npm run build:check
 ```
 
-Synthetic negative test matrix covers wrong/Production target label, missing synthetic provenance, enabled feature, secret-bearing context, unknown/higher module version, header conflict on populated table, missing tables, count overflow, malformed preview/attestation claims, changed/stale key, interruption at 0/1/3/7 descriptive steps, forged executable plan, and zero availability of apply/backup/restore helpers.
+Synthetic negative test matrix (29 groups) covers wrong/Production target label, missing synthetic provenance, enabled feature, secret-bearing context, unknown/higher module version, header conflict on populated table, missing tables, count overflow, malformed preview/attestation claims, changed/stale key, interruption at 0/1/3/7 descriptive steps, forged executable plan, and zero availability of apply/backup/restore helpers.
 
 ## Future gated stages
 
