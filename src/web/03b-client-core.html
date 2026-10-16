@@ -46,7 +46,7 @@
     // A second key must not claim the same interactive button or busy region.
     if(button&&button.disabled)return null;
     for(const owner of uiPendingActions.values()){
-      if(button&&owner.button===button||region&&owner.region===region)return null;
+      if(button&&owner.button===button||region&&owner.region===region||status&&owner.status===status)return null;
     }
     const lease={
       key,button,region,status,
@@ -80,8 +80,8 @@
     if(button&&button.isConnected!==false){
       button.innerHTML=lease.originalMarkup;
       // Caller with changing permissions must supply an authoritative recheck.
-      button.disabled=typeof options.canEnable==='function'
-        ?!options.canEnable():lease.originalDisabled;
+      button.disabled=state==='unknown'||(typeof options.canEnable==='function'
+        ?!options.canEnable():lease.originalDisabled);
       button.setAttribute('aria-busy','false');
     }
     if(lease.region&&lease.region.isConnected!==false){

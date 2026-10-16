@@ -66,7 +66,7 @@ Legend: R-latest = latest request owns visible results; R-coalesce = avoid dupli
 
 - uiSetSectionState(sectionId,statusId,state,message) supports idle/loading/ready/success/empty/error/unknown, with real loading marked aria-busy=true. Distinguish an empty successful result from server failure and uncertain mutation.
 - uiBeginAction(key,{buttonId,sectionId,statusId,pendingText}) acquires an exclusive key and associated button/section **synchronously before RPC**, or returns null for duplicate/busy. Options also accept DOM refs button/region/status. No global google.script.run interception.
-- uiFinishAction(lease,state,message,{canEnable}) finishes only the live owner and restores the original trusted button markup. Callers with dynamic authorization must provide canEnable; status text is textContent, not HTML.
+- uiFinishAction(lease,state,message,{canEnable}) finishes only the live owner and restores the original trusted button markup. Unknown keeps its action button disabled until separate authoritative recovery; canEnable cannot override an unknown outcome. Callers with dynamic authorization must provide canEnable for other terminal states; status text is textContent, not HTML.
 - uiInvalidateAction(lease) and uiInvalidateAllActions() reject stale completions. Later integration must wire per-session cleanup explicitly; they are not a replacement for existing auth/request/job guards.
 - No auto retry of mutation, installer/repair, report create, archive, import, or unknown work. A frontend lease alone cannot prevent duplicates across tabs or devices; server RBAC, revision locks and idempotent job state remain authoritative.
 - Accessible role=status, aria-live=polite, aria-busy controls; visual icon/skeleton and reduced-motion styling will be introduced with real callsite adoption (P9-02+). No arbitrary full-screen overlay.
@@ -74,8 +74,8 @@ Legend: R-latest = latest request owns visible results; R-coalesce = avoid dupli
 ## P9-01 source-only acceptance
 
 1. Duplicate attempts return null before any RPC, independent actions can coexist.
-2. One active lease owns each key, button and busy section; stale completions never rewrite newer state.
-3. Success/error/empty/unknown are distinct and optional canEnable recomputes current permissions.
+2. One active lease owns each key, button, busy section **and shared status region**; stale completions never rewrite newer state.
+3. Success/error/empty/unknown are distinct; unknown keeps its action button disabled until separate authoritative verification, while optional canEnable recomputes current permissions for other terminal outcomes.
 4. Logout/session-related invalidation can release stale leases; no old result leakage.
 5. Plain text status/ARIA; no fabricated progress, false success or busy-forever.
 6. No change to existing business action handlers, source order, generated CSS or Google APIs in this candidate.

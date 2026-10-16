@@ -120,3 +120,22 @@ test('P9-01 detached nodes are not repainted and helper never globally intercept
   assert.match(source,/function gs\(fn,\.\.\.args\)\{return new Promise/);
   assert.equal(h.rpcCalls.length,0);
 });
+
+test('P9-01 shared status region cannot be stolen by a separate pending action',()=>{
+  const h=fixture();
+  const first=h.evalIn("uiBeginAction('users:refresh',{buttonId:'users',statusId:'sharedStatus'})");
+  assert.ok(first);
+  assert.equal(h.evalIn("uiBeginAction('areas:refresh',{buttonId:'areas',statusId:'sharedStatus'})"),null);
+  assert.equal(h.get('areas').disabled,false);
+  assert.equal(h.evalIn("uiFinishAction(uiPendingActions.get('users:refresh'),'ready')"),true);
+  assert.ok(h.evalIn("uiBeginAction('areas:refresh',{buttonId:'areas',statusId:'sharedStatus'})"));
+});
+test('P9-01 unknown mutation does not silently unlock the action or imply success',()=>{
+  const h=fixture();
+  h.evalIn("uiBeginAction('report:create',{buttonId:'reportBtn',statusId:'reportStatus'})");
+  assert.equal(h.evalIn("uiFinishAction(uiPendingActions.get('report:create'),'unknown','ยังยืนยันผลไม่ได้',{canEnable:()=>true})"),true);
+  assert.equal(h.get('reportBtn').disabled,true);
+  assert.equal(h.get('reportBtn').getAttribute('aria-busy'),'false');
+  assert.equal(h.get('reportStatus').textContent,'ยังยืนยันผลไม่ได้');
+  assert.equal(h.evalIn("uiBeginAction('report:create',{buttonId:'reportBtn'})"),null);
+});
