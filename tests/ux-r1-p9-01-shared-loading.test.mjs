@@ -139,3 +139,26 @@ test('P9-01 unknown mutation does not silently unlock the action or imply succes
   assert.equal(h.get('reportStatus').textContent,'ยังยืนยันผลไม่ได้');
   assert.equal(h.evalIn("uiBeginAction('report:create',{buttonId:'reportBtn'})"),null);
 });
+
+test('P9-01 indeterminate result blocks the action key even without a button until independently verified',()=>{
+  const h=fixture();
+  h.evalIn("uiBeginAction('report:generate',{buttonId:'generate',statusId:'status'})");
+  h.evalIn("uiFinishAction(uiPendingActions.get('report:generate'),'unknown','ต้องตรวจสอบทะเบียนรายงาน')");
+  assert.equal(h.evalIn("uiBeginAction('report:generate')"),null);
+  assert.equal(h.evalIn("uiInvalidateAllActions()"),undefined);
+  assert.equal(h.evalIn("uiBeginAction('report:generate')"),null);
+  assert.equal(h.evalIn("uiConfirmActionResult('report:generate')"),true);
+  assert.equal(h.evalIn("uiConfirmActionResult('report:generate')"),false);
+  // Server verification is a caller-owned operation; a disabled button stays
+  // disabled until that caller explicitly rerenders its authoritative state.
+  assert.equal(h.get('generate').disabled,true);
+  assert.ok(h.evalIn("uiBeginAction('report:generate')"));
+});
+test('P9-01 failed current-permission recomputation stays disabled but clears aria-busy',()=>{
+  const h=fixture();
+  h.evalIn("uiBeginAction('settings:save',{buttonId:'save'})");
+  const result=h.evalIn("uiFinishAction(uiPendingActions.get('settings:save'),'error','สิทธิ์เปลี่ยนไป',{canEnable:()=>{throw Error('permission changed')}})");
+  assert.equal(result,true);
+  assert.equal(h.get('save').disabled,true);
+  assert.equal(h.get('save').getAttribute('aria-busy'),'false');
+});

@@ -21,6 +21,7 @@
   // UX-R1/P9-01: opt-in, scoped loading foundation. Existing RPC/session/job
   // controllers remain authoritative; never globally intercept google.script.run.
   const uiPendingActions=new Map();
+  const uiUnverifiedActionKeys=new Set();
   const uiActionStates=new Set(['idle','loading','ready','success','empty','error','unknown']);
   function uiSetSectionState(sectionId,statusId,state,message=''){
     if(!uiActionStates.has(state))throw new Error('Invalid UI action state');
@@ -39,7 +40,7 @@
   }
   function uiBeginAction(key,options={}){
     if(typeof key!=='string'||!key.trim())throw new Error('UI action key required');
-    if(uiPendingActions.has(key))return null; // synchronous single-flight lock
+    if(uiPendingActions.has(key)||uiUnverifiedActionKeys.has(key))return null; // pending or unverified action
     const button=options.button||options.buttonId&&el(options.buttonId)||null;
     const region=options.region||options.sectionId&&el(options.sectionId)||null;
     const status=options.status||options.statusId&&el(options.statusId)||null;
@@ -76,12 +77,18 @@
     if(!lease||uiPendingActions.get(lease.key)!==lease)return false;
     if(!uiActionStates.has(state)||state==='loading')throw new Error('Invalid terminal UI action state');
     uiPendingActions.delete(lease.key);
+    if(state==='unknown')uiUnverifiedActionKeys.add(lease.key);
     const button=lease.button;
     if(button&&button.isConnected!==false){
       button.innerHTML=lease.originalMarkup;
       // Caller with changing permissions must supply an authoritative recheck.
-      button.disabled=state==='unknown'||(typeof options.canEnable==='function'
-        ?!options.canEnable():lease.originalDisabled);
+      let canEnable=false;
+      if(state!=='unknown'){
+        try{canEnable=typeof options.canEnable==='function'
+          ?!!options.canEnable():!lease.originalDisabled;}
+        catch(_){canEnable=false;} // fail closed if an authorization recheck fails
+      }
+      button.disabled=!canEnable;
       button.setAttribute('aria-busy','false');
     }
     if(lease.region&&lease.region.isConnected!==false){
@@ -102,6 +109,12 @@
   }
   function uiInvalidateAllActions(){
     for(const lease of [...uiPendingActions.values()])uiInvalidateAction(lease);
+    // Unknown outcomes intentionally survive reset: verify the server first.
+  }
+  function uiConfirmActionResult(key){
+    // Only call after a separately authenticated, authoritative status/read.
+    // The caller must also re-render/re-enable the control using live policy.
+    return uiUnverifiedActionKeys.delete(key);
   }
   function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
   // UX-R1/P7-02: keyboard support only for non-destructive Admin forms + Auth.
