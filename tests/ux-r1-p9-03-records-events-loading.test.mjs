@@ -79,8 +79,13 @@ test('P9-03 lifecycle reason and Revision preserved; failure cannot double-dispa
   await Promise.all([first,duplicate]);
   assert.match(h.el('eventActionStatus').textContent,/สถานะยังไม่ยืนยัน/);
   assert.equal(h.el('eventActionConfirmBtn').disabled,true);
+  vm.runInContext('cancelEventAction();closeEventFlow("E1",2)',h.ctx);
+  assert.equal(h.el('eventActionConfirmBtn').disabled,true,'same unknown command must stay locked');
+  assert.match(h.el('eventActionStatus').textContent,/ยังยืนยันผลคำสั่งเดิมไม่ได้/);
   await vm.runInContext('confirmEventAction()',h.ctx);
   assert.equal(h.calls.length,1);
+  vm.runInContext('cancelEventAction();deleteEvent("E1",2)',h.ctx);
+  assert.equal(h.el('eventActionConfirmBtn').disabled,false,'different operation remains available');
 });
 test('P9-03 owner chooser coalesces same row, shows pending and ignores old session result',async()=>{
   const h=fixture();login(h);records(h);
@@ -131,6 +136,21 @@ test('P9-03 attachment list identical read coalesces and distinguishes empty/err
   h.calls[1].reject(new Error('offline'));
   await retry;
   assert.equal(h.el('attachmentList').getAttribute('data-ui-state'),'error');
+});
+test('P9-03 changed attachment Revision wins and old read cannot clear newer pending state',async()=>{
+  const h=fixture();login(h,'Admin');
+  h.el('attachmentEventId').value='E1';h.el('attachmentRevision').value='2';
+  const first=vm.runInContext('loadAttachmentList()',h.ctx);
+  h.el('attachmentRevision').value='3';
+  const second=vm.runInContext('loadAttachmentList()',h.ctx);
+  assert.equal(h.calls.length,2);
+  h.calls[0].resolve([]);
+  await first;
+  assert.equal(h.el('attachmentList').getAttribute('aria-busy'),'true');
+  h.calls[1].resolve([{attachmentId:'A1',fileName:'new.pdf',sizeBytes:2}]);
+  await second;
+  assert.equal(h.el('attachmentList').getAttribute('data-ui-state'),'ready');
+  assert.match(h.el('attachmentList').innerHTML,/new.pdf/);
 });
 test('P9-03 upload separates local read error from unknown server commit',async()=>{
   const h=fixture();login(h,'Admin');records(h);
