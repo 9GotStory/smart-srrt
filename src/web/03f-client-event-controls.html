@@ -173,7 +173,7 @@
       toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return
     }
     const session=token;
-    const candidate=arguments[1]||document.activeElement;
+    const candidate=arguments[1]||(document.activeElement&&document.activeElement.tagName==='BUTTON'?document.activeElement:null);
     const opener=candidate&&typeof candidate.setAttribute==='function'?candidate:null;
     const lease=uiBeginAction('owner:list:'+session+':'+r.eventId+':'+Number(r.revision||1),{
       button:opener,pendingText:'กำลังโหลดผู้รับผิดชอบ...'
