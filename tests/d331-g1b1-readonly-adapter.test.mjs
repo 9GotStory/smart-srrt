@@ -97,7 +97,7 @@ test('reader cannot skip one of the four required read-only methods',()=>{
     listTableNames(){return []},readModuleVersion(){return 1},
     readTableHeaders(){return []}
   }]) {
-    assert.throws(()=>a.d331B1ReadSnapshot_(broken),/D331_B1_READER_REQUIRED/);
+    assert.throws(()=>a.d331B1ReadPreview_(broken),/D331_B1_READER_REQUIRED/);
   }
 });
 
@@ -182,18 +182,18 @@ test('reader refuses duplicate or malformed table names without fetching rows',(
   const a=api(),data=snapshot(a);
   const r=reader(data);
   r.listTableNames=()=>['DengueCases','DengueCases'];
-  assert.throws(()=>a.d331B1ReadSnapshot_(r),/D331_B1_READ_FAILED/);
+  assert.throws(()=>a.d331B1ReadPreview_(r),/D331_B1_READ_FAILED/);
   r.listTableNames=()=>[''];
-  assert.throws(()=>a.d331B1ReadSnapshot_(r),/D331_B1_READ_FAILED/);
+  assert.throws(()=>a.d331B1ReadPreview_(r),/D331_B1_READ_FAILED/);
 });
 
 test('reader fails closed on unsafe counts and does not return underlying errors',()=>{
   const a=api(),data=snapshot(a);
   const r=reader(data);
   r.readTableRowCount=()=>NaN;
-  assert.throws(()=>a.d331B1ReadSnapshot_(r),/D331_B1_READ_FAILED/);
+  assert.throws(()=>a.d331B1ReadPreview_(r),/D331_B1_READ_FAILED/);
   r.readTableRowCount=()=>-1;
-  assert.throws(()=>a.d331B1ReadSnapshot_(r),/D331_B1_READ_FAILED/);
+  assert.throws(()=>a.d331B1ReadPreview_(r),/D331_B1_READ_FAILED/);
 });
 
 test('synthetic MainData projection uses col31 ID, col32 revision, col33 status, col39 owner',()=>{
@@ -214,7 +214,7 @@ test('forged but syntactically valid AreaID proof does not authorize an event',(
   const result=a.d331B1ProjectEvent_(mainRow(),{
     verified:true,eventId:U,areaId:'area-1'
   });
-  assert.equal(result.areaEvidenceAvailable,true);
+  assert.equal(result.areaEvidenceAvailable,false);
   assert.equal(result.areaId,null);
   assert.equal(result.eligibleDisease,false);
   assert.equal(result.authorizationReady,false);
@@ -222,6 +222,40 @@ test('forged but syntactically valid AreaID proof does not authorize an event',(
     active:true,userId:'owner-1',capabilities:['dengue.case.read'],
     allowedAreaIds:['area-1'],allowedEventIds:[U]
   },result,'dengue.case.read',false),/D331_FORBIDDEN/);
+});
+
+test('all reader-driven helpers redact raw header values even when malicious',()=>{
+  const a=api(), data=snapshot(a);
+  data.tables.DengueCases.headers=['PRIVATE_PATIENT_NAME_ABC'];
+  const r=reader(data);
+  const result=a.d331B1ReadPreview_(r);
+  const other=a.d331B1PreviewFromReader_(r);
+  for(const output of [result,other]){
+    const serialized=JSON.stringify(output);
+    assert.doesNotMatch(serialized,/PRIVATE_PATIENT_NAME_ABC/);
+    assert.equal(output.status,'HOLD');
+    assert.equal(output.canApply,false);
+    assert.equal(output.candidateHeadersMatch,false);
+    assert.ok(output.findings.some(x=>x.table==='DengueCases' && x.code==='HEADER_MISMATCH'));
+  }
+});
+
+test('untrusted area evidence can never set a positive evidence flag',()=>{
+  const a=api();
+  const variants=[
+    {verified:true,eventId:U,areaId:'area-1'},
+    {verified:true,eventId:V,areaId:'area-1'},
+    {verified:false,eventId:U,areaId:'area-1'},
+    {verified:true,eventId:U,areaId:'  area-1  '},
+    null
+  ];
+  for(const spoof of variants){
+    const projected=a.d331B1ProjectEvent_(mainRow(),spoof);
+    assert.equal(projected.areaEvidenceAvailable,false);
+    assert.equal(projected.areaId,null);
+    assert.equal(projected.eligibleDisease,false);
+    assert.equal(projected.authorizationReady,false);
+  }
 });
 
 test('event foreign evidence, missing evidence and void status remain closed',()=>{
