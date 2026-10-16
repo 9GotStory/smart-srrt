@@ -250,8 +250,12 @@ test('G-34 N1-A accepts only exact inert Native25 backup and rejects unsafe vari
   assert.match(ok.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
   assert.match(ok.stdout,/SOURCE_ENTRYPOINTS=PASS/);
   assert.match(ok.stdout,/REMOTE_MANIFEST_V8=PASS/);
+  // A Native25 backup minus the new G1-A file is exactly the *historical*
+  // Native24 layout and MUST remain accepted as a preserved prior version.
+  const old=native24BackupFixture({layout25:true,missing:'00-g1a-foundation.gs'});
+  assert.equal(old.status,0,old.stderr);
+  assert.match(old.stdout,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
   for(const bad of [
-    {missing:'00-g1a-foundation.gs'},
     {extra:'rogue.gs'},
     {badD331:true},
     {v8:false},
