@@ -128,13 +128,13 @@
     el('recordResultSummary').textContent='แสดง '+visibleRecords.length+' จาก '+allData.length+' เหตุการณ์';
     el('eventBody').innerHTML=allData.map((r,i)=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
-      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
+      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i},this)">กำหนด</button></div>`:'';
       const primary=manage&&!closed?`<button class="btn light" onclick="openRecordForm('edit',${i})">แก้ไข</button> `:'';
       return`<tr><td>${escapeHtml(r.col2)}</td><td><b style="color:#b91c1c">${escapeHtml(r.col6||'-')}</b></td><td>${escapeHtml(locationLabel(r))}</td><td>${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td>${ownerLabel(r)}${ownerControl}</td><td>${escapeHtml(r.col15||'-')}</td><td>${escapeHtml(r.col17||'-')}</td><td>${riskBadge(r.col19)}</td><td>${attachmentButton(r,i)}</td><td>${manage?`${primary}${reportActionButton(r.eventId||'',true)} ${reportReadinessBadge(r)}`:'-'}</td></tr>`
     }).join('')||'<tr><td colspan="10">ไม่มีข้อมูล</td></tr>';
     el('recordBody').innerHTML=visibleRecords.map(({r,i})=>{
       const closed=String(r.recordStatus||'active').toLowerCase()==='closed';
-      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i})">กำหนด</button></div>`:'';
+      const ownerControl=roleCanManage()&&!closed?`<div style="margin-top:6px"><button class="btn light" onclick="openOwnerModal(${i},this)">กำหนด</button></div>`:'';
       return`<tr class="srrt-record-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2)}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="สถานะเหตุการณ์">${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td data-label="การตรวจสอบ">${escapeHtml(r.col15||'-')}</td><td data-label="เข้าเกณฑ์สอบสวน">${escapeHtml(r.col17||'-')}</td><td data-label="การสอบสวน">${escapeHtml(r.col24||'-')} ${escapeHtml(r.col26||'')}</td><td data-label="ความเสี่ยง">${riskBadge(r.col19)}</td><td data-label="ผู้รับผิดชอบ">${ownerLabel(r)}${ownerControl}</td><td data-label="ผู้บันทึก">${escapeHtml(r.col27||'-')}</td><td data-label="ไฟล์แนบ">${attachmentButton(r,i)}</td><td data-label="จัดการ">${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr class="srrt-record-empty"><td colspan="12">'+(allData.length?'ไม่พบรายการที่ตรงกับเงื่อนไขค้นหา':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>';
     renderReporterWorklist()
