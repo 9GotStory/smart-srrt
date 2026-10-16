@@ -134,6 +134,7 @@ test('RBAC and owner/area/event guard fail closed for every missing boundary',()
     [principal({allowedEventIds:[]}),event(),'dengue.case.read',false],
     [principal(),event({eligibleDisease:false}),'dengue.case.read',false],
     [principal(),event({recordStatus:'void'}),'dengue.case.read',false],
+    [principal(),event({recordStatus:'unknown'}),'dengue.case.read',false],
     [principal(),event({recordStatus:'closed'}),'dengue.survey.write',true],
     [principal(),event({eventId:W}),'dengue.case.read',false],
     [principal(),event(),'view',false]
@@ -160,7 +161,7 @@ test('request ledger forbids replay with changed digest, identity or operation',
   assert.equal(a.d331RequestDecision_({...request,phase:'UNKNOWN'},request).decision,'reconcile');
   assert.equal(a.d331RequestDecision_({...request,phase:'COMMITTED'},request).decision,'replay');
   for(const field of ['payloadDigest','principalId','operation','requestId']) {
-    const other={...request,[field]:field==='payloadDigest'?'b'.repeat(64):field==='requestId'?W:'other'};
+    const other={...request,[field]:field==='payloadDigest'?'b'.repeat(64):field==='requestId'?W:field==='operation'?'dengue.plan.write':'other'};
     assert.throws(()=>a.d331RequestDecision_({...request,phase:'COMMITTED'},other),/D331_IDEMPOTENCY_CONFLICT/);
   }
   assert.throws(()=>a.d331RequestDecision_({...request,phase:'FAILED'},request),/D331_INVALID_LEDGER_STATE/);
