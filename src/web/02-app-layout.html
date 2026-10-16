@@ -152,7 +152,8 @@
       </div>
 
       <div class="card">
-        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-screwdriver-wrench"></i> สถานะการติดตั้ง</h3><button class="btn orange" onclick="repairSystem()"><i class="fa-solid fa-wand-magic-sparkles"></i>ตรวจสอบ/ซ่อมระบบอัตโนมัติ</button></div>
+        <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-screwdriver-wrench"></i> สถานะการติดตั้ง</h3><button class="btn orange" id="adminRepairBtn" onclick="repairSystem()"><i class="fa-solid fa-wand-magic-sparkles"></i>ตรวจสอบ/ซ่อมระบบอัตโนมัติ</button></div>
+        <p id="adminRepairStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <p id="adminInstallReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <div id="installStatus" class="help">กำลังตรวจสอบ...</div>
       </div>
@@ -161,6 +162,7 @@
       <div id="admin-workspace-settings" class="srrt-admin-workspace" role="tabpanel" aria-labelledby="admin-tab-settings" hidden>
       <div class="card" style="margin-top:16px">
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-palette"></i> ตั้งค่าชื่อระบบและโลโก้</h3><button class="btn green" id="adminSaveSettingsBtn" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i>บันทึกการตั้งค่า</button></div>
+        <p id="adminSettingsWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <p id="adminSettingsReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <div class="settings-grid">
           <div class="setting-group">
@@ -184,7 +186,7 @@
             <div class="logo-preview"><img id="adminLogoPreview" src="" alt="preview"><div><b>อัปโหลดจากหน้าเว็บได้โดยตรง</b><div class="mini">PNG, JPG/JPEG หรือ WEBP ขนาดไม่เกิน 3 MB</div></div></div>
             <input class="input" type="file" id="logoFile" aria-label="เลือกไฟล์โลโก้" accept="image/png,image/jpeg,image/webp" style="width:100%">
             <button class="btn" style="width:100%;margin-top:10px" id="adminUploadLogoBtn" onclick="uploadLogoFile()"><i class="fa-solid fa-cloud-arrow-up"></i>อัปโหลดและใช้โลโก้นี้</button>
-            <div id="logoProgress" class="progress">กำลังอัปโหลด...</div>
+            <div id="logoProgress" class="progress">กำลังอัปโหลด...</div><p id="adminLogoWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
             <h4>AI Reporter</h4>
             <div class="fg"><label for="set_GEMINI_API_KEY">Gemini API Key</label><input type="password" id="set_GEMINI_API_KEY" autocomplete="off"></div>
@@ -218,6 +220,7 @@
         <div class="panel-head" style="margin-top:0"><h3><i class="fa-solid fa-house-medical"></i> จัดการข้อมูลพื้นที่ระดับหมู่บ้าน</h3><div><button class="btn secondary" onclick="document.getElementById('areaImportFile').click()"><i class="fa-solid fa-file-import"></i>Import Excel/CSV</button><input type="file" id="areaImportFile" aria-label="เลือกไฟล์นำเข้าข้อมูลพื้นที่" accept=".xlsx,.xls,.csv" style="display:none" onchange="importAreaFile(this)"><button class="btn" onclick="openAreaForm()"><i class="fa-solid fa-plus"></i>เพิ่มหมู่บ้าน</button></div></div>
         <div class="help">หัวคอลัมน์ที่รองรับ: จังหวัด, อำเภอ, ตำบล, หมู่, ชื่อหมู่บ้าน, รหัสหมู่บ้าน — ระบบจะแสดงจำนวนแถวให้ยืนยันก่อนนำเข้าจริง</div>
         <p id="adminAreasReadStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
+        <p id="adminDisableAreaStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <p id="adminImportStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p>
         <input class="input" id="areaSearch" aria-label="ค้นหาข้อมูลพื้นที่ระดับหมู่บ้าน" placeholder="ค้นหาจังหวัด/อำเภอ/ตำบล/หมู่บ้าน" oninput="loadAreasAdmin()" style="width:100%;margin:12px 0">
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><table aria-label="ตารางจัดการข้อมูลพื้นที่ระดับหมู่บ้าน"><thead><tr><th>จังหวัด</th><th>อำเภอ</th><th>ตำบล</th><th>หมู่</th><th>ชื่อหมู่บ้าน</th><th>รหัสหมู่บ้าน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="areaBody"></tbody></table></div>
