@@ -91,15 +91,20 @@ const native24Layout = [
   ...native24Partials.map(name=>name+'.html'),'Index.html'
 ];
 if (native24Layout.length !== 24) throw new Error('Invalid Native24 expected layout');
+// Retain the exact Native24 pre-deploy backup gate, while also recognizing
+// the subsequently staged inert 25-file N1-A layout for future preflights.
+const native25Layout = [...native24Layout, '00-g1a-foundation.gs'];
+if (native25Layout.length !== 25) throw new Error('Invalid Native25 expected layout');
 const sameNames = expected =>
   JSON.stringify(actual) === JSON.stringify(expected.slice().sort());
 const isLegacy = legacyLayouts.some(sameNames);
 const isNative13 = sameNames(native13Layout);
 const isNative24 = sameNames(native24Layout);
-if (!isLegacy && !isNative13 && !isNative24) {
-  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; exact known 13-file Native layout; or exact known 24-file Native layout; found: '+JSON.stringify(actual));
+const isNative25 = sameNames(native25Layout);
+if (!isLegacy && !isNative13 && !isNative24 && !isNative25) {
+  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; exact known 13-file Native layout; or exact known 24-file Native layout; or exact known 25-file Native layout; found: '+JSON.stringify(actual));
 }
-const server = (isNative13 || isNative24) ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
+const server = (isNative13 || isNative24 || isNative25) ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
 const code = fs.readFileSync(path.join(root, server), 'utf8');
 if (!/\bfunction\s+doGet\s*\(/.test(code) || !/\bfunction\s+include\s*\(/.test(code)) {
   throw new Error('Known server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
@@ -115,7 +120,7 @@ if (isNative13) {
     throw new Error('Native 13-file Index template missing a known partial include');
   }
 }
-if (isNative24) {
+if (isNative24 || isNative25) {
   // TEST v11 was deployed from the canonical Native 24-file index template.
   // Require exactly all sixteen ordered includes, not just substring presence.
   const index = fs.readFileSync(path.join(root, 'Index.html'), 'utf8');
@@ -123,14 +128,23 @@ if (isNative24) {
   if (index.trim() !== expectedIndex) {
     throw new Error('Native 24-file Index template missing, extra, reordered or untrusted includes');
   }
-  for (const filename of native24Layout) {
+  for (const filename of (isNative25 ? native25Layout : native24Layout)) {
     if (!fs.statSync(path.join(root,filename)).isFile() ||
         fs.statSync(path.join(root,filename)).size === 0) {
       throw new Error('Native 24-file backup contains an empty or invalid source: '+filename);
     }
   }
 }
-const layoutLabel=isNative24?'BACKED_UP_NATIVE_24_LAYOUT=PASS':
+if (isNative25) {
+  const d331 = fs.readFileSync(path.join(root, '00-g1a-foundation.gs'), 'utf8');
+  // Fast-fail known unsafe source layouts before any source push or deployment.
+  if (!/^var D331_G1A_ENABLED = false;$/m.test(d331) ||
+      /\b(?:SpreadsheetApp|DriveApp|PropertiesService|LockService|ScriptApp|UrlFetchApp)\s*\./.test(d331)) {
+    throw new Error('Native25 D331 feature flag or service boundary not safe');
+  }
+}
+const layoutLabel=isNative25?'BACKED_UP_NATIVE_25_LAYOUT=PASS':
+  isNative24?'BACKED_UP_NATIVE_24_LAYOUT=PASS':
   isNative13?'BACKED_UP_NATIVE_13_LAYOUT=PASS':
   'BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server;
 console.log(layoutLabel+'; SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS');
