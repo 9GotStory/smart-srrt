@@ -111,8 +111,8 @@ test('reject arbitrary alternate script/deployment identity, mismatched parent a
   deny(e=>e.script.knownTestDeploymentIds=[e.script.expectedDeploymentId]);
   deny(e=>e.script.knownProdScriptIds=[]);
   deny(e=>e.script.knownTestScriptIds=[]);
-  deny(e=>e.script.knownProdScriptIds=['same-isolation-id-AAAAA']);
-  deny(e=>e.script.knownTestScriptIds=['same-isolation-id-AAAAA']);
+  deny(e=>{e.script.knownProdScriptIds=['same-isolation-id-AAAAA'];
+    e.script.knownTestScriptIds=['same-isolation-id-AAAAA'];});
   deny(e=>e.script.knownProdScriptIds=['PROD-SCRIPT-BBBBBBBBBBBB','PROD-SCRIPT-BBBBBBBBBBBB']);
   deny(e=>e.script.unexpectedSource='UNCHECKED');
 });
