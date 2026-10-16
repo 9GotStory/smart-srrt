@@ -14,7 +14,7 @@ var D331_G1A_SCHEMAS = {
   DengueEntomology: ['SurveyID','EventID','SurveyRevision','HousesInspected','HousesPositive','ContainersInspected','ContainersPositive'],
   DengueContainers: ['ContainerID','EventID','SurveyID','ContainerRevision','Inspected','Positive'],
   DengueFollowups: ['FollowupID','EventID','PlanID','CheckpointKey','FollowupRevision','FollowupStatus'],
-  DengueRequestLedger: ['RequestID','PrincipalID','Operation','PayloadDigest','Phase','EntityID','UpdatedAt']
+  DengueRequestLedger: ['RequestID','EventID','PrincipalID','Operation','PayloadDigest','Phase','EntityID','UpdatedAt']
 };
 
 function d331IsUuid_(value) {
@@ -197,7 +197,7 @@ function d331BindChild_(eventId, child, plan) {
   return true;
 }
 function d331RequestDecision_(existing, request) {
-  if (!request || !d331IsUuid_(request.requestId) ||
+  if (!request || !d331IsUuid_(request.requestId) || !d331IsUuid_(request.eventId) ||
       typeof request.principalId !== 'string' || !request.principalId ||
       typeof request.operation !== 'string' || !/^dengue\.[a-z.]+$/.test(request.operation) ||
       typeof request.payloadDigest !== 'string' || !/^[0-9a-f]{64}$/i.test(request.payloadDigest)) {
@@ -205,6 +205,7 @@ function d331RequestDecision_(existing, request) {
   }
   if (!existing) return { decision: 'reserve', phase: 'PENDING' };
   if (existing.requestId !== request.requestId ||
+      existing.eventId !== request.eventId ||
       existing.principalId !== request.principalId ||
       existing.operation !== request.operation ||
       existing.payloadDigest !== request.payloadDigest) throw new Error('D331_IDEMPOTENCY_CONFLICT');
@@ -224,7 +225,7 @@ function d331LedgerTransition_(entry, action) {
   if (entry.phase !== 'PENDING' || action !== 'AMBIGUOUS') {
     throw new Error('D331_RECONCILIATION_REQUIRED');
   }
-  return { requestId: entry.requestId, principalId: entry.principalId,
+  return { requestId: entry.requestId, eventId: entry.eventId, principalId: entry.principalId,
     operation: entry.operation, payloadDigest: entry.payloadDigest, phase: 'UNKNOWN' };
 }
 function d331SyntheticIdMap_(legacyIds, uuidFactory) {
