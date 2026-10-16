@@ -2,6 +2,7 @@
 
   // P4-03: one explicit, revision-safe confirmation surface for privileged actions.
   let eventActionContext=null,eventActionPending=false,eventActionRequest=0;
+  let attachmentListFlight=null;
   let ownerSavePending=false,ownerModalRequest=0,attachmentListRequest=0;
   let attachmentUploadPending=false,attachmentUploadRequest=0;
   const EVENT_ACTION_COPY={
@@ -33,6 +34,7 @@
     el('eventActionReason').value='';
     el('eventActionError').textContent='';
     el('eventActionError').hidden=true;
+    uiSetSectionState(null,'eventActionStatus','idle','');
     openModal('eventActionModal');
     el('eventActionReason').focus()
   }
@@ -49,34 +51,37 @@
     const reason=String(el('eventActionReason').value||'').trim();
     if(!reason){
       el('eventActionError').textContent='กรุณาระบุเหตุผลก่อนยืนยัน';
-      el('eventActionError').hidden=false;
-      el('eventActionReason').focus();
-      return
+      el('eventActionError').hidden=false;el('eventActionReason').focus();return
     }
     const active=allData.find(r=>r.eventId===action.eventId);
     if(!active||Number(active.revision||1)!==action.revision){
       el('eventActionError').textContent='Revision เปลี่ยนแปลงแล้ว กรุณาปิดและรีเฟรช';
       el('eventActionError').hidden=false;return
     }
+    const lease=uiBeginAction('event:change:'+action.session+':'+action.kind+':'+action.eventId+':'+action.revision+':'+action.attachmentId,{
+      buttonId:'eventActionConfirmBtn',statusId:'eventActionStatus',pendingText:'กำลังส่งคำสั่งและรอการยืนยันจากระบบ...'
+    });
+    if(!lease)return;
     eventActionPending=true;
-    const request=++eventActionRequest,confirmBtn=el('eventActionConfirmBtn'),cancelBtn=el('eventActionCancelBtn');
-    confirmBtn.disabled=true;cancelBtn.disabled=true;
+    const request=++eventActionRequest,cancelBtn=el('eventActionCancelBtn');
+    cancelBtn.disabled=true;
+    let confirmed=false;
     try{
       let result;
-      if(action.kind==='removeAttachment'){
-        result=await gs('removeEventAttachment',token,action.attachmentId,reason,action.revision);
-      }else{
+      if(action.kind==='removeAttachment')
+        result=await gs('removeEventAttachment',action.session,action.attachmentId,reason,action.revision);
+      else {
         const fn={close:'closeEvent',reopen:'reopenEvent',void:'deleteRecord'}[action.kind];
-        result=await gs(fn,token,action.eventId,reason,action.revision)
+        result=await gs(fn,action.session,action.eventId,reason,action.revision)
       }
+      confirmed=true;
       if(request!==eventActionRequest||token!==action.session||!currentUser)return;
-      eventActionContext=null;
-      closeModal('eventActionModal');
+      eventActionContext=null;closeModal('eventActionModal');
       if(action.kind==='removeAttachment'){
         el('attachmentRevision').value=String(result.revision||action.revision);
         toast(result.message||'นำเอกสารแนบออกแล้ว');
       }else toast(result);
-      await loadDashboard();
+      try{await loadDashboard()}catch(_){toast('ดำเนินการแล้ว แต่รีเฟรชรายการไม่สำเร็จ')}
       if(request!==eventActionRequest||token!==action.session||!currentUser)return;
       if(action.kind==='removeAttachment'&&el('attachmentEventId').value===action.eventId){
         const refreshed=allData.find(r=>r.eventId===action.eventId);
@@ -85,17 +90,26 @@
       }
     }catch(e){
       if(request===eventActionRequest&&token===action.session&&currentUser){
-        el('eventActionError').textContent=String(e.message||e);
-        el('eventActionError').hidden=false
+        el('eventActionError').textContent='ยังยืนยันผลคำสั่งไม่ได้ โปรดตรวจสอบสถานะเหตุการณ์ก่อนทำซ้ำ';
+        el('eventActionError').hidden=false;
+        toast('ผลการดำเนินการไม่แน่ชัด กรุณาตรวจสอบ EventID/Revision')
       }
     }finally{
       if(request===eventActionRequest){
-        eventActionPending=false;confirmBtn.disabled=false;cancelBtn.disabled=false
-      }
+        eventActionPending=false;
+        if(token===action.session&&currentUser){
+          uiFinishAction(lease,confirmed?'success':'unknown',confirmed?'ดำเนินการสำเร็จ':
+            'สถานะยังไม่ยืนยัน ห้ามส่งคำสั่งเดิมซ้ำจนกว่าจะตรวจสอบจากระบบ',{
+              canEnable:()=>!!roleCanManage()
+            });
+          cancelBtn.disabled=false;
+        }else uiInvalidateAction(lease)
+      }else uiInvalidateAction(lease)
     }
   }
   function invalidateEventActionUi(){
     ++eventActionRequest;++ownerModalRequest;++attachmentListRequest;++attachmentUploadRequest;
+    attachmentListFlight=null;
     eventActionContext=null;eventActionPending=false;ownerSavePending=false;attachmentUploadPending=false;
     for(const id of ['eventActionModal','ownerModal','attachmentModal'])closeModal(id);
     for(const id of ['eventActionConfirmBtn','eventActionCancelBtn','saveOwnerBtn','uploadAttachmentBtn']){
@@ -106,7 +120,7 @@
     el('attachmentFile').value='';
     el('attachmentDescription').value='';
     el('ownerUserId').innerHTML='';
-    for(const id of ['ownerEventContext','ownerSaveStatus','attachmentEventContext','attachmentListStatus']){
+    for(const id of ['ownerEventContext','ownerSaveStatus','attachmentEventContext','attachmentListStatus','attachmentUploadStatus','attachmentDownloadStatus','eventActionStatus']){
       el(id).textContent=''
     }
   }
@@ -149,14 +163,27 @@
   async function openOwnerModal(i){
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับกำหนดผู้รับผิดชอบ');return}
     const r=allData[i];if(!r||!r.eventId){toast('ไม่พบ EventID');return}
-    if(String(r.recordStatus||'active').toLowerCase()==='closed'){toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return}
-    const session=token,request=++ownerModalRequest;
+    if(String(r.recordStatus||'active').toLowerCase()==='closed'){
+      toast('เหตุการณ์นี้ถูกปิดแล้ว กรุณาเปิดเหตุการณ์อีกครั้งก่อนเปลี่ยนผู้รับผิดชอบ');return
+    }
+    const session=token;
+    const candidate=arguments[1]||document.activeElement;
+    const opener=candidate&&typeof candidate.setAttribute==='function'?candidate:null;
+    const lease=uiBeginAction('owner:list:'+session+':'+r.eventId+':'+Number(r.revision||1),{
+      button:opener,pendingText:'กำลังโหลดผู้รับผิดชอบ...'
+    });
+    if(!lease)return;
+    const request=++ownerModalRequest;
+    let failed=false;
     el('ownerSaveStatus').textContent='กำลังตรวจสอบรายชื่อผู้รับผิดชอบ';
     try{
-      const eligible=await gs('listAssignableEventOwners',token);
+      const eligible=await gs('listAssignableEventOwners',session);
       if(request!==ownerModalRequest||token!==session||!roleCanManage())return;
       const current=allData.find(x=>x.eventId===r.eventId);
-      if(!current||Number(current.revision||1)!==Number(r.revision||1)){toast('ข้อมูลเหตุการณ์เปลี่ยน กรุณารีเฟรช');return}
+      if(!current||Number(current.revision||1)!==Number(r.revision||1)){
+        toast('ข้อมูลเหตุการณ์เปลี่ยน กรุณารีเฟรช');return
+      }
+      if(!Array.isArray(eligible))throw Error('Invalid owner list');
       assignableOwnerCache=eligible;
       el('ownerEventId').value=r.eventId;el('ownerRevision').value=String(r.revision||1);
       el('ownerEventContext').textContent=String(r.col6||'เหตุการณ์')+' — Revision '+String(r.revision||1);
@@ -164,25 +191,44 @@
       el('ownerUserId').value=r.ownerUserId||'';
       el('ownerSaveStatus').textContent='ตรวจสอบผู้รับผิดชอบก่อนบันทึก';
       openModal('ownerModal')
-    }catch(e){if(request===ownerModalRequest&&token===session)toast(e.message||e)}
+    }catch(e){
+      failed=true;
+      if(request===ownerModalRequest&&token===session)toast(e.message||e)
+    }finally{
+      if(request===ownerModalRequest&&token===session)
+        uiFinishAction(lease,failed?'error':'ready','',{canEnable:()=>!!roleCanManage()});
+      else uiInvalidateAction(lease);
+    }
   }
   async function saveEventOwner(){
     if(ownerSavePending||!roleCanManage())return;
     const eventId=el('ownerEventId').value,revision=Number(el('ownerRevision').value||0);
-    const session=token,request=ownerModalRequest,btn=el('saveOwnerBtn');
+    const session=token,user=currentUser,request=ownerModalRequest;
+    const lease=uiBeginAction('owner:assign:'+session+':'+eventId+':'+revision,{
+      buttonId:'saveOwnerBtn',statusId:'ownerSaveStatus',pendingText:'กำลังบันทึกผู้รับผิดชอบ...'
+    });
+    if(!lease)return;
     ownerSavePending=true;
+    let confirmed=false;
     try{
-      btn.disabled=true;el('ownerSaveStatus').textContent='กำลังบันทึกผู้รับผิดชอบ';
-      const msg=await gs('assignEventOwner',token,eventId,el('ownerUserId').value,revision);
-      if(token!==session||request!==ownerModalRequest||!currentUser)return;
-      closeModal('ownerModal');toast(msg);await loadDashboard()
+      const msg=await gs('assignEventOwner',session,eventId,el('ownerUserId').value,revision);
+      confirmed=true;
+      if(token!==session||currentUser!==user||request!==ownerModalRequest)return;
+      closeModal('ownerModal');toast(msg);
+      try{await loadDashboard()}catch(_){toast('บันทึกแล้ว แต่รีเฟรชข้อมูลไม่สำเร็จ')}
     }catch(e){
-      if(token===session&&request===ownerModalRequest&&currentUser){
-        el('ownerSaveStatus').textContent='บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลและลองใหม่';
-        toast(e.message||e)
-      }
+      if(token===session&&currentUser===user&&request===ownerModalRequest)
+        toast('ไม่สามารถยืนยันผลการกำหนดผู้รับผิดชอบ โปรดตรวจสอบ Revision ก่อนส่งซ้ำ')
     }finally{
-      if(request===ownerModalRequest){ownerSavePending=false;btn.disabled=false}
+      if(request===ownerModalRequest){
+        ownerSavePending=false;
+        if(token===session&&currentUser===user)
+          uiFinishAction(lease,confirmed?'success':'unknown',confirmed?'บันทึกผู้รับผิดชอบแล้ว':
+            'ผลยังไม่ยืนยัน กรุณาตรวจสอบผู้รับผิดชอบก่อนส่งคำขออีกครั้ง',{
+              canEnable:()=>!!roleCanManage()
+            });
+        else uiInvalidateAction(lease)
+      }else uiInvalidateAction(lease)
     }
   }
 
