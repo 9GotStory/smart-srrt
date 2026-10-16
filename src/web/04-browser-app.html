@@ -6,20 +6,39 @@
     settings:'adminSaveSettingsBtn',logo:'adminUploadLogoBtn',area:'adminSaveAreaBtn',
     disableArea:null,user:'adminSaveUserBtn',master:'adminSaveMasterBtn',content:'adminSaveContentBtn'
   };
+  const adminFormStatusIds={
+    settings:'adminSettingsWriteStatus',logo:'adminLogoWriteStatus',
+    area:'adminAreaWriteStatus',disableArea:'adminDisableAreaStatus',
+    user:'adminUserWriteStatus',master:'adminMasterWriteStatus',content:'adminContentWriteStatus'
+  };
   async function runAdminFormSave(kind,work){
     const ctx=adminContext();
     if(!ctx||adminFormSavePending[kind])return;
+    const lease=uiBeginAction('admin:form:'+kind+':'+ctx.token+':'+ctx.epoch,{
+      buttonId:adminFormButtonIds[kind],statusId:adminFormStatusIds[kind],
+      pendingText:'กำลังตรวจสอบและบันทึกข้อมูล...'
+    });
+    if(!lease)return;
     adminFormSavePending[kind]=ctx;
-    const buttonId=adminFormButtonIds[kind];
-    const btn=buttonId?el(buttonId):null;
-    if(btn)btn.disabled=true;
+    let failure=null;
     try{await work(ctx)}
-    catch(e){if(adminCurrent(ctx))toast(e.message||e)}
-    finally{
+    catch(e){
+      failure=e;
+      if(adminCurrent(ctx))toast(e.message||e);
+    }finally{
       if(adminFormSavePending[kind]===ctx){
         delete adminFormSavePending[kind];
-        if(btn)btn.disabled=false
-      }
+        if(adminCurrent(ctx)){
+          const state=failure?(ctx.writeDispatched&&!ctx.writeConfirmed?'unknown':'error'):
+            ctx.writeConfirmed?'success':'ready';
+          uiFinishAction(lease,state,
+            state==='unknown'?'ไม่สามารถยืนยันผลการบันทึก โปรดตรวจสอบข้อมูลจริงก่อนส่งคำขออีกครั้ง':
+            state==='error'?'ดำเนินการไม่สำเร็จ กรุณาตรวจสอบข้อมูล':
+            state==='success'?'คำสั่งบันทึกสำเร็จ':'ไม่มีคำสั่งบันทึกที่ส่งไป',{
+              canEnable:()=>adminCurrent(ctx)
+            });
+        }else uiInvalidateAction(lease);
+      }else uiInvalidateAction(lease);
     }
   }
   function resetAdminFormState(){
@@ -40,6 +59,7 @@
       'cId','cCategory','cTitle','cDesc','cUrl','cStatus']){
       const node=el(id);if(node)node.value=''
     }
+    for(const id of Object.values(adminFormStatusIds)){const node=el(id);if(node){node.textContent='';node.hidden=true;if(typeof node.setAttribute==='function')node.setAttribute('aria-busy','false')}}
     const progress=el('logoProgress');
     if(progress&&progress.classList&&typeof progress.classList.remove==='function')progress.classList.remove('show')
   }
@@ -181,7 +201,9 @@
   async function saveSettings(){
     return runAdminFormSave('settings',async ctx=>{
       const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
+      ctx.writeDispatched=true;
       const message=await gs('saveSystemSettings',ctx.token,arr);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       toast(message);
       const b=await gs('getAppBoot',ctx.token);
@@ -200,7 +222,9 @@
       try{
         const base64=await fileToBase64(file);
         if(!adminCurrent(ctx))return;
-        const r=await gs('uploadLogo',ctx.token,{name:file.name,mimeType:file.type,base64});
+        ctx.writeDispatched=true;
+      const r=await gs('uploadLogo',ctx.token,{name:file.name,mimeType:file.type,base64});
+      ctx.writeConfirmed=true;
         if(!adminCurrent(ctx))return;
         settings.LOGO_URL=r.url;applyTheme();toast(r.message);el('logoFile').value=''
       }finally{
@@ -223,7 +247,9 @@
       const item={id:el('aId').value,province:el('aProvince').value,amphoe:el('aAmphoe').value,
         tambon:el('aTambon').value,moo:el('aMoo').value,village:el('aVillage').value,
         villageCode:el('aVillageCode').value,active:el('aActive').value==='true'};
+      ctx.writeDispatched=true;
       const message=await gs('saveArea',ctx.token,item);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       closeModal('areaModal');toast(message);
       await refreshAreas()
@@ -234,7 +260,9 @@
     return runAdminFormSave('disableArea',async ctx=>{
       if(!confirm('ปิดใช้งานข้อมูลหมู่บ้านนี้?'))return;
       if(!adminCurrent(ctx))return;
+      ctx.writeDispatched=true;
       const message=await gs('deleteArea',ctx.token,id);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       toast(message);await refreshAreas()
     })
@@ -293,7 +321,9 @@
       const data={name:el('uName').value,role:el('uRole').value,status:el('uStatus').value,
         org:el('uOrg').value,tambon:el('uTambon').value,amphoe:el('uAmphoe').value,
         province:el('uProvince').value,newPassword:el('uPassword').value};
+      ctx.writeDispatched=true;
       const message=await gs('updateUser',ctx.token,userId,data);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       el('uPassword').value='';
       closeModal('userModal');toast(message);await loadUsers()
@@ -354,7 +384,9 @@
         type:el('mdType').value,value:el('mdValue').value,label:el('mdLabel').value,
         sortOrder:Number(el('mdSort').value||0),active:el('mdActive').value==='true'
       };
+      ctx.writeDispatched=true;
       const message=await gs('saveMasterDataItem',ctx.token,item);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       closeModal('masterDataModal');toast(message);
       const b=await gs('getAppBoot',ctx.token);
@@ -384,7 +416,9 @@
     return runAdminFormSave('content',async ctx=>{
       const item={id:el('cId').value,category:el('cCategory').value,title:el('cTitle').value,
         description:el('cDesc').value,url:el('cUrl').value,status:el('cStatus').value};
+      ctx.writeDispatched=true;
       const message=await gs('saveContent',ctx.token,item);
+      ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
       closeModal('contentModal');toast(message);
       await loadContentAdmin();
