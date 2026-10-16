@@ -170,7 +170,7 @@
   <label for="uAmphoe">อำเภอ</label><input class="input" id="uAmphoe" style="width:100%;margin-bottom:8px">
   <label for="uProvince">จังหวัด</label><input class="input" id="uProvince" style="width:100%;margin-bottom:8px">
   <label for="uPassword">เปลี่ยนรหัสผ่านใหม่ (ไม่กรอก = ไม่เปลี่ยน)</label><input class="input" id="uPassword" type="password" style="width:100%;margin-bottom:8px">
-  <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" id="adminSaveUserBtn" onclick="saveUser()">บันทึกผู้ใช้</button></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('userModal')">ปิด</button><button class="btn green" id="adminSaveUserBtn" onclick="saveUser()">บันทึกผู้ใช้</button><p id="adminUserWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p></div>
 </div></div>
 
 <div class="modal" id="masterDataModal" role="dialog" aria-modal="true" aria-labelledby="adminMasterTitle"><div class="modal-box modal-sm">
@@ -182,7 +182,7 @@
   <label for="mdSort">ลำดับ</label><input class="input" id="mdSort" type="number" min="1" max="9999" step="1" style="width:100%;margin-bottom:8px">
   <label for="mdActive">สถานะ</label><select class="input" id="mdActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
   <div id="mdPolicyNote" class="help" style="margin-bottom:8px"></div>
-  <div class="actions"><button class="btn light" onclick="closeModal('masterDataModal')">ปิด</button><button class="btn green" id="adminSaveMasterBtn" onclick="saveMasterDataAdminItem()">บันทึก</button></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('masterDataModal')">ปิด</button><button class="btn green" id="adminSaveMasterBtn" onclick="saveMasterDataAdminItem()">บันทึก</button><p id="adminMasterWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p></div>
 </div></div>
 
 <div class="modal" id="areaModal" role="dialog" aria-modal="true" aria-labelledby="adminAreaTitle"><div class="modal-box modal-sm">
@@ -194,7 +194,7 @@
   <label for="aVillage">ชื่อหมู่บ้าน</label><input class="input" id="aVillage" style="width:100%;margin-bottom:8px">
   <label for="aVillageCode">รหัสหมู่บ้าน</label><input class="input" id="aVillageCode" style="width:100%;margin-bottom:8px">
   <label for="aActive">สถานะ</label><select class="input" id="aActive" style="width:100%;margin-bottom:8px"><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select>
-  <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" id="adminSaveAreaBtn" onclick="saveAreaItem()">บันทึก</button></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('areaModal')">ปิด</button><button class="btn green" id="adminSaveAreaBtn" onclick="saveAreaItem()">บันทึก</button><p id="adminAreaWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p></div>
 </div></div>
 
 <div class="modal" id="contentModal" role="dialog" aria-modal="true" aria-labelledby="adminContentTitle"><div class="modal-box modal-sm">
@@ -204,7 +204,7 @@
   <label for="cDesc">รายละเอียด</label><textarea class="input" id="cDesc" rows="3" style="width:100%;margin-bottom:8px"></textarea>
   <label for="cUrl">URL</label><input class="input" id="cUrl" style="width:100%;margin-bottom:8px">
   <label for="cStatus">Status</label><select class="input" id="cStatus" style="width:100%;margin-bottom:8px"><option>published</option><option>draft</option></select>
-  <div class="actions"><button class="btn light" onclick="closeModal('contentModal')">ปิด</button><button class="btn green" id="adminSaveContentBtn" onclick="saveContentItem()">บันทึก</button></div>
+  <div class="actions"><button class="btn light" onclick="closeModal('contentModal')">ปิด</button><button class="btn green" id="adminSaveContentBtn" onclick="saveContentItem()">บันทึก</button><p id="adminContentWriteStatus" class="srrt-event-status" role="status" aria-live="polite" hidden></p></div>
 </div></div>
 
 <div class="toast" id="toast"></div>

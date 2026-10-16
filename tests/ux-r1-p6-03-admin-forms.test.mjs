@@ -75,7 +75,7 @@ test('P6-03 User save is one RPC; delayed result after logout does not close a n
   assert.equal(h.toasts.length,0);
   assert.equal(h.calls.length,1,'no follow-up refresh with new token')
 });
-test('P6-03 failed save retains form and re-enables button; no false success',async()=>{
+test('P9-04 ambiguous Admin save preserves form but remains unknown until verified',async()=>{
   const h=fixture();login(h);
   vm.runInContext("openModal('areaModal')",h.ctx);
   h.el('aVillage').value='Synthetic village';
@@ -86,8 +86,11 @@ test('P6-03 failed save retains form and re-enables button; no false success',as
   assert.equal(h.calls[0][2].village,'Synthetic village');
   assert.equal(h.el('areaModal').classList.contains('open'),true);
   assert.equal(h.el('aVillage').value,'Synthetic village');
-  assert.equal(h.el('adminSaveAreaBtn').disabled,false);
-  assert.match(h.toasts.join(' '),/Synthetic rejection/)
+  assert.equal(h.el('adminSaveAreaBtn').disabled,true,'ambiguous write must stay blocked');
+  assert.match(h.el('adminAreaWriteStatus').textContent,/ไม่สามารถยืนยันผล/);
+  assert.match(h.toasts.join(' '),/Synthetic rejection/);
+  await vm.runInContext('saveAreaItem()',h.ctx);
+  assert.equal(h.calls.length,1,'unverified save must not auto-repeat')
 });
 test('P6-03 Guest and Staff cannot submit any Admin form, even by direct function call',async()=>{
   const h=fixture();
