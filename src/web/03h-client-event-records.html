@@ -203,6 +203,13 @@
   }
   function discardRecordFormOnLogout(){
     ++recordSaveRequest;recordSaveInFlight=false;
+    // Unknown action keys remain scoped to the old token; a later session must
+    // not inherit disabled controls or a private status message.
+    for(const id of ['saveRecordBtn','cancelRecordBtn']){
+      const button=el(id);if(button){button.disabled=false;button.setAttribute('aria-busy','false')}
+    }
+    const saveStatus=el('recordSaveStatus');
+    if(saveStatus){saveStatus.textContent='';saveStatus.hidden=true}
     if(typeof fields!=='undefined'&&Array.isArray(fields))fields.forEach(f=>{const control=el('in'+f[0]);if(control)control.value=''});
     recordDraftSnapshot='';
     // A pending response is still guarded by the original session token below.
