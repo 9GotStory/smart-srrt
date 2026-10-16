@@ -87,24 +87,45 @@ test('HI/CI use exact numerator/denominator, zero denominator becomes null',()=>
 
 test('weighted aggregate is not mean of percentages and guards overflow',()=>{
   const a=api();
-  const x=a.d331AggregateCounts_([{inspected:10,positive:1},{inspected:2,positive:2}]);
+  const x=a.d331AggregateCounts_([{scopeKey:'round-1',inspected:10,positive:1},{scopeKey:'round-1',inspected:2,positive:2}],'round-1');
   assert.equal(x.inspected,12); assert.equal(x.positive,3); assert.equal(x.percent,25);
-  assert.equal(a.d331AggregateCounts_([]).percent,null);
-  assert.throws(()=>a.d331AggregateCounts_([{inspected:Number.MAX_SAFE_INTEGER,positive:0},
-    {inspected:1,positive:0}]),/D331_INVALID_COUNTS/);
+  assert.equal(a.d331AggregateCounts_([],'round-1').percent,null);
+  assert.throws(()=>a.d331AggregateCounts_([{scopeKey:'round-1',inspected:Number.MAX_SAFE_INTEGER,positive:0},
+    {scopeKey:'round-1',inspected:1,positive:0}],'round-1'),/D331_INVALID_COUNTS/);
 });
 
 test('schema inspector is pure, exact, and never repairs sheets',()=>{
   const a=api();
   const existing=Object.fromEntries(Object.entries(a.D331_G1A_SCHEMAS).map(([k,v])=>[k,[...v]]));
-  assert.equal(a.d331InspectHeaders_(existing).valid,true);
+  assert.equal(a.d331InspectHeaders_(existing,1).valid,true);
   existing.DenguePlans[0]='EventID';
-  assert.equal(a.d331InspectHeaders_(existing).valid,false);
+  assert.equal(a.d331InspectHeaders_(existing,1).valid,false);
   assert.equal(existing.DenguePlans[0],'EventID');
   delete existing.DengueFollowups;
-  const result=a.d331InspectHeaders_(existing);
+  const result=a.d331InspectHeaders_(existing,1);
   assert.ok(result.problems.includes('DengueFollowups:MISSING'));
   assert.ok(result.problems.includes('DenguePlans:HEADER_MISMATCH'));
+});
+
+test('typed PlanID/SurveyID/FollowupID scope binding fails closed',()=>{
+  const a=api();
+  const parentPlan={EventID:U,PlanID:V}, parentSurvey={EventID:U,SurveyID:W};
+  assert.equal(a.d331BindScopedEntity_(U,parentPlan,{EventID:U,PlanID:V},'PlanID','PlanID'),true);
+  assert.equal(a.d331BindScopedEntity_(U,parentSurvey,{EventID:U,SurveyID:W},'SurveyID','SurveyID'),true);
+  assert.throws(()=>a.d331BindScopedEntity_(U,parentSurvey,{EventID:U,SurveyID:V},'SurveyID','SurveyID'),/D331_FOREIGN_CHILD/);
+  assert.throws(()=>a.d331BindScopedEntity_(U,parentSurvey,{EventID:V,SurveyID:W},'SurveyID','SurveyID'),/D331_FOREIGN_CHILD/);
+  assert.throws(()=>a.d331BindScopedEntity_(U,{EventID:W,FollowupID:V},{EventID:U,FollowupID:V},'FollowupID','FollowupID'),/D331_FOREIGN_CHILD/);
+  assert.throws(()=>a.d331BindScopedEntity_(U,parentSurvey,{EventID:U,SurveyID:W},'__proto__','SurveyID'),/D331_FOREIGN_CHILD/);
+});
+
+test('schema version, enumerations and aggregation scope are validated',()=>{
+  const a=api();
+  assert.equal(a.d331InspectHeaders_(a.D331_G1A_SCHEMAS,0).valid,false);
+  assert.equal(a.d331InspectHeaders_(a.D331_G1A_SCHEMAS).valid,false);
+  assert.equal(a.d331RequireEnum_('pending',['pending','complete']),'pending');
+  assert.throws(()=>a.d331RequireEnum_('unknown',['pending','complete']),/D331_INVALID_ENUM/);
+  assert.throws(()=>a.d331AggregateCounts_([{scopeKey:'a',inspected:2,positive:1},{scopeKey:'b',inspected:1,positive:0}],'a'),/D331_MIXED_SCOPE/);
+  assert.throws(()=>a.d331AggregateCounts_([{scopeKey:'a',inspected:2,positive:1}]),/D331_INVALID_COUNTS/);
 });
 
 test('DTO only allows named primitive fields and serializes Date',()=>{
