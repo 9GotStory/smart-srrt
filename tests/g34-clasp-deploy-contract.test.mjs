@@ -160,7 +160,8 @@ function native24BackupFixture(options={}) {
   try{
     fs.writeFileSync(path.join(root,'appsscript.json'),
       JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
-    const nativeFiles=expectedNativeFiles();
+    const nativeFiles=options.layout25 ? expectedNativeFiles() :
+      expectedNativeFiles().filter(name=>name!=='00-g1a-foundation.gs');
     const canonicalIndex=nativeFiles.filter(x=>x.endsWith('.html')&&x!=='Index.html')
       .map(x=>path.parse(x).name);
     assert.equal(canonicalIndex.length,16);
@@ -180,6 +181,9 @@ function native24BackupFixture(options={}) {
     for(const name of nativeFiles){
       if(name===options.missing)continue;
       let content='// known pre-existing Native24 source\n';
+      if(name==='00-g1a-foundation.gs') content=options.badD331
+        ? 'var D331_G1A_ENABLED = true;\n'
+        : 'var D331_G1A_ENABLED = false;\n';
       if(name==='00-bootstrap.gs')content=options.badEntrypoints
         ? 'function doGet(e) {}\n'
         : 'function doGet(e) {}\nfunction include(filename) {}\n';
@@ -238,4 +242,23 @@ test('G-34 new Native24 backup gate does not weaken deploy approval, rollback ev
   assert.ok(staged);
   const names=[...staged[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
   assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort());
+});
+
+test('G-34 N1-A accepts only exact inert Native25 backup and rejects unsafe variants',()=>{
+  const ok=native24BackupFixture({layout25:true});
+  assert.equal(ok.status,0,ok.stderr);
+  assert.match(ok.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
+  assert.match(ok.stdout,/SOURCE_ENTRYPOINTS=PASS/);
+  assert.match(ok.stdout,/REMOTE_MANIFEST_V8=PASS/);
+  for(const bad of [
+    {missing:'00-g1a-foundation.gs'},
+    {extra:'rogue.gs'},
+    {badD331:true},
+    {v8:false},
+    {indexDuplicate:true}
+  ]){
+    const r=native24BackupFixture({...bad,layout25:true});
+    assert.notEqual(r.status,0,JSON.stringify(bad));
+    assert.doesNotMatch(r.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
+  }
 });
