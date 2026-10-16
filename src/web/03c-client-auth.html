@@ -184,6 +184,12 @@
     }
     el('reportHistoryList').innerHTML='';
     el('reportReadinessWarnings').innerHTML='';
+    // P9-05: clear persistent reporter status regions on local logout.
+    // Old async report/history responses are already fenced by token/request.
+    if(typeof uiSetSectionState==='function'){
+      uiSetSectionState('reportBody','reportRegistryLoadStatus','idle','');
+      uiSetSectionState('reportHistoryList','reportHistorySummary','idle','');
+    }
     token='';localStorage.removeItem('SRRT_TOKEN');currentUser=null;allData=[];dashboardSummary=null;if(typeof resetAdminWorkspace==='function')resetAdminWorkspace();if(typeof resetAdminPrivate==='function')resetAdminPrivate();if(typeof invalidateEventActionUi==='function')invalidateEventActionUi();discardRecordFormOnLogout();renderTables();
     if(typeof destroyDashboardCharts==='function')destroyDashboardCharts(true);
     updateAuthBox();if(typeof setDashboardViewState==='function')setDashboardViewState('loading');toast('ออกจากระบบแล้ว');showPage('dashboard',document.querySelector('[data-page="dashboard"]'));

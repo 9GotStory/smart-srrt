@@ -288,8 +288,8 @@
         if(!Array.isArray(items))throw Error('Invalid attachment list');
         const closed=el('attachmentClosed').value==='1';
         el('attachmentList').innerHTML=items.map(a=>{
-          const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark" aria-hidden="true"></i> นำออก</button>`:'';
-          return`<div class="content-item"><h4><i class="fa-solid fa-file" aria-hidden="true"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")},this)'><i class="fa-solid fa-download" aria-hidden="true"></i> ดาวน์โหลด</button>${remove}</div></div>`
+          const remove=roleCanManage()&&!closed?`<button class="btn red" data-attachment-id="${escapeHtml(a.attachmentId||'')}" onclick="removeAttachment(this.dataset.attachmentId)"><i class="fa-solid fa-xmark" aria-hidden="true"></i> นำออก</button>`:'';
+          return`<div class="content-item"><h4><i class="fa-solid fa-file" aria-hidden="true"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" data-attachment-id="${escapeHtml(a.attachmentId||'')}" onclick="downloadAttachment(this.dataset.attachmentId,this)"><i class="fa-solid fa-download" aria-hidden="true"></i> ดาวน์โหลด</button>${remove}</div></div>`
         }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>';
         uiSetSectionState('attachmentList','attachmentListStatus',items.length?'ready':'empty',
           items.length?'เอกสารแนบ '+items.length+' รายการ':'ยังไม่มีเอกสารแนบ');

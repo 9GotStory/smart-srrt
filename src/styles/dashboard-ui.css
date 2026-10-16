@@ -392,3 +392,9 @@
 @media(max-width:560px){
   .app #page-dashboard .srrt-dashboard-chart .chart{height:260px}
 }
+
+/* P9-05: preserve informational progress text while removing spinning
+   glyph motion for users who request reduced motion. */
+@media(prefers-reduced-motion:reduce){
+  .app .fa-spin,.app .fa-pulse{animation:none!important}
+}
