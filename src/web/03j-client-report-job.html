@@ -67,6 +67,7 @@
     }
     const previousStatus=activeReportJob&&activeReportJob.id===job.id?activeReportJob.status:'';
     activeReportJob=job;
+    if(reportCancelUnverifiedJobId===job.id&&reportJobTerminal(job))reportCancelUnverifiedJobId=null;
     if(job.status==='unknown')reportUnknownNeedsVerification=true;
     if(job.status==='completed')reportUnknownNeedsVerification=false;
     localStorage.setItem(REPORT_JOB_LOCAL_KEY,job.id);
@@ -160,6 +161,9 @@
     hideReportCancelConfirm();
   }
   function cancelCurrentReportTask(){
+    if(reportCancelUnverifiedJobId&&activeReportJob&&reportCancelUnverifiedJobId===activeReportJob.id){
+      toast('ยังยืนยันผลการขอยกเลิกไม่ได้ กรุณาตรวจสถานะงานก่อนส่งคำขอใหม่');return
+    }
     if(reportCancelSubmitting||!currentUser||!activeReportJob||reportJobTerminal(activeReportJob)||
        ['cancel_requested','finalizing'].includes(activeReportJob.status))return;
     reportCancelPendingJobId=activeReportJob.id;
@@ -171,7 +175,7 @@
   }
   async function confirmReportCancelRequest(){
     // Ignore duplicate clicks during a pending RPC without dismissing the dialog.
-    if(reportCancelSubmitting)return;
+    if(reportCancelSubmitting||reportCancelUnverifiedJobId===reportCancelPendingJobId)return;
     if(!currentUser||!activeReportJob||
        activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
        ['cancel_requested','finalizing'].includes(activeReportJob.status)){
@@ -197,6 +201,7 @@
       }
     }catch(error){
       if(token===session&&currentUser&&activeReportJob&&activeReportJob.id===id){
+        reportCancelUnverifiedJobId=id;
         warning.textContent='ยังยืนยันการรับคำขอยกเลิกไม่ได้ กรุณาตรวจสถานะงานก่อนส่งคำขอใหม่';
         warning.style.display='block';
       }else{
@@ -204,7 +209,7 @@
       }
     }finally{
       reportCancelSubmitting=false;
-      submit.disabled=false;keep.disabled=false;submit.innerHTML=previous;
+      submit.disabled=reportCancelUnverifiedJobId===id;keep.disabled=false;submit.innerHTML=previous;
     }
   }
   document.addEventListener('keydown',event=>{
