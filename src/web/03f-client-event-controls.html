@@ -34,7 +34,13 @@
     el('eventActionReason').value='';
     el('eventActionError').textContent='';
     el('eventActionError').hidden=true;
-    uiSetSectionState(null,'eventActionStatus','idle','');
+    // A different operation may use the dialog; the same unverified mutation
+    // remains blocked and visible until authoritative server verification.
+    const blockedKey='event:change:'+token+':'+kind+':'+eventId+':'+rev+':'+(attachmentId||'');
+    const blocked=uiUnverifiedActionKeys.has(blockedKey);
+    el('eventActionConfirmBtn').disabled=blocked;
+    uiSetSectionState(null,'eventActionStatus',blocked?'unknown':'idle',
+      blocked?'ยังยืนยันผลคำสั่งเดิมไม่ได้ กรุณาตรวจสอบสถานะเหตุการณ์ก่อนดำเนินการอีกครั้ง':'');
     openModal('eventActionModal');
     el('eventActionReason').focus()
   }
@@ -262,7 +268,8 @@
   async function loadAttachmentList(){
     const eventId=el('attachmentEventId').value;
     if(!eventId||!currentUser)return;
-    const session=token,key=session+':'+eventId;
+    const session=token,revision=el('attachmentRevision').value,
+      key=session+':'+eventId+':'+revision;
     if(attachmentListFlight&&attachmentListFlight.key===key)return attachmentListFlight.promise;
     const request=++attachmentListRequest;
     uiSetSectionState('attachmentList','attachmentListStatus','loading','กำลังโหลดเอกสารแนบ...');
@@ -270,7 +277,7 @@
       try{
         const items=await gs('listEventAttachments',session,eventId);
         if(request!==attachmentListRequest||token!==session||!currentUser||
-           el('attachmentEventId').value!==eventId)return;
+           el('attachmentEventId').value!==eventId||el('attachmentRevision').value!==revision)return;
         if(!Array.isArray(items))throw Error('Invalid attachment list');
         const closed=el('attachmentClosed').value==='1';
         el('attachmentList').innerHTML=items.map(a=>{
@@ -280,7 +287,7 @@
         uiSetSectionState('attachmentList','attachmentListStatus',items.length?'ready':'empty',
           items.length?'เอกสารแนบ '+items.length+' รายการ':'ยังไม่มีเอกสารแนบ');
       }catch(e){
-        if(request===attachmentListRequest&&token===session&&currentUser&&el('attachmentEventId').value===eventId){
+        if(request===attachmentListRequest&&token===session&&currentUser&&el('attachmentEventId').value===eventId&&el('attachmentRevision').value===revision){
           el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>';
           uiSetSectionState('attachmentList','attachmentListStatus','error','ไม่สามารถโหลดเอกสารแนบได้ กรุณาลองใหม่');
         }
