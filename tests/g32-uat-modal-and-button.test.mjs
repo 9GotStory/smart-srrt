@@ -232,7 +232,9 @@ test('G-32 confirmation errors remain in themed modal and do not claim cancelled
   await h.ctx.confirmReportCancelRequest();
   assert.equal(h.el('reportCancelConfirmModal').classList.contains('open'),true);
   assert.match(h.el('reportCancelConfirmError').textContent,/ยังยืนยัน/);
-  assert.equal(h.el('reportCancelConfirmBtn').disabled,false);
+  assert.equal(h.el('reportCancelConfirmBtn').disabled,true,'unknown result must not allow blind resubmit');
+  await h.ctx.confirmReportCancelRequest();
+  assert.equal(h.calls.filter(c=>c[0]==='cancelReportJob').length,1,'only one cancel RPC is allowed without verification');
   assert.equal(h.el('reportResultStatus').textContent.includes('ยกเลิกการสร้างรายงานแล้ว'),false);
 });
 
