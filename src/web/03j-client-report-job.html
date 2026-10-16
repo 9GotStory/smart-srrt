@@ -175,7 +175,7 @@
   }
   async function confirmReportCancelRequest(){
     // Ignore duplicate clicks during a pending RPC without dismissing the dialog.
-    if(reportCancelSubmitting||reportCancelUnverifiedJobId===reportCancelPendingJobId)return;
+    if(reportCancelSubmitting||(reportCancelUnverifiedJobId&&reportCancelUnverifiedJobId===reportCancelPendingJobId))return;
     if(!currentUser||!activeReportJob||
        activeReportJob.id!==reportCancelPendingJobId||reportJobTerminal(activeReportJob)||
        ['cancel_requested','finalizing'].includes(activeReportJob.status)){
