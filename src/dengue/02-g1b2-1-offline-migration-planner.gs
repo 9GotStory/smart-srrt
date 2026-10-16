@@ -64,7 +64,29 @@ function d331B2ValidatePreview_(preview) {
     seen[key] = true;
     findings.push({code:code,table:table});
   });
-  if (preview.candidateHeadersMatch !== (findings.length === 0)) {
+  // Reject contradictory caller-supplied "sanitized" preview metadata.
+  // G1-B1 is the only expected producer, but an offline object is never proof.
+  var missingNames = Object.create(null), conflictNames = Object.create(null);
+  var populatedNames = Object.create(null), versionMismatch = false;
+  findings.forEach(function(f){
+    if (f.code === 'MISSING_TABLE') missingNames[f.table] = true;
+    if (f.code === 'HEADER_MISMATCH' || f.code === 'DUPLICATE_HEADER') {
+      if (conflictNames[f.table]) throw new Error('D331_B2_INVALID_PREVIEW');
+      conflictNames[f.table] = true;
+    }
+    if (f.code === 'POPULATED_CONFLICT') populatedNames[f.table] = true;
+    if (f.code === 'SCHEMA_VERSION_MISMATCH') versionMismatch = true;
+  });
+  if (Object.keys(missingNames).length !== s.missingTables ||
+      Object.keys(conflictNames).length !== s.conflictingTables ||
+      versionMismatch !== (preview.observedSchemaVersion !== D331_G1A_SCHEMA_VERSION) ||
+      Object.keys(populatedNames).some(function(table){
+        return !conflictNames[table] || s.observedDataRows === 0;
+      }) ||
+      Object.keys(missingNames).some(function(table){
+        return !!conflictNames[table] || !!populatedNames[table];
+      }) ||
+      preview.candidateHeadersMatch !== (findings.length === 0)) {
     throw new Error('D331_B2_INVALID_PREVIEW');
   }
   // Never echo unapproved/unknown keys from caller-provided previews.
