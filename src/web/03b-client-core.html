@@ -18,6 +18,91 @@
 
   function el(id){return document.getElementById(id)}
   function gs(fn,...args){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err))[fn](...args))}
+  // UX-R1/P9-01: opt-in, scoped loading foundation. Existing RPC/session/job
+  // controllers remain authoritative; never globally intercept google.script.run.
+  const uiPendingActions=new Map();
+  const uiActionStates=new Set(['idle','loading','ready','success','empty','error','unknown']);
+  function uiSetSectionState(sectionId,statusId,state,message=''){
+    if(!uiActionStates.has(state))throw new Error('Invalid UI action state');
+    const region=sectionId?el(sectionId):null,status=statusId?el(statusId):null;
+    if(region){
+      region.setAttribute('aria-busy',String(state==='loading'));
+      region.setAttribute('data-ui-state',state);
+    }
+    if(status){
+      status.setAttribute('role','status');
+      status.setAttribute('aria-live','polite');
+      status.textContent=String(message||'');
+      status.hidden=!message&&(state==='idle'||state==='ready');
+    }
+    return state;
+  }
+  function uiBeginAction(key,options={}){
+    if(typeof key!=='string'||!key.trim())throw new Error('UI action key required');
+    if(uiPendingActions.has(key))return null; // synchronous single-flight lock
+    const button=options.button||options.buttonId&&el(options.buttonId)||null;
+    const region=options.region||options.sectionId&&el(options.sectionId)||null;
+    const status=options.status||options.statusId&&el(options.statusId)||null;
+    // A second key must not claim the same interactive button or busy region.
+    if(button&&button.disabled)return null;
+    for(const owner of uiPendingActions.values()){
+      if(button&&owner.button===button||region&&owner.region===region)return null;
+    }
+    const lease={
+      key,button,region,status,
+      originalMarkup:button?button.innerHTML:'',
+      originalDisabled:button?!!button.disabled:false,
+      pendingText:String(options.pendingText||'กำลังดำเนินการ...')
+    };
+    uiPendingActions.set(key,lease);
+    if(button){
+      button.disabled=true;
+      button.setAttribute('aria-busy','true');
+      button.textContent=lease.pendingText; // never interpret a status as HTML
+    }
+    if(region) {
+      region.setAttribute('aria-busy','true');
+      region.setAttribute('data-ui-state','loading');
+    }
+    if(status){
+      status.setAttribute('role','status');
+      status.setAttribute('aria-live','polite');
+      status.textContent=lease.pendingText;
+      status.hidden=false;
+    }
+    return lease;
+  }
+  function uiFinishAction(lease,state='ready',message='',options={}){
+    if(!lease||uiPendingActions.get(lease.key)!==lease)return false;
+    if(!uiActionStates.has(state)||state==='loading')throw new Error('Invalid terminal UI action state');
+    uiPendingActions.delete(lease.key);
+    const button=lease.button;
+    if(button&&button.isConnected!==false){
+      button.innerHTML=lease.originalMarkup;
+      // Caller with changing permissions must supply an authoritative recheck.
+      button.disabled=typeof options.canEnable==='function'
+        ?!options.canEnable():lease.originalDisabled;
+      button.setAttribute('aria-busy','false');
+    }
+    if(lease.region&&lease.region.isConnected!==false){
+      lease.region.setAttribute('aria-busy','false');
+      lease.region.setAttribute('data-ui-state',state);
+    }
+    if(lease.status&&lease.status.isConnected!==false){
+      lease.status.setAttribute('role','status');
+      lease.status.setAttribute('aria-live','polite');
+      lease.status.textContent=String(message||'');
+      lease.status.hidden=!message&&(state==='ready'||state==='idle');
+    }
+    return true;
+  }
+  function uiInvalidateAction(lease){
+    // Old finally must never clear a successor's busy state or repaint its UI.
+    return !!lease&&uiFinishAction(lease,'idle','');
+  }
+  function uiInvalidateAllActions(){
+    for(const lease of [...uiPendingActions.values()])uiInvalidateAction(lease);
+  }
   function toast(msg){const t=el('toast');t.textContent=String(msg||'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4200)}
   // UX-R1/P7-02: keyboard support only for non-destructive Admin forms + Auth.
   // Record, lifecycle and AI confirmation dialogs retain their specialized consent handlers.
