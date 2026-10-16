@@ -18,9 +18,9 @@
 2. HI/CI numerator and denominator are safe nonnegative integers; positive count cannot exceed inspected; zero denominator is `null` (not surveyed), and aggregate rates sum comparable numerators/denominators.
 3. Non-mutating prospective 7-sheet header inspector only, with **feature flag OFF**. No `ensureSheet_`, `installSmartSRRTCore_`, `SpreadsheetApp` or schema write path.
 4. Explicit capability + active principal + canonical EventID + owner/event membership + jurisdiction rule. No patient access granted from existing generic `view`; existing roles are not modified.
-5. EventID/PlanID parent-child binding and separate revision comparison. The future RPC must always load principal and event from trusted server state before calling these pure guards.
+5. EventID/PlanID parent-child binding (an existing PlanID on a child **requires** a verified parent), separate safe-integer revision comparison, and rejection of empty principal IDs and non-boolean write modes. The future RPC must always load principal and event from trusted server state before calling these pure guards.
 6. Primitive-only field-projected DTO. This only serializes preapproved fields; it **does not decide which PII fields may be disclosed**.
-7. Ledger request digest/identity match, pending/unknown reconciliation and authoritative evidence required before marking a business commit. This implements **only the decision/state transition model**, not a durable ledger writer or multi-sheet atomicity.
+7. Ledger request digest/identity match and PENDING → UNKNOWN ambiguity handling. **G1-A cannot mark COMMITTED, even if a caller supplies a proof string.** A future G1-B durable writer must independently read the authoritative business row and verify request identity, digest and persisted outcome before allowing reconciliation. G1-A may interpret a COMMITTED ledger row but cannot create one. This is not a durable ledger writer or a guarantee of multi-sheet atomicity.
 8. Synthetic `TEST-*` ID mapping with unique generated UUIDs and checked foreign keys. Never import legacy XLSX into actual `MainData`.
 
 ## Explicitly held for later gates
