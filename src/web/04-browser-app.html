@@ -44,6 +44,31 @@
     if(progress&&progress.classList&&typeof progress.classList.remove==='function')progress.classList.remove('show')
   }
 
+  // P9-04: latest-read ownership is independent per Admin workspace. Only
+  // the current authenticated Admin session may publish a status or data.
+  const adminReadVersions=Object.create(null);
+  const adminReadStatusIds={
+    overview:'adminAnalyticsStatus',installation:'adminInstallReadStatus',
+    settings:'adminSettingsReadStatus',master:'adminMasterReadStatus',
+    areas:'adminAreasReadStatus',users:'adminUsersReadStatus',
+    content:'adminContentReadStatus',audit:'adminAuditReadStatus',
+    retention:'auditRetentionStatus'
+  };
+  function adminReadBegin(key,ctx){
+    const read={key,ctx,version:(adminReadVersions[key]||0)+1};
+    adminReadVersions[key]=read.version;
+    uiSetSectionState(null,adminReadStatusIds[key],'loading','กำลังโหลดข้อมูล...');
+    return read;
+  }
+  function adminReadCurrent(read){
+    return adminCurrent(read.ctx)&&adminReadVersions[read.key]===read.version;
+  }
+  function adminReadFinish(read,state,message){
+    if(!adminReadCurrent(read))return false;
+    uiSetSectionState(null,adminReadStatusIds[read.key],state,message);
+    return true;
+  }
+
   // P6-02: never accept private Admin results from a previous session.
   let adminEpoch=0,areaReadSeq=0,userReadSeq=0;
   const adminBusy={repair:false,archive:false,import:false};
@@ -55,6 +80,8 @@
   function resetAdminPrivate(){
     resetAdminFormState();
     ++adminEpoch;++areaReadSeq;++userReadSeq;
+    for(const key of Object.keys(adminReadVersions))++adminReadVersions[key];
+    for(const id of Object.values(adminReadStatusIds)){const node=el(id);if(node){node.textContent='';node.hidden=true}}
     usersCache=[];areaAdminCache=[];masterAdminCache=[];masterTypePolicies=[];
     if(typeof window!=='undefined')window._contentRows=[];
     for(const id of ['userBody','areaBody','masterDataBody','contentAdminList','auditBody',
@@ -115,13 +142,14 @@
   async function loadAdmin(){
     const ctx=adminContext();if(!ctx)return;
     if(!roleCanManage()){toast('สิทธิ์ไม่เพียงพอ');return}
-    try{const a=await gs('getAnalytics',ctx.token);if(!adminCurrent(ctx))return;el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events}catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+    const read=adminReadBegin('overview',ctx);
+    try{const a=await gs('getAnalytics',ctx.token);if(!adminReadCurrent(read))return;el('akUsers').textContent=a.kpi.users;el('akActive').textContent=a.kpi.activeUsers;el('akEvents').textContent=a.kpi.events;adminReadFinish(read,'ready','ภาพรวมพร้อมใช้งาน')}catch(e){if(adminReadFinish(read,'error','ไม่สามารถโหลดภาพรวมได้'))toast(e.message||e)}
     if(!adminCurrent(ctx))return;
     await Promise.allSettled([loadSettings(),loadInstallStatus(),loadMasterDataAdmin(),loadAreasAdmin(),loadUsers(),loadContentAdmin(),loadAudit(),loadAuditRetentionStatus()])
   }
   async function loadInstallStatus(){
-    const ctx=adminContext();if(!ctx)return;
-    try{const s=await gs('getInstallationStatus',ctx.token);if(!adminCurrent(ctx))return;el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`}catch(e){if(adminCurrent(ctx))el('installStatus').textContent=e.message||e}
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('installation',ctx);
+    try{const s=await gs('getInstallationStatus',ctx.token);if(!adminReadCurrent(read))return;el('akAreas').textContent=s.areas;el('installStatus').innerHTML=`<b>Version:</b> ${escapeHtml(s.version)} &nbsp; <b>ฐานข้อมูล:</b> ${escapeHtml(s.spreadsheetName)}<br><b>Spreadsheet ID:</b> ${escapeHtml(s.spreadsheetId)}<br><b>Report Folder ID:</b> ${escapeHtml(s.reportFolderId||'-')}<br><b>Template Doc ID:</b> ${escapeHtml(s.templateDocId||'-')}`;adminReadFinish(read,'ready','ตรวจสอบสถานะการติดตั้งแล้ว')}catch(e){if(adminReadFinish(read,'error','ตรวจสอบสถานะการติดตั้งไม่สำเร็จ'))el('installStatus').textContent='ไม่สามารถตรวจสอบสถานะการติดตั้งได้'}
   }
   async function repairSystem(){
     const ctx=adminContext();if(!ctx||adminBusy.repair)return;
@@ -141,11 +169,12 @@
   }
 
   async function loadSettings(){
-    const ctx=adminContext();if(!ctx)return;
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('settings',ctx);
     try{
-      const response=await gs('getSystemSettings',ctx.token);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'การตั้งค่าระบบ'),m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
-      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src
-    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+      const response=await gs('getSystemSettings',ctx.token);if(!adminReadCurrent(read))return;const rows=requireAdminRows_(response,'การตั้งค่าระบบ'),m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
+      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src;
+      adminReadFinish(read,rows.length?'ready':'empty',rows.length?'โหลดการตั้งค่าแล้ว':'ยังไม่มีค่าการตั้งค่า')
+    }catch(e){if(adminReadFinish(read,'error','โหลดการตั้งค่าไม่สำเร็จ'))toast(e.message||e)}
   }
   async function saveSettings(){
     return runAdminFormSave('settings',async ctx=>{
@@ -181,8 +210,8 @@
   function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=reject;reader.readAsDataURL(file)})}
 
   async function loadAreasAdmin(){
-    const ctx=adminContext();if(!ctx)return;const seq=++areaReadSeq;
-    try{const values=await gs('listAreas',ctx.token,el('areaSearch').value);if(!adminCurrent(ctx)||seq!==areaReadSeq)return;areaAdminCache=requireAdminRows_(values,'ข้อมูลพื้นที่');el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===areaReadSeq)toast(e.message||e)}
+    const ctx=adminContext();if(!ctx)return;const seq=++areaReadSeq,read=adminReadBegin('areas',ctx);
+    try{const values=await gs('listAreas',ctx.token,el('areaSearch').value);if(!adminReadCurrent(read)||seq!==areaReadSeq)return;areaAdminCache=requireAdminRows_(values,'ข้อมูลพื้นที่');el('akAreas').textContent=areaAdminCache.filter(x=>String(x.active).toLowerCase()!=='false').length;el('areaBody').innerHTML=areaAdminCache.map((a,i)=>`<tr><td>${escapeHtml(a.province)}</td><td>${escapeHtml(a.amphoe)}</td><td>${escapeHtml(a.tambon)}</td><td>${escapeHtml(a.moo)}</td><td>${escapeHtml(a.village)}</td><td>${escapeHtml(a.villageCode||'-')}</td><td>${String(a.active).toLowerCase()==='false'?'ปิด':'ใช้งาน'}</td><td><button class="btn light" onclick="openAreaForm(${i})">แก้ไข</button> <button class="btn red" onclick="disableArea('${escapeHtml(a.id)}')">ปิดใช้</button></td></tr>`).join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลพื้นที่</td></tr>';adminReadFinish(read,areaAdminCache.length?'ready':'empty',areaAdminCache.length?'โหลดข้อมูลพื้นที่ '+areaAdminCache.length+' รายการ':'ยังไม่มีข้อมูลพื้นที่')}catch(e){if(adminReadFinish(read,'error','โหลดข้อมูลพื้นที่ไม่สำเร็จ')&&seq===areaReadSeq)toast(e.message||e)}
   }
   function openAreaForm(i){
     const a=i===undefined?{}:areaAdminCache[i];el('aId').value=a.id||'';el('aProvince').value=a.province||'';el('aAmphoe').value=a.amphoe||'';el('aTambon').value=a.tambon||'';el('aMoo').value=a.moo||'';el('aVillage').value=a.village||'';el('aVillageCode').value=a.villageCode||'';el('aActive').value=String(a.active).toLowerCase()==='false'?'false':'true';openModal('areaModal')
@@ -252,8 +281,8 @@
   }
 
   async function loadUsers(){
-    const ctx=adminContext();if(!ctx)return;const seq=++userReadSeq;
-    try{const values=await gs('listUsers',ctx.token,el('userSearch').value);if(!adminCurrent(ctx)||seq!==userReadSeq)return;usersCache=requireAdminRows_(values,'ผู้ใช้งาน');el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx)&&seq===userReadSeq)toast(e.message||e)}
+    const ctx=adminContext();if(!ctx)return;const seq=++userReadSeq,read=adminReadBegin('users',ctx);
+    try{const values=await gs('listUsers',ctx.token,el('userSearch').value);if(!adminReadCurrent(read)||seq!==userReadSeq)return;usersCache=requireAdminRows_(values,'ผู้ใช้งาน');el('userBody').innerHTML=usersCache.map((u,i)=>`<tr><td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.status)}</td><td>${escapeHtml(u.org||'-')}</td><td>${escapeHtml([u.tambon,u.amphoe,u.province].filter(Boolean).join(' / ')||'-')}</td><td><button class="btn light" onclick="openUser(${i})">แก้ไข</button></td></tr>`).join('')||'<tr><td colspan="7">ไม่มีข้อมูล</td></tr>';adminReadFinish(read,usersCache.length?'ready':'empty',usersCache.length?'โหลดผู้ใช้ '+usersCache.length+' รายการ':'ยังไม่มีข้อมูลผู้ใช้')}catch(e){if(adminReadFinish(read,'error','โหลดผู้ใช้ไม่สำเร็จ')&&seq===userReadSeq)toast(e.message||e)}
   }
   function openUser(i){const u=usersCache[i];el('uId').value=u.userId;el('uName').value=u.name;el('uRole').value=u.role;el('uStatus').value=u.status;el('uOrg').value=u.org||'';el('uTambon').value=u.tambon||'';el('uAmphoe').value=u.amphoe||'';el('uProvince').value=u.province||'';el('uPassword').value='';openModal('userModal')}
   async function saveUser(){
@@ -271,9 +300,9 @@
 
   function masterPolicyByType(type){return masterTypePolicies.find(p=>p.type===type)||null}
   async function loadMasterDataAdmin(){
-    const ctx=adminContext();if(!ctx)return;
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('master',ctx);
     try{
-      const result=await gs('getMasterDataAdmin',ctx.token);if(!adminCurrent(ctx))return;
+      const result=await gs('getMasterDataAdmin',ctx.token);if(!adminReadCurrent(read))return;
       if(!result||typeof result!=='object')throw new Error('โหลดข้อมูลมาตรฐานไม่สำเร็จ: Server ไม่ได้ส่งข้อมูลที่ถูกต้อง');
       const items=requireAdminRows_(result.items,'รายการข้อมูลมาตรฐาน');
       const policies=requireAdminRows_(result.types,'ประเภทข้อมูลมาตรฐาน');
@@ -281,8 +310,8 @@
       const filter=el('masterTypeFilter'),current=filter.value;
       filter.innerHTML='<option value="">ทั้งหมด</option>'+masterTypePolicies.map(p=>`<option value="${escapeHtml(p.type)}">${escapeHtml(p.label)}</option>`).join('');
       filter.value=current;
-      renderMasterDataAdmin()
-    }catch(e){if(adminCurrent(ctx))toast(e.message||e)}
+      renderMasterDataAdmin();adminReadFinish(read,items.length?'ready':'empty',items.length?'โหลดข้อมูลมาตรฐาน '+items.length+' รายการ':'ไม่มีข้อมูลมาตรฐาน')
+    }catch(e){if(adminReadFinish(read,'error','โหลดข้อมูลมาตรฐานไม่สำเร็จ'))toast(e.message||e)}
   }
   function renderMasterDataAdmin(){
     const type=el('masterTypeFilter').value,q=String(el('masterSearch').value||'').trim().toLowerCase();
@@ -346,7 +375,7 @@
   }
 
   async function loadContentAdmin(){
-    const ctx=adminContext();if(!ctx)return;try{const response=await gs('listContent',ctx.token);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'ประกาศและคู่มือ');el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('content',ctx);try{const response=await gs('listContent',ctx.token);if(!adminReadCurrent(read))return;const rows=requireAdminRows_(response,'ประกาศและคู่มือ');el('contentAdminList').innerHTML=rows.map((r,i)=>`<div class="content-item"><h4>${escapeHtml(r.title)}</h4><p>${escapeHtml(r.category)} | ${escapeHtml(r.status)}</p><button class="btn light" onclick="editContent(${i})">แก้ไข</button></div>`).join('')||'ยังไม่มีข้อมูล';window._contentRows=rows;adminReadFinish(read,rows.length?'ready':'empty',rows.length?'โหลดประกาศและคู่มือ '+rows.length+' รายการ':'ยังไม่มีข้อมูลประกาศและคู่มือ')}catch(e){if(adminReadFinish(read,'error','โหลดประกาศและคู่มือไม่สำเร็จ'))toast(e.message||e)}}
   function openContentForm(){el('cId').value='';populateContentCategoryOptions('');el('cTitle').value='';el('cDesc').value='';el('cUrl').value='';el('cStatus').value='published';openModal('contentModal')}
   function editContent(i){const r=window._contentRows[i];el('cId').value=r.id;populateContentCategoryOptions(r.category);el('cTitle').value=r.title;el('cDesc').value=r.description;el('cUrl').value=r.url;el('cStatus').value=r.status;openModal('contentModal')}
   async function saveContentItem(){
@@ -365,9 +394,9 @@
   }
 
   async function loadAuditRetentionStatus(){
-    const ctx=adminContext();if(!ctx)return;
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('retention',ctx);
     try{
-      const s=await gs('getAuditRetentionStatus',ctx.token);if(!adminCurrent(ctx))return;
+      const s=await gs('getAuditRetentionStatus',ctx.token);if(!adminReadCurrent(read))return;
       el('auditRetentionStatus').innerHTML=`เก็บ Audit ในฐานข้อมูลหลัก <b>${Number(s.retentionDays||0)} วัน</b> · Active <b>${Number(s.activeRows||0)}</b> รายการ · เข้าเกณฑ์ Archive <b>${Number(s.eligibleRows||0)}</b> รายการ${Number(s.malformedTimestampRows||0)?` · <span style="color:#b45309">Timestamp ผิดรูปแบบ ${Number(s.malformedTimestampRows||0)} รายการ (ยังคงไว้)</span>`:''}${s.oldestTimestamp?`<br>รายการเก่าสุด: ${escapeHtml(s.oldestTimestamp)} · Cutoff: ${escapeHtml(s.cutoff||'')}`:''}`;
       // GS-S5: read-only operator-visible audit delivery health. Do not
       // interpolate untrusted error messages, identifiers or Audit payloads.
@@ -387,8 +416,10 @@
         message='AuditLogs: ไม่สามารถอ่านสถานะการบันทึกได้ กรุณาตรวจสอบ Apps Script Executions';
       }
       el('auditRetentionStatus').innerHTML+='<div class="help" role="status" style="margin-top:10px">'+message+'</div>';
-      el('archiveAuditBtn').disabled=Number(s.eligibleRows||0)===0
-    }catch(e){if(adminCurrent(ctx))el('auditRetentionStatus').textContent=e.message||e}
+      el('archiveAuditBtn').disabled=Number(s.eligibleRows||0)===0;
+      // Rich retention details were rendered above; preserve them in the region.
+      if(adminReadCurrent(read)){const n=el('auditRetentionStatus');if(n){n.setAttribute('data-ui-state','ready');n.setAttribute('aria-busy','false')}}
+    }catch(e){if(adminReadFinish(read,'error','ตรวจสอบ Audit Retention ไม่สำเร็จ'))el('auditRetentionStatus').textContent='ตรวจสอบนโยบาย Audit ไม่สำเร็จ'}
   }
   async function archiveAuditNow(){
     const ctx=adminContext();if(!ctx||adminBusy.archive)return;
@@ -412,7 +443,7 @@
   }
 
   async function loadAudit(){
-    const ctx=adminContext();if(!ctx)return;try{const response=await gs('listAuditLogs',ctx.token,100);if(!adminCurrent(ctx))return;const rows=requireAdminRows_(response,'Audit Logs');el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}catch(e){if(adminCurrent(ctx))toast(e.message||e)}}
+    const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('audit',ctx);try{const response=await gs('listAuditLogs',ctx.token,100);if(!adminReadCurrent(read))return;const rows=requireAdminRows_(response,'Audit Logs');el('auditBody').innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.timestamp)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml(r.targetSheet+':'+r.targetId)}</td></tr>`).join('')||'<tr><td colspan="4">ไม่มีข้อมูล</td></tr>';adminReadFinish(read,rows.length?'ready':'empty',rows.length?'โหลดประวัติ '+rows.length+' รายการ':'ยังไม่มีข้อมูล Audit')}catch(e){if(adminReadFinish(read,'error','โหลด Audit ไม่สำเร็จ'))toast(e.message||e)}}
 
   // P6-04: getAppBoot.content comes from the server's published-only list.
   // Defensively exclude explicitly draft records without requiring a new API.
