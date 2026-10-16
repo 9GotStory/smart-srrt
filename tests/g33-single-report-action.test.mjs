@@ -256,12 +256,17 @@ test('G33 rejects obsolete dashboard loads across filters and sessions',async()=
   const sourceStart=html.indexOf('  let dashboardLoadRequest=0;');
   const sourceEnd=html.indexOf('  function resetFilter(){',sourceStart);
   assert.ok(sourceStart>0&&sourceEnd>sourceStart);
-  const requests=[],visible=[];
+  const requests=[],visible=[],nodes=new Map();
+  const element=id=>{
+    if(!nodes.has(id))nodes.set(id,{value:'',innerHTML:'',disabled:false,textContent:'',attrs:{},
+      setAttribute(k,v){this.attrs[k]=v},getAttribute(k){return this.attrs[k]}});
+    return nodes.get(id);
+  };
   const ctx={
     token:'session-a',currentUser:{role:'Admin'},reportSummaryRequest:0,
     reportSummaryState:{status:'idle',summaries:{}},
     dashboardSummary:null,allData:[],areas:[{province:'demo'}],
-    el:()=>({value:''}),
+    el:element,
     gs:(name,session)=>new Promise(resolve=>requests.push({name,session,resolve})),
     updateDashboard:()=>visible.push('updated'),
     renderTables:()=>visible.push('rendered'),
@@ -273,6 +278,8 @@ test('G33 rejects obsolete dashboard loads across filters and sessions',async()=
   vm.createContext(ctx);
   vm.runInContext(html.slice(sourceStart,sourceEnd),ctx,{filename:'dashboard-request-guard.js'});
   const first=ctx.loadDashboard();
+  // Changed filters should supersede old data; identical concurrent filters coalesce.
+  ctx.el('startDate').value='2026-10-15';
   const second=ctx.loadDashboard();
   assert.equal(requests.length,2);
   requests[1].resolve([{eventId:'new'}]);

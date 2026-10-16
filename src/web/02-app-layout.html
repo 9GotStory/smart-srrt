@@ -24,6 +24,9 @@
       <button type="button" id="openSidebarBtn" class="hamb" aria-label="เปิดเมนูหลัก" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar(true)"><svg class="srrt-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-lucide="menu"><path d="M4 5h16" /> <path d="M4 12h16" /> <path d="M4 19h16" /></svg></button>
       <div class="banner srrt-shell-banner" style="flex:1"><div class="srrt-shell-heading"><p class="srrt-shell-eyebrow">ระบบเฝ้าระวังและตอบโต้เหตุการณ์</p><h2 id="appName">Smart SRRT Dashboard & AI Reporter</h2><p id="appSubtitle">ระบบบริหารจัดการข้อมูลระบาดวิทยาระดับพื้นที่</p></div><div class="pill" id="bannerText"><i class="fa-solid fa-bullhorn"></i> ระบบพร้อมใช้งาน</div></div>
     </div>
+    <div id="appBootStatus" class="help" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+    <button type="button" class="btn light" id="appBootRetryBtn" onclick="boot()" hidden>ลองโหลดระบบใหม่</button>
+    <div id="sessionActivityStatus" class="help" role="status" aria-live="polite" hidden></div>
     <div id="closedBox" class="closed" style="display:none"><i class="fa-solid fa-triangle-exclamation"></i> ระบบถูกปิดการบันทึกและสร้างรายงานชั่วคราว ขณะนี้ยังดู Dashboard ได้</div>
 
     <section id="page-dashboard" class="section active">
@@ -46,8 +49,8 @@
             <label class="srrt-dashboard-field"><span>หมู่บ้าน</span><select class="input" id="filterVillage" aria-label="หมู่บ้าน"><option value="">ทุกหมู่บ้าน</option></select></label>
           </div>
           <div class="srrt-dashboard-filter-actions">
-            <button class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
-            <button class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
+            <button id="dashboardSearchBtn" class="btn" onclick="loadDashboard()"><i class="fa-solid fa-magnifying-glass"></i>ค้นหา</button>
+            <button id="dashboardResetBtn" class="btn light" onclick="resetFilter()"><i class="fa-solid fa-rotate"></i>ล้างค่า</button>
             <button id="dashboardCaptureBtn" class="btn green" onclick="captureDashboard()"><i class="fa-solid fa-camera"></i>บันทึกรูปภาพ</button>
           </div>
         </div>
@@ -74,10 +77,16 @@
           <div class="card srrt-dashboard-chart"><h4>สัดส่วนตามระดับความเสี่ยง</h4><p>ภาพรวมระดับความเสี่ยงที่บันทึกไว้</p><div id="pieRisk" class="chart" role="img" aria-label="กราฟสัดส่วนตามระดับความเสี่ยง"></div><details class="srrt-dashboard-chart-details"><summary>ดูข้อมูลประกอบกราฟในรูปแบบตาราง</summary><div id="pieRiskTable" class="srrt-dashboard-chart-data" aria-live="polite"></div></details></div>
         </div>
       </div>
+      <!-- Outside captureArea: never embed export URLs or pending state in a screenshot. -->
+      <div class="help" aria-label="สถานะการส่งออกข้อมูล">
+        <p id="dashboardExportStatus" role="status" aria-live="polite" hidden></p>
+        <a id="dashboardExportLink" href="#" target="_blank" rel="noopener noreferrer" hidden>เปิดไฟล์ที่สร้างใน Google Drive</a>
+        <p id="dashboardCaptureStatus" role="status" aria-live="polite" hidden></p>
+      </div>
       <div id="publicAggregateNotice" class="help" style="margin-top:16px;display:none">Dashboard สาธารณะแสดงเฉพาะข้อมูลสรุปเชิงสถิติ กรุณาเข้าสู่ระบบเพื่อดูรายการเหตุการณ์</div>
       <div id="eventDetailPanel">
         <div class="srrt-dashboard-worklist-heading"><div><p>สำหรับผู้ใช้งานที่ได้รับสิทธิ์</p><h3>รายการเหตุการณ์สำหรับติดตาม</h3></div><span id="dashboardFollowupSummary" class="srrt-dashboard-followup-summary" role="status" aria-live="polite"></span></div>
-        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div class="srrt-action-group"><button class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
+        <div class="panel-head"><h3><i class="fa-solid fa-table-list"></i> รายการเหตุการณ์</h3><div class="srrt-action-group"><button id="dashboardExcelBtn" class="btn secondary" onclick="exportClientExcel()"><i class="fa-solid fa-file-excel"></i>Excel</button><button id="dashboardServerExportBtn" class="btn gray" onclick="exportServerFile('xlsx')"><i class="fa-solid fa-cloud-arrow-down"></i>Export จากระบบ</button></div></div>
         <div class="table-wrap" role="region" tabindex="0" aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><table aria-label="ตารางเหตุการณ์ตามตัวกรอง Dashboard"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>ผู้รับผิดชอบ</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์</th><th>ความเสี่ยง</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="eventBody"></tbody></table></div>
       </div>
     </section>
@@ -96,7 +105,7 @@
     </section>
 
     <section id="page-reporter" class="section">
-      <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
+      <div class="panel-head"><h3><i class="fa-solid fa-file-medical"></i> สร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI</h3><button id="dashboardReporterRefreshBtn" class="btn light" onclick="loadDashboard()"><i class="fa-solid fa-rotate"></i>รีเฟรชรายการ</button></div>
       <p class="srrt-reporter-guidance">รายงานที่ AI สร้างเป็น <strong>ร่างรายงานสอบสวนโรคเบื้องต้น</strong> ต้องตรวจทานโดยเจ้าหน้าที่ก่อนนำไปใช้ การประเมินความพร้อมเป็นเพียงคำแนะนำ ไม่ใช่การรับรองความถูกต้อง</p>
       <div class="card srrt-reporter-filters" role="search" aria-label="ค้นหาและกรองรายงานสอบสวนโรคเบื้องต้น">
         <label for="reportSearch">ค้นหาเหตุการณ์หรือพื้นที่<input class="input" type="search" id="reportSearch" placeholder="โรค เหตุการณ์ วันที่ หรือพื้นที่" autocomplete="off" oninput="renderReporterWorklist()"></label>

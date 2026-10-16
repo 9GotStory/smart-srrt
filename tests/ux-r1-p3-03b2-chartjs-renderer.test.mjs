@@ -28,6 +28,11 @@ function fixture(){
   const a=dash.indexOf('  function villageLabel(r){'),b=dash.indexOf('  function updateDashboard(){',a);
   assert.ok(begin>0&&end>begin&&a>0&&b>a);
   vm.runInContext(helper+'\n'+dash.slice(a,b)+dash.slice(begin,end),ctx);
+  const core=read('src/web/03b-client-core.html');
+  const from=core.indexOf('  const uiPendingActions=new Map();');
+  const to=core.indexOf('  function toast(msg)',from);
+  assert.ok(from>0&&to>from);
+  vm.runInContext(core.slice(from,to),ctx);
   vm.runInContext(exp.slice(exp.indexOf('  async function captureDashboard(){'),exp.lastIndexOf('</script>')),ctx);
   return {ctx,el,instances};
 }

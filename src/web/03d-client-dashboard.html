@@ -21,6 +21,8 @@
   }
 
   let dashboardLoadRequest=0;
+  let dashboardPendingKey='',dashboardPendingPromise=null;
+  const dashboardButtonOriginals=new Map();
   // UX-R1/P3-02: one visible state for in-flight, empty and failed Dashboard reads.
   // Never present stale figures as the currently selected filter's result.
   function setDashboardViewState(state){
@@ -30,7 +32,27 @@
       error:'ไม่สามารถโหลดข้อมูล Dashboard ได้ กรุณาลองค้นหาใหม่อีกครั้ง'
     };
     const page=el('page-dashboard'),message=el('dashboardLoadStatus');
-    if(page&&typeof page.setAttribute==='function')page.setAttribute('data-dashboard-state',state);
+    if(page&&typeof page.setAttribute==='function'){
+      page.setAttribute('data-dashboard-state',state);
+      page.setAttribute('aria-busy',String(state==='loading'));
+    }
+    for(const [id,label] of [['dashboardSearchBtn','กำลังค้นหา...'],
+      ['dashboardResetBtn','กำลังโหลด...'],['dashboardReporterRefreshBtn','กำลังรีเฟรช...']]){
+      const button=el(id);if(!button)continue;
+      if(state==='loading'){
+        if(!dashboardButtonOriginals.has(id))dashboardButtonOriginals.set(id,button.innerHTML);
+        button.textContent=label;
+        button.disabled=true;
+        if(typeof button.setAttribute==='function')button.setAttribute('aria-busy','true');
+      }else{
+        if(dashboardButtonOriginals.has(id)){
+          button.innerHTML=dashboardButtonOriginals.get(id);
+          dashboardButtonOriginals.delete(id);
+        }
+        button.disabled=false;
+        if(typeof button.setAttribute==='function')button.setAttribute('aria-busy','false');
+      }
+    }
     if(message){message.hidden=state==='ready';message.textContent=messages[state]||''}
     const privatePanel=el('eventDetailPanel');
     if(privatePanel)privatePanel.hidden=state==='loading'||state==='error';
@@ -52,31 +74,46 @@
       :'ไม่มีรายการเข้าเกณฑ์ที่รอระบุวันที่ลงสอบสวนตามข้อมูลปัจจุบัน';
   }
   async function loadDashboard(){
-    const request=++dashboardLoadRequest,session=token,hasUser=!!currentUser;
+    const session=token,hasUser=!!currentUser;
+    const filter={startDate:el('startDate').value,endDate:el('endDate').value,
+      province:el('filterProvince').value,amphoe:el('filterAmphoe').value,
+      tambon:el('filterTambon').value,village:el('filterVillage').value};
+    const key=JSON.stringify([session,hasUser,filter]);
+    // The same read already in flight must not create duplicate RPCs.
+    // A different filter/session may start a new read: only the latest owns UI.
+    if(dashboardPendingKey===key&&dashboardPendingPromise)return dashboardPendingPromise;
+    const request=++dashboardLoadRequest;
+    dashboardPendingKey=key;
     ++reportSummaryRequest;
     reportSummaryState={status:'loading',summaries:{}};
     setDashboardViewState('loading');
-    try{
-      const filter={startDate:el('startDate').value,endDate:el('endDate').value,province:el('filterProvince').value,amphoe:el('filterAmphoe').value,tambon:el('filterTambon').value,village:el('filterVillage').value};
-      // Ignore old requests after filters, login/logout, or auth mode change.
-      const response=hasUser
-        ?await gs('getDashboardData',session,filter)
-        :await gs('getPublicDashboardData',filter);
-      if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
-      if(hasUser&&!Array.isArray(response))throw new Error('Invalid authenticated Dashboard response');
-      if(!hasUser&&(!response||typeof response!=='object'||!response.kpi))throw new Error('Invalid public Dashboard response');
-      if(hasUser){allData=response;dashboardSummary=null}
-      else{allData=[];dashboardSummary=response}
-      updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters();
-      refreshDashboardFollowupSummary();
-      const count=hasUser?allData.length:Number(dashboardSummary.kpi.events||0);
-      setDashboardViewState(count>0?'ready':'empty');
-      if(currentUser&&roleCanRecord())void refreshReportSummaries();
-    }catch(e){
-      if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser){
-        setDashboardViewState('error');toast(e.message||e)
+    const task=(async()=>{
+      try{
+        const response=hasUser
+          ?await gs('getDashboardData',session,filter)
+          :await gs('getPublicDashboardData',filter);
+        if(request!==dashboardLoadRequest||session!==token||hasUser!==!!currentUser)return;
+        if(hasUser&&!Array.isArray(response))throw new Error('Invalid authenticated Dashboard response');
+        if(!hasUser&&(!response||typeof response!=='object'||!response.kpi))throw new Error('Invalid public Dashboard response');
+        if(hasUser){allData=response;dashboardSummary=null}
+        else{allData=[];dashboardSummary=response}
+        updateDashboard();renderTables();if(!areas.length&&currentUser)setupDashboardFilters();
+        refreshDashboardFollowupSummary();
+        const count=hasUser?allData.length:Number(dashboardSummary.kpi.events||0);
+        setDashboardViewState(count>0?'ready':'empty');
+        if(currentUser&&roleCanRecord())void refreshReportSummaries();
+      }catch(e){
+        if(request===dashboardLoadRequest&&session===token&&hasUser===!!currentUser){
+          setDashboardViewState('error');toast(e.message||e)
+        }
+      }finally{
+        if(request===dashboardLoadRequest){
+          dashboardPendingKey='';dashboardPendingPromise=null;
+        }
       }
-    }
+    })();
+    dashboardPendingPromise=task;
+    return task;
   }
   function resetFilter(){['startDate','endDate','filterProvince','filterAmphoe','filterTambon','filterVillage'].forEach(id=>el(id).value='');setupDashboardFilters();loadDashboard()}
   function villageLabel(r){return r.col29?`บ้าน${r.col29}${r.col10?' หมู่ '+r.col10:''}`:(r.col10?`หมู่ ${r.col10}`:'ไม่ระบุหมู่บ้าน')}

@@ -15,7 +15,8 @@ function fixture(){
   const cell=id=>{
     if(!cells.has(id))cells.set(id,{id,textContent:'',innerHTML:'',value:'',style:{},
       classList:{add(){},remove(){},contains(){return false}},
-      children:[],replaceChildren(...items){this.children=items}});
+      attrs:{},setAttribute(k,v){this.attrs[k]=v},getAttribute(k){return this.attrs[k]},removeAttribute(k){delete this.attrs[k]},
+       children:[],replaceChildren(...items){this.children=items}});
     return cells.get(id);
   };
   const makeChart=class{
