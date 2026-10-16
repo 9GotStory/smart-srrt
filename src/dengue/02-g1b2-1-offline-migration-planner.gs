@@ -184,15 +184,50 @@ function d331B2BuildPlan_(preview, context) {
   };
 }
 /**
+ * Validate the complete fail-closed plan before allowing ANY synthetic
+ * comparison or failure-model operation. An arbitrary object is never
+ * accepted as an approval or executable plan.
+ */
+function d331B2RequireHoldPlan_(plan, needsSteps) {
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan) ||
+      plan.contract !== 'D331-B2-OFFLINE-PLAN-V1' ||
+      plan.plannerVersion !== D331_B2_PLANNER_VERSION ||
+      plan.source !== 'UNTRUSTED_SYNTHETIC_PREVIEW' ||
+      plan.status !== 'HOLD' ||
+      plan.candidateDDLApproved !== false ||
+      plan.canReadLive !== false ||
+      plan.canBackup !== false ||
+      plan.canApply !== false ||
+      plan.canRestore !== false ||
+      plan.canEnable !== false ||
+      plan.operationExecuted !== false ||
+      typeof plan.comparisonKey !== 'string' ||
+      !plan.comparisonKey || plan.comparisonKey.length > 8192 ||
+      !Array.isArray(plan.candidateSteps) ||
+      plan.candidateSteps.length > 7) {
+    throw new Error('D331_B2_INVALID_PLAN');
+  }
+  var allowed = d331B2Names_();
+  var seen = Object.create(null);
+  plan.candidateSteps.forEach(function(step) {
+    if (!step || typeof step !== 'object' || Array.isArray(step) ||
+        step.kind !== 'DESCRIBE_MISSING_TABLE' ||
+        step.executed !== false || allowed.indexOf(step.table) < 0 ||
+        seen[step.table] || Object.keys(step).some(function(key) {
+          return ['kind','table','executed'].indexOf(key) < 0;
+        })) {
+      throw new Error('D331_B2_INVALID_PLAN');
+    }
+    seen[step.table] = true;
+  });
+  return true;
+}
+/**
  * A comparison key is only a best-effort synthetic *change detector*.
  * Never use it in place of an authoritative, locked, signed target recheck.
  */
 function d331B2ComparePlan_(plan, freshPreview) {
-  if (!plan || plan.contract !== 'D331-B2-OFFLINE-PLAN-V1' ||
-      plan.status !== 'HOLD' || plan.canApply !== false ||
-      typeof plan.comparisonKey !== 'string') {
-    throw new Error('D331_B2_INVALID_PLAN');
-  }
+  d331B2RequireHoldPlan_(plan);
   var fresh = d331B2ValidatePreview_(freshPreview);
   var changed = plan.comparisonKey !== d331B2ComparisonKey_(fresh);
   return {status:'HOLD',changed:changed,
@@ -204,10 +239,8 @@ function d331B2ComparePlan_(plan, freshPreview) {
  * cannot declare a migration successful even when zero faults are modeled.
  */
 function d331B2SimulateInterruption_(plan, atStep) {
-  if (!plan || plan.contract !== 'D331-B2-OFFLINE-PLAN-V1' ||
-      plan.status !== 'HOLD' || plan.canApply !== false ||
-      !Array.isArray(plan.candidateSteps) ||
-      !d331B2SafeCount_(atStep) || atStep > plan.candidateSteps.length) {
+  d331B2RequireHoldPlan_(plan);
+  if (!d331B2SafeCount_(atStep) || atStep > plan.candidateSteps.length) {
     throw new Error('D331_B2_INVALID_SIMULATION');
   }
   return {
