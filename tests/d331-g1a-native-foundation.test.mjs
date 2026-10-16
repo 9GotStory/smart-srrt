@@ -176,7 +176,8 @@ test('injected ambiguous write remains UNKNOWN and is never blind-retried',()=>{
   assert.equal(result.phase,'UNKNOWN');
   assert.equal(a.d331RequestDecision_(result,request).decision,'reconcile');
   assert.throws(()=>a.d331LedgerTransition_(result,'COMMIT'),/D331_RECONCILIATION_REQUIRED/);
-  const reconciled=a.d331LedgerTransition_(result,'RECONCILED_COMMIT');
+  assert.throws(()=>a.d331LedgerTransition_(result,'RECONCILED_COMMIT'),/D331_RECONCILIATION_REQUIRED/);
+  const reconciled=a.d331LedgerTransition_(result,'RECONCILED_COMMIT','AUTHORITATIVE_MATCH');
   assert.equal(reconciled.phase,'COMMITTED');
   assert.equal(a.d331RequestDecision_(reconciled,request).decision,'replay');
 });
