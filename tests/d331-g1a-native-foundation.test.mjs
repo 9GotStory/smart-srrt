@@ -13,7 +13,7 @@ const U='11111111-1111-4111-8111-111111111111';
 const V='22222222-2222-4222-8222-222222222222';
 const W='33333333-3333-4333-8333-333333333333';
 const DIGEST='a'.repeat(64);
-const request={requestId:V,principalId:'synthetic-user',operation:'dengue.case.write',payloadDigest:DIGEST};
+const request={requestId:V,eventId:U,principalId:'synthetic-user',operation:'dengue.case.write',payloadDigest:DIGEST};
 function principal(overrides={}) {
   return {active:true,userId:'u1',capabilities:['dengue.case.read','dengue.survey.write'],
     allowedAreaIds:['area-1'],allowedEventIds:[U],...overrides};
@@ -190,8 +190,8 @@ test('request ledger forbids replay with changed digest, identity or operation',
   assert.equal(a.d331RequestDecision_({...request,phase:'PENDING'},request).decision,'reconcile');
   assert.equal(a.d331RequestDecision_({...request,phase:'UNKNOWN'},request).decision,'reconcile');
   assert.equal(a.d331RequestDecision_({...request,phase:'COMMITTED'},request).decision,'replay');
-  for(const field of ['payloadDigest','principalId','operation','requestId']) {
-    const other={...request,[field]:field==='payloadDigest'?'b'.repeat(64):field==='requestId'?W:field==='operation'?'dengue.plan.write':'other'};
+  for(const field of ['payloadDigest','principalId','operation','requestId','eventId']) {
+    const other={...request,[field]:field==='payloadDigest'?'b'.repeat(64):field==='eventId'?W:field==='requestId'?W:field==='operation'?'dengue.plan.write':'other'};
     assert.throws(()=>a.d331RequestDecision_({...request,phase:'COMMITTED'},other),/D331_IDEMPOTENCY_CONFLICT/);
   }
   assert.throws(()=>a.d331RequestDecision_({...request,phase:'FAILED'},request),/D331_INVALID_LEDGER_STATE/);
@@ -204,6 +204,7 @@ test('injected ambiguous write remains UNKNOWN and is never blind-retried',()=>{
   let result;
   try{writer();}catch{result=a.d331LedgerTransition_(reserved,'AMBIGUOUS');}
   assert.equal(result.phase,'UNKNOWN');
+  assert.equal(result.eventId,U);
   assert.equal(a.d331RequestDecision_(result,request).decision,'reconcile');
   assert.throws(()=>a.d331LedgerTransition_(result,'COMMIT'),/D331_RECONCILIATION_REQUIRED/);
   assert.throws(()=>a.d331LedgerTransition_(result,'RECONCILED_COMMIT'),/D331_RECONCILIATION_REQUIRED/);
