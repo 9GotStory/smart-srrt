@@ -169,6 +169,39 @@ test('unknown or duplicate findings are rejected rather than echoed',()=>{
       /D331_B2_INVALID_PREVIEW/);
   }
 });
+test('contradictory missing-table finding cannot invent a migration proposal',()=>{
+  const a=api(),valid=preview(a,snapshot(a));
+  const forged={...valid,candidateHeadersMatch:false,
+    findings:[{code:'MISSING_TABLE',table:'DenguePlans'}]};
+  assert.throws(()=>a.d331B2BuildPlan_(forged,environment()),
+    /D331_B2_INVALID_PREVIEW/);
+});
+test('schema-version mismatch must be represented in sanitized findings',()=>{
+  const a=api(),valid=preview(a,snapshot(a));
+  const forged={...valid,observedSchemaVersion:99};
+  assert.throws(()=>a.d331B2BuildPlan_(forged,environment()),
+    /D331_B2_INVALID_PREVIEW/);
+  const opposite={...valid,candidateHeadersMatch:false,
+    findings:[{code:'SCHEMA_VERSION_MISMATCH'}]};
+  assert.throws(()=>a.d331B2BuildPlan_(opposite,environment()),
+    /D331_B2_INVALID_PREVIEW/);
+});
+test('populated conflicts must have matching header conflicts and real row counts',()=>{
+  const a=api(),valid=preview(a,snapshot(a));
+  for(const forged of [
+    {...valid,candidateHeadersMatch:false,
+      findings:[{code:'POPULATED_CONFLICT',table:'DengueCases'}]},
+    {...valid,candidateHeadersMatch:false,
+      findings:[{code:'HEADER_MISMATCH',table:'DengueCases'}]},
+    {...valid,candidateHeadersMatch:false,
+      findings:[{code:'MISSING_TABLE',table:'DengueCases'},
+        {code:'HEADER_MISMATCH',table:'DengueCases'}]}
+  ]){
+    assert.throws(()=>a.d331B2BuildPlan_(forged,environment()),
+      /D331_B2_INVALID_PREVIEW/);
+  }
+});
+
 test('plan comparison detects a changed synthetic row count as stale',()=>{
   const a=api(),s=snapshot(a),p=plan(a,s);
   const now=snapshot(a);
