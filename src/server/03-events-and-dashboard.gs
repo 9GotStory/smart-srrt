@@ -556,9 +556,9 @@ function listUsers(sessionToken, keyword) {
   requireAuth_(sessionToken, 'users');
   var values = getSheet_(CONFIG.SHEETS.USERS).getDataRange().getValues().slice(1);
   var q = String(keyword || '').toLowerCase();
-  return values.map(function(r){
+  return adminRpcSafeRows_(values.map(function(r){
     return {userId:r[0], name:r[1], email:r[2], role:r[4], status:r[5], org:r[6], tambon:r[7], amphoe:r[8], province:r[9], created:r[10], lastLogin:r[13]};
-  }).filter(function(u){ return !q || JSON.stringify(u).toLowerCase().indexOf(q) >= 0; });
+  })).filter(function(u){ return !q || JSON.stringify(u).toLowerCase().indexOf(q) >= 0; });
 }
 
 function updateUser(sessionToken, userId, patch) {
@@ -626,9 +626,9 @@ function listAreas(sessionToken, keyword) {
   requireAuth_(sessionToken, 'master');
   var rows = getSheet_(CONFIG.SHEETS.AREAS).getDataRange().getValues().slice(1);
   var q = String(keyword || '').toLowerCase();
-  return rows.map(function(r){
+  return adminRpcSafeRows_(rows.map(function(r){
     return {id:r[0], province:r[1], amphoe:r[2], tambon:r[3], moo:r[4], village:r[5], villageCode:r[6], active:r[7], updatedAt:r[8], updatedBy:r[9]};
-  }).filter(function(x){ return !q || JSON.stringify(x).toLowerCase().indexOf(q) >= 0; });
+  })).filter(function(x){ return !q || JSON.stringify(x).toLowerCase().indexOf(q) >= 0; });
 }
 
 function saveArea(sessionToken, item) {
