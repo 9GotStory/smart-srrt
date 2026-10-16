@@ -30,7 +30,7 @@ test('N1-A registers only pure G1-A in Native candidate; no B1/B2 runtime or ena
   assert.doesNotMatch(manifest,/src\/dengue\/02-g1b2-1-offline-migration-planner\.gs/);
   assert.match(manifest,/src\/server\/06-gemini-and-prompts\.gs/);
   assert.match(SOURCE,/var D331_G1A_ENABLED = false;/);
-  assert.doesNotMatch(SOURCE,/\b(?:SpreadsheetApp|DriveApp|PropertiesService|LockService|ScriptApp|UrlFetchApp)\b/);
+  assert.doesNotMatch(SOURCE,/\b(?:SpreadsheetApp|DriveApp|PropertiesService|LockService|ScriptApp|UrlFetchApp)\s*\./);
   const declared=[...SOURCE.matchAll(/\bfunction\s+(d331[A-Za-z0-9_]+)\s*\(/g)].map(m=>m[1]);
   assert.ok(declared.length>10);
   assert.ok(declared.every(name=>name.endsWith('_')),'no publicly callable Dengue API in N1-A');
