@@ -262,22 +262,33 @@
   async function loadAttachmentList(){
     const eventId=el('attachmentEventId').value;
     if(!eventId||!currentUser)return;
-    const session=token,request=++attachmentListRequest;
-    el('attachmentListStatus').textContent='กำลังโหลดเอกสารแนบ';
-    try{
-      const items=await gs('listEventAttachments',token,eventId);
-      if(request!==attachmentListRequest||token!==session||!currentUser||el('attachmentEventId').value!==eventId)return;
-      const closed=el('attachmentClosed').value==='1';
-      el('attachmentList').innerHTML=items.map(a=>{
-        const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark" aria-hidden="true"></i> นำออก</button>`:'';
-        return`<div class="content-item"><h4><i class="fa-solid fa-file" aria-hidden="true"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-download" aria-hidden="true"></i> ดาวน์โหลด</button>${remove}</div></div>`
-      }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>';
-      el('attachmentListStatus').textContent='เอกสารแนบ '+items.length+' รายการ'
-    }catch(e){
-      if(request===attachmentListRequest&&token===session&&currentUser){
-        el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>';
-        el('attachmentListStatus').textContent='ไม่สามารถโหลดเอกสารแนบได้'
+    const session=token,key=session+':'+eventId;
+    if(attachmentListFlight&&attachmentListFlight.key===key)return attachmentListFlight.promise;
+    const request=++attachmentListRequest;
+    uiSetSectionState('attachmentList','attachmentListStatus','loading','กำลังโหลดเอกสารแนบ...');
+    const operation=(async()=>{
+      try{
+        const items=await gs('listEventAttachments',session,eventId);
+        if(request!==attachmentListRequest||token!==session||!currentUser||
+           el('attachmentEventId').value!==eventId)return;
+        if(!Array.isArray(items))throw Error('Invalid attachment list');
+        const closed=el('attachmentClosed').value==='1';
+        el('attachmentList').innerHTML=items.map(a=>{
+          const remove=roleCanManage()&&!closed?`<button class="btn red" onclick='removeAttachment(${JSON.stringify(a.attachmentId||"")})'><i class="fa-solid fa-xmark" aria-hidden="true"></i> นำออก</button>`:'';
+          return`<div class="content-item"><h4><i class="fa-solid fa-file" aria-hidden="true"></i> ${escapeHtml(a.fileName||'ไฟล์แนบ')}</h4><p>${escapeHtml(a.description||'ไม่มีรายละเอียด')}</p><div class="mini">${escapeHtml(formatFileSize(a.sizeBytes))} · ${escapeHtml(a.uploadedAt||'')} · ${escapeHtml(a.uploadedBy||'')}</div><div class="actions" style="justify-content:flex-start"><button class="btn secondary" onclick='downloadAttachment(${JSON.stringify(a.attachmentId||"")},this)'><i class="fa-solid fa-download" aria-hidden="true"></i> ดาวน์โหลด</button>${remove}</div></div>`
+        }).join('')||'<div class="help">ยังไม่มีเอกสารแนบสำหรับเหตุการณ์นี้</div>';
+        uiSetSectionState('attachmentList','attachmentListStatus',items.length?'ready':'empty',
+          items.length?'เอกสารแนบ '+items.length+' รายการ':'ยังไม่มีเอกสารแนบ');
+      }catch(e){
+        if(request===attachmentListRequest&&token===session&&currentUser&&el('attachmentEventId').value===eventId){
+          el('attachmentList').innerHTML='<div class="help">'+escapeHtml(e.message||e)+'</div>';
+          uiSetSectionState('attachmentList','attachmentListStatus','error','ไม่สามารถโหลดเอกสารแนบได้ กรุณาลองใหม่');
+        }
       }
+    })();
+    attachmentListFlight={key,promise:operation};
+    try{return await operation}finally{
+      if(attachmentListFlight&&attachmentListFlight.promise===operation)attachmentListFlight=null;
     }
   }
   function attachmentMimeForFile(file){
@@ -307,45 +318,62 @@
     const file=el('attachmentFile').files&&el('attachmentFile').files[0];
     if(!file){toast('กรุณาเลือกไฟล์แนบ');return}
     if(file.size>5*1024*1024){toast('ไฟล์แนบต้องมีขนาดไม่เกิน 5 MB');return}
-    const eventId=el('attachmentEventId').value;
-    const revision=Number(el('attachmentRevision').value||0);
+    const eventId=el('attachmentEventId').value,revision=Number(el('attachmentRevision').value||0);
     const description=el('attachmentDescription').value;
-    const session=token,request=++attachmentUploadRequest,btn=el('uploadAttachmentBtn');
+    const session=token,user=currentUser,request=++attachmentUploadRequest;
     const stillCurrent=()=>request===attachmentUploadRequest&&token===session&&
-      !!currentUser&&roleCanRecord()&&el('attachmentEventId').value===eventId&&
+      currentUser===user&&roleCanRecord()&&el('attachmentEventId').value===eventId&&
       el('attachmentClosed').value!=='1'&&el('attachmentModal').classList.contains('open');
+    const lease=uiBeginAction('attachment:upload:'+session+':'+eventId+':'+revision,{
+      buttonId:'uploadAttachmentBtn',statusId:'attachmentUploadStatus',pendingText:'กำลังอ่านไฟล์แนบ...'
+    });
+    if(!lease)return;
     attachmentUploadPending=true;
+    let dispatched=false,confirmed=false;
     try{
-      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังอัปโหลด';
       const base64=await fileToBase64(file);
       if(!stillCurrent())return;
+      uiSetSectionState(null,'attachmentUploadStatus','loading','กำลังส่งไฟล์ไปยังระบบ...');
+      dispatched=true;
       const result=await gs('uploadEventAttachment',session,eventId,{
         name:file.name,mimeType:attachmentMimeForFile(file),base64,description
       },revision);
+      confirmed=true;
       if(!stillCurrent())return;
       el('attachmentRevision').value=String(result.revision||revision);
       toast(result.message||'แนบไฟล์เรียบร้อยแล้ว');
       el('attachmentFile').value='';el('attachmentDescription').value='';
-      await loadDashboard();
+      try{await loadDashboard()}catch(_){toast('แนบไฟล์แล้ว แต่รีเฟรชรายการไม่สำเร็จ')}
       if(!stillCurrent())return;
       const refreshed=allData.find(x=>x.eventId===eventId);
       if(refreshed)el('attachmentRevision').value=String(refreshed.revision||1);
       await loadAttachmentList()
     }catch(e){
-      if(stillCurrent())toast(e.message||e)
+      if(stillCurrent())toast(dispatched?'ยังยืนยันผลอัปโหลดไม่ได้ โปรดตรวจสอบรายการก่อนส่งซ้ำ':
+        'อ่านไฟล์แนบไม่สำเร็จ: '+(e.message||e))
     }finally{
       if(request===attachmentUploadRequest){
-        attachmentUploadPending=false;btn.disabled=false;
-        btn.innerHTML='<i class="fa-solid fa-upload"></i> แนบไฟล์'
-      }
+        attachmentUploadPending=false;
+        if(stillCurrent())uiFinishAction(lease,confirmed?'success':dispatched?'unknown':'error',
+          confirmed?'แนบไฟล์สำเร็จ':dispatched?'ยังยืนยันผลอัปโหลดไม่ได้ กรุณาตรวจสอบเอกสารแนบก่อนทำซ้ำ':
+            'อ่านไฟล์ไม่สำเร็จ กรุณาตรวจสอบแล้วลองใหม่',{
+              canEnable:()=>!!roleCanRecord()&&el('attachmentClosed').value!=='1'
+            });
+        else uiInvalidateAction(lease)
+      }else uiInvalidateAction(lease);
     }
   }
   async function downloadAttachment(attachmentId){
     if(!currentUser){openLogin();return}
-    const session=token;
+    const session=token,user=currentUser,eventId=el('attachmentEventId').value;
+    const lease=uiBeginAction('attachment:download:'+session+':'+attachmentId,{
+      button:arguments[1]||null,pendingText:'กำลังดาวน์โหลด...'
+    });
+    if(!lease)return;
+    let failed=false;
     try{
       const result=await gs('downloadEventAttachment',session,attachmentId);
-      if(token!==session||!currentUser)return;
+      if(token!==session||currentUser!==user||el('attachmentEventId').value!==eventId)return;
       const binary=atob(result.base64||'');
       const bytes=new Uint8Array(binary.length);
       for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
@@ -355,7 +383,12 @@
       document.body.appendChild(a);a.click();a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000)
     }catch(e){
-      if(token===session&&currentUser)toast(e.message||e)
+      failed=true;
+      if(token===session&&currentUser===user)toast('ดาวน์โหลดไม่สำเร็จ: '+(e.message||e))
+    }finally{
+      if(token===session&&currentUser===user)
+        uiFinishAction(lease,failed?'error':'ready','',{canEnable:()=>!!currentUser});
+      else uiInvalidateAction(lease)
     }
   }
   function removeAttachment(attachmentId){
