@@ -23,10 +23,17 @@ function event(overrides={}) {
     recordStatus:'active',eligibleDisease:true,...overrides};
 }
 
-test('G1-A stays unregistered: current runtime still has 24 native files',()=>{
+test('N1-A registers only pure G1-A in Native candidate; no B1/B2 runtime or enabled feature',()=>{
   const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
-  assert.doesNotMatch(manifest,/src\/dengue\/00-g1a-foundation\.gs/);
+  assert.match(manifest,/src\/dengue\/00-g1a-foundation\.gs/);
+  assert.doesNotMatch(manifest,/src\/dengue\/01-g1b1-readonly-adapter\.gs/);
+  assert.doesNotMatch(manifest,/src\/dengue\/02-g1b2-1-offline-migration-planner\.gs/);
   assert.match(manifest,/src\/server\/06-gemini-and-prompts\.gs/);
+  assert.match(SOURCE,/var D331_G1A_ENABLED = false;/);
+  assert.doesNotMatch(SOURCE,/\b(?:SpreadsheetApp|DriveApp|PropertiesService|LockService|ScriptApp|UrlFetchApp)\s*\./);
+  const declared=[...SOURCE.matchAll(/\bfunction\s+(d331[A-Za-z0-9_]+)\s*\(/g)].map(m=>m[1]);
+  assert.ok(declared.length>10);
+  assert.ok(declared.every(name=>name.endsWith('_')),'no publicly callable Dengue API in N1-A');
 });
 
 test('feature flag is false and fails closed even with a supplied config',()=>{

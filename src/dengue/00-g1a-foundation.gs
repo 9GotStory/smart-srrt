@@ -1,7 +1,8 @@
 /**
  * D331-G1-A: Offline-only Dengue 3-3-1 foundation contract.
- * NOT listed in tools/native-sources.mjs; does not run in any deployed GAS app.
- * No SpreadsheetApp, LockService, DriveApp, PropertiesService or RPC entrypoints.
+ * N1-A source candidate: registered in the Native build but feature remains OFF.
+ * Existing deployments are NOT changed until separately approved release.
+ * No SpreadsheetApp, LockService, DriveApp, PropertiesService or public RPC entrypoints.
  * No clinical 3-3-1 policy is adopted by this module.
  */
 var D331_G1A_ENABLED = false;

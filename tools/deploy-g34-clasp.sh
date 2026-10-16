@@ -51,7 +51,7 @@ const [remote, local] = process.argv.slice(2);
 const scriptId = process.env.SMART_SRRT_SCRIPT_ID;
 const ordered = ['00-bootstrap.gs', '01-schema-and-db.gs', '02-auth-and-attachments.gs',
   '03-events-and-dashboard.gs', '04-admin-and-audit.gs', '05-reports-and-models.gs',
-  '06-gemini-and-prompts.gs'];
+  '06-gemini-and-prompts.gs', '00-g1a-foundation.gs'];
 const base = {scriptId, scriptExtensions:['.gs'], htmlExtensions:['.html']};
 fs.writeFileSync(remote, JSON.stringify({...base, rootDir:'.'}, null, 2)+'\n');
 fs.writeFileSync(local, JSON.stringify({...base, rootDir:'stage', filePushOrder:ordered.map(x=>'stage/'+x)}, null, 2)+'\n');
@@ -91,15 +91,20 @@ const native24Layout = [
   ...native24Partials.map(name=>name+'.html'),'Index.html'
 ];
 if (native24Layout.length !== 24) throw new Error('Invalid Native24 expected layout');
+// Retain the exact Native24 pre-deploy backup gate, while also recognizing
+// the subsequently staged inert 25-file N1-A layout for future preflights.
+const native25Layout = [...native24Layout, '00-g1a-foundation.gs'];
+if (native25Layout.length !== 25) throw new Error('Invalid Native25 expected layout');
 const sameNames = expected =>
   JSON.stringify(actual) === JSON.stringify(expected.slice().sort());
 const isLegacy = legacyLayouts.some(sameNames);
 const isNative13 = sameNames(native13Layout);
 const isNative24 = sameNames(native24Layout);
-if (!isLegacy && !isNative13 && !isNative24) {
-  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; exact known 13-file Native layout; or exact known 24-file Native layout; found: '+JSON.stringify(actual));
+const isNative25 = sameNames(native25Layout);
+if (!isLegacy && !isNative13 && !isNative24 && !isNative25) {
+  throw new Error('Expected Index.html with exactly one legacy Code.gs or รหัส.gs; exact known 13-file Native layout; or exact known 24-file Native layout; or exact known 25-file Native layout; found: '+JSON.stringify(actual));
 }
-const server = (isNative13 || isNative24) ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
+const server = (isNative13 || isNative24 || isNative25) ? '00-bootstrap.gs' : actual.find(x => x.endsWith('.gs'));
 const code = fs.readFileSync(path.join(root, server), 'utf8');
 if (!/\bfunction\s+doGet\s*\(/.test(code) || !/\bfunction\s+include\s*\(/.test(code)) {
   throw new Error('Known server does not contain expected doGet/include entrypoints; inspect private backup before proceeding');
@@ -115,7 +120,7 @@ if (isNative13) {
     throw new Error('Native 13-file Index template missing a known partial include');
   }
 }
-if (isNative24) {
+if (isNative24 || isNative25) {
   // TEST v11 was deployed from the canonical Native 24-file index template.
   // Require exactly all sixteen ordered includes, not just substring presence.
   const index = fs.readFileSync(path.join(root, 'Index.html'), 'utf8');
@@ -123,14 +128,27 @@ if (isNative24) {
   if (index.trim() !== expectedIndex) {
     throw new Error('Native 24-file Index template missing, extra, reordered or untrusted includes');
   }
-  for (const filename of native24Layout) {
+  for (const filename of (isNative25 ? native25Layout : native24Layout)) {
     if (!fs.statSync(path.join(root,filename)).isFile() ||
         fs.statSync(path.join(root,filename)).size === 0) {
       throw new Error('Native 24-file backup contains an empty or invalid source: '+filename);
     }
   }
 }
-const layoutLabel=isNative24?'BACKED_UP_NATIVE_24_LAYOUT=PASS':
+if (isNative25) {
+  // The bash preflight already pinned the tracked, clean current checkout to an
+  // exact Product Owner approved main commit. Its canonical G1-A source is the
+  // closed-world allowlist for this release. A prior Native25 with different
+  // bytes must be reviewed and explicitly allowlisted in a future revision;
+  // do NOT try to infer its safety from syntax or presence of a flag line.
+  const approved = fs.readFileSync(path.join(process.cwd(), 'src/dengue/00-g1a-foundation.gs'));
+  const backedUp = fs.readFileSync(path.join(root, '00-g1a-foundation.gs'));
+  if (!backedUp.equals(approved)) {
+    throw new Error('Native25 D331 source differs from exact approved main bytes; STOP before push');
+  }
+}
+const layoutLabel=isNative25?'BACKED_UP_NATIVE_25_LAYOUT=PASS':
+  isNative24?'BACKED_UP_NATIVE_24_LAYOUT=PASS':
   isNative13?'BACKED_UP_NATIVE_13_LAYOUT=PASS':
   'BACKED_UP_LEGACY_LAYOUT=PASS; LEGACY_SERVER_FILE='+server;
 console.log(layoutLabel+'; SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS');
@@ -147,7 +165,8 @@ const [stage, oldManifest] = process.argv.slice(2);
 const expected = [
   '00-bootstrap.gs','01-schema-and-db.gs','02-auth-and-attachments.gs',
   '03-events-and-dashboard.gs','04-admin-and-audit.gs','05-reports-and-models.gs',
-  '06-gemini-and-prompts.gs','00-document-head.html','01-styles.html',
+  '06-gemini-and-prompts.gs','00-g1a-foundation.gs',
+  '00-document-head.html','01-styles.html',
   '02-app-layout.html','03-modals.html','03a-dashboard-mobile.html',
   '03b-client-core.html','03c-client-auth.html','03d-client-dashboard.html',
   '03e-client-dashboard-export.html','03f-client-event-controls.html',
@@ -160,7 +179,7 @@ if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Wrong sta
 if(!fs.readFileSync(path.join(stage,'appsscript.json')).equals(fs.readFileSync(oldManifest))) {
   throw new Error('Manifest was modified in the staged package');
 }
-console.log('STAGE=PASS (24 files + preserved manifest; ordered script files)');
+console.log('STAGE=PASS (25 files + preserved manifest; ordered script files)');
 NODE
 (cd "$WORK" && "$CLASP" show-file-status > "$WORK/files.before.txt") || fail 'Cannot inspect proposed clasp file push.'
 

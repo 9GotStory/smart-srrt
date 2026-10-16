@@ -160,7 +160,8 @@ function native24BackupFixture(options={}) {
   try{
     fs.writeFileSync(path.join(root,'appsscript.json'),
       JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
-    const nativeFiles=expectedNativeFiles();
+    const nativeFiles=options.layout25 ? expectedNativeFiles() :
+      expectedNativeFiles().filter(name=>name!=='00-g1a-foundation.gs');
     const canonicalIndex=nativeFiles.filter(x=>x.endsWith('.html')&&x!=='Index.html')
       .map(x=>path.parse(x).name);
     assert.equal(canonicalIndex.length,16);
@@ -180,6 +181,15 @@ function native24BackupFixture(options={}) {
     for(const name of nativeFiles){
       if(name===options.missing)continue;
       let content='// known pre-existing Native24 source\n';
+      if(name==='00-g1a-foundation.gs') {
+        // The legitimate remote Native25 bytes must exactly match the
+        // separately checked-out source at the approved main SHA.
+        content=fs.readFileSync(path.join(ROOT,'src/dengue/00-g1a-foundation.gs'),'utf8');
+        if(options.badD331)content=content.replace(
+          'var D331_G1A_ENABLED = false;',
+          'var D331_G1A_ENABLED = true;');
+        if(options.d331Tail)content+=options.d331Tail;
+      }
       if(name==='00-bootstrap.gs')content=options.badEntrypoints
         ? 'function doGet(e) {}\n'
         : 'function doGet(e) {}\nfunction include(filename) {}\n';
@@ -238,4 +248,33 @@ test('G-34 new Native24 backup gate does not weaken deploy approval, rollback ev
   assert.ok(staged);
   const names=[...staged[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
   assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort());
+});
+
+test('G-34 N1-A accepts only exact inert Native25 backup and rejects unsafe variants',()=>{
+  const ok=native24BackupFixture({layout25:true});
+  assert.equal(ok.status,0,ok.stderr);
+  assert.match(ok.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
+  assert.match(ok.stdout,/SOURCE_ENTRYPOINTS=PASS/);
+  assert.match(ok.stdout,/REMOTE_MANIFEST_V8=PASS/);
+  // A Native25 backup minus the new G1-A file is exactly the *historical*
+  // Native24 layout and MUST remain accepted as a preserved prior version.
+  const old=native24BackupFixture({layout25:true,missing:'00-g1a-foundation.gs'});
+  assert.equal(old.status,0,old.stderr);
+  assert.match(old.stdout,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
+  for(const bad of [
+    {extra:'rogue.gs'},
+    {badD331:true},
+    {d331Tail:'\nD331_G1A_ENABLED = true;\n'},
+    {d331Tail:"\nSpreadsheetApp['openById']('SYNTHETIC-NOT-REAL');\n"},
+    {d331Tail:'\ngetDb_();\n'},
+    {d331Tail:'\n// unrelated source drift must also stop\n'},
+    {v8:false},
+    {indexDuplicate:true}
+  ]){
+    const r=native24BackupFixture({...bad,layout25:true});
+    assert.notEqual(r.status,0,JSON.stringify(bad));
+    assert.doesNotMatch(r.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
+    if(bad.badD331||bad.d331Tail)assert.match(
+      r.stderr,/Native25 D331 source differs from exact approved main bytes/);
+  }
 });

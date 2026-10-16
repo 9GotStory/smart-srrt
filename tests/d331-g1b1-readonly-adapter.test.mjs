@@ -45,9 +45,9 @@ function mainRow(overrides={}) {
   return row;
 }
 
-test('B1 added library is deliberately not staged in Native 24 files',()=>{
+test('B1 stays offline while only G1-A is registered in Native25',()=>{
   assert.doesNotMatch(MANIFEST,/src\/dengue\/01-g1b1-readonly-adapter\.gs/);
-  assert.doesNotMatch(MANIFEST,/src\/dengue\/00-g1a-foundation\.gs/);
+  assert.match(MANIFEST,/src\/dengue\/00-g1a-foundation\.gs/);
   assert.match(MANIFEST,/src\/server\/06-gemini-and-prompts\.gs/);
 });
 

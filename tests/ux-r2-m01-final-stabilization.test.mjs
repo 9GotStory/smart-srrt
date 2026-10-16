@@ -24,7 +24,7 @@ const CLIENT=[
 const FINAL=CLIENT.at(-1);
 
 function assertClientTopology(manifest,scripts){
-  assert.equal(GAS_SERVER_SOURCES.length,7,'approved Native server manifest size changed');
+  assert.equal(GAS_SERVER_SOURCES.length,8,'approved Native server manifest size changed');
   assert.deepEqual(manifest.slice(-CLIENT.length),CLIENT,
     'Core → Auth → Dashboard → Event → Reporter → Admin order changed');
   assert.deepEqual(scripts.map(script=>script.path),CLIENT,
@@ -101,12 +101,12 @@ function assertHandlers(context,handlers){
   }
 }
 
-test('M01-05 Native 24-file topology is exact and globally collision-characterized',()=>{
+test('M01-05 Native 25-file topology is exact and globally collision-characterized',()=>{
   const scripts=readOrderedClientScripts();
   assert.equal(GAS_HTML_SOURCES.length,16);
   assertClientTopology(GAS_HTML_SOURCES,scripts);
   const entries=buildGasMultiFileEntries();
-  assert.equal(entries.size,24);
+  assert.equal(entries.size,25);
   assert.deepEqual(renderGasIndexOffline(entries),
     Buffer.concat(GAS_HTML_SOURCES.map(source=>
       entries.get(source.split('/').at(-1)))));

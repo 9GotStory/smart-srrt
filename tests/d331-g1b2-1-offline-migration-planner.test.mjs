@@ -26,7 +26,8 @@ const missingNames=['DengueCases','DenguePlans','DengueControlActions',
 
 test('B2 offline planner deliberately excluded from GAS runtime manifest',()=>{
   assert.doesNotMatch(MANIFEST,/src\/dengue\/02-g1b2-1-offline-migration-planner\.gs/);
-  assert.doesNotMatch(MANIFEST,/src\/dengue\/0[01]-g1/);
+  assert.match(MANIFEST,/src\/dengue\/00-g1a-foundation\.gs/);
+  assert.doesNotMatch(MANIFEST,/src\/dengue\/01-g1b1-readonly-adapter\.gs/);
 });
 test('no service APIs, writes, installer, deployment or live adapter in B2',()=>{
   assert.doesNotMatch(B2,/\b(?:SpreadsheetApp|PropertiesService|LockService|DriveApp|UrlFetchApp|ScriptApp)\s*\./);
