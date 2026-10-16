@@ -88,7 +88,10 @@ function d331N1b2bSimulate_(source, request) {
   // runs even while the deployed (separate) N1-A feature is permanently OFF.
   // It cannot be registered into GAS without a different, reviewed trust design.
   d331N1b2bMockProvider_(source);
-  if (!request || !d331IsUuid_(request.eventId) ||
+  if (!request || typeof request !== 'object' || Array.isArray(request) ||
+      !Object.prototype.hasOwnProperty.call(request, 'eventId') ||
+      !Object.prototype.hasOwnProperty.call(request, 'operation') ||
+      !d331IsUuid_(request.eventId) ||
       request.eventId !== request.eventId.toLowerCase() ||
       (request.operation !== 'dengue.case.read' &&
        request.operation !== 'dengue.case.write') ||
