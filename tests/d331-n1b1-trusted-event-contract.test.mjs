@@ -29,16 +29,16 @@ function grant(){return {approved:true,userId:'user-owner',
   capabilities:['dengue.case.read','dengue.case.write'],
   allowedAreaIds:['area-A'],allowedEventIds:[]};}
 const authorize=(a,extras={})=>a.d331N1bAuthorizeOffline_(
-  extras.user ?? user(),extras.row ?? raw(),extras.areas ?? [master()],
-  extras.grant ?? grant(),extras.diseases ?? ['DENGUE_APPROVED_SYNTHETIC'],
-  extras.cap ?? 'dengue.case.read',extras.write ?? false,extras.rev);
+  Object.hasOwn(extras,'user') ? extras.user : user(),Object.hasOwn(extras,'row') ? extras.row : raw(),Object.hasOwn(extras,'areas') ? extras.areas : [master()],
+  Object.hasOwn(extras,'grant') ? extras.grant : grant(),Object.hasOwn(extras,'diseases') ? extras.diseases : ['DENGUE_APPROVED_SYNTHETIC'],
+  Object.hasOwn(extras,'cap') ? extras.cap : 'dengue.case.read',Object.hasOwn(extras,'write') ? extras.write : false,extras.rev);
 
 test('N1-B1 is offline-only and adds no public RPC or Google services',()=>{
   const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
-  assert.doesNotMatch(manifest,/src\\/dengue\\/03-n1b1-trusted-event-contract\\.gs/);
-  assert.match(manifest,/src\\/dengue\\/00-g1a-foundation\\.gs/);
-  assert.doesNotMatch(B,/\\b(?:SpreadsheetApp|DriveApp|PropertiesService|ScriptApp|LockService|UrlFetchApp|getDb_|ensureSheet_|google\\.script\\.run)\\b/);
-  const functions=[...B.matchAll(/\\bfunction\\s+(d331\\w+)\\s*\\(/g)].map(m=>m[1]);
+  assert.doesNotMatch(manifest,/src\/dengue\/03-n1b1-trusted-event-contract\.gs/);
+  assert.match(manifest,/src\/dengue\/00-g1a-foundation\.gs/);
+  assert.doesNotMatch(B,/\b(?:SpreadsheetApp|DriveApp|PropertiesService|ScriptApp|LockService|UrlFetchApp|getDb_|ensureSheet_|google\.script\.run)\b/);
+  const functions=[...B.matchAll(/\bfunction\s+(d331\w+)\s*\(/g)].map(m=>m[1]);
   assert.ok(functions.length>=5);
   assert.ok(functions.every(n=>n.endsWith('_')));
   assert.match(A,/var D331_G1A_ENABLED = false;/);
