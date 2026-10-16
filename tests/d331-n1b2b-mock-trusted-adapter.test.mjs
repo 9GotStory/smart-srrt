@@ -128,7 +128,7 @@ test('invalid request and spoofed client security inputs stop before connector c
     {eventId:U,operation:'dengue.case.read',allowedAreaIds:['area-A']},
     {eventId:U,operation:'dengue.case.read',userId:'user-1'},
     {eventId:U,operation:'dengue.case.read',mainRow:mainRow()},
-    {eventId:V.toUpperCase(),operation:'dengue.case.read'}
+    {eventId:'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',operation:'dengue.case.read'}
   ];
   for(const request of bad){
     const ctx=api(); const {source,calls}=build(ctx);
