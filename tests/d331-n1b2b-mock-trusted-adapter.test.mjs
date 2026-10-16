@@ -136,6 +136,18 @@ test('invalid request and spoofed client security inputs stop before connector c
     assert.deepEqual(calls,[]);
   }
 });
+test('mock requests reject inherited authorization fields and spoofed revision',()=>{
+  const ctx=api(), {source,calls}=build(ctx);
+  const inherited=Object.create({eventId:U,operation:'dengue.case.read'});
+  assert.throws(()=>ctx.d331N1b2bSimulate_(source,inherited),/D331_MOCK_INVALID_REQUEST/);
+  assert.deepEqual(calls,[]);
+  const inheritedWrite=Object.create({expectedRevision:3});
+  inheritedWrite.eventId=U; inheritedWrite.operation='dengue.case.write';
+  assert.throws(()=>ctx.d331N1b2bSimulate_(source,inheritedWrite),
+    /D331_MOCK_INVALID_REQUEST/);
+  assert.deepEqual(calls,[]);
+});
+
 test('strict headers deny missing, swapped, extra, incorrect and duplicate positions',()=>{
   const ctx=api(),mh=Array.from(ctx.D331_N1B2B_MAIN_HEADERS_);
   const ah=Array.from(ctx.D331_N1B2B_AREA_HEADERS_);
