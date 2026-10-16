@@ -149,7 +149,7 @@
     {id:'investigate',title:'4. การสอบสวนและมาตรการ',keys:[18,24,26,21,22]}
   ];
   const recordTabIds_=['receive','place','verify','investigate','review'];
-  let recordDraftSnapshot='',recordSaveInFlight=false;
+  let recordDraftSnapshot='',recordSaveInFlight=false,recordSaveRequest=0;
   function recordDraftValues(){
     return JSON.stringify(fields.map(f=>String(el('in'+f[0]).value||'')));
   }
@@ -202,6 +202,7 @@
     recordDraftSnapshot='';
   }
   function discardRecordFormOnLogout(){
+    ++recordSaveRequest;recordSaveInFlight=false;
     if(typeof fields!=='undefined'&&Array.isArray(fields))fields.forEach(f=>{const control=el('in'+f[0]);if(control)control.value=''});
     recordDraftSnapshot='';
     // A pending response is still guarded by the original session token below.
@@ -275,23 +276,44 @@
   async function saveRecord(){
     if(recordSaveInFlight||!roleCanRecord())return;
     const btn=el('saveRecordBtn'),cancel=el('cancelRecordBtn');
-    const sessionToken=token;
-    recordSaveInFlight=true;
+    const sessionToken=token,user=currentUser,mode=el('formMode').value,
+      eventId=el('editEventId').value,revision=Number(el('editRevision').value||0);
+    const lease=uiBeginAction('record:save:'+sessionToken+':'+mode+':'+(eventId||'new')+':'+revision,{
+      buttonId:'saveRecordBtn',statusId:'recordSaveStatus',pendingText:'กำลังบันทึกเหตุการณ์...'
+    });
+    if(!lease)return;
+    const request=++recordSaveRequest;
+    recordSaveInFlight=true;cancel.disabled=true;
+    let confirmed=false,dispatched=false,failure='';
     try{
-      btn.disabled=true;cancel.disabled=true;
-      btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก';
-      const data={};fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
-      const msg=el('formMode').value==='add'
-        ?await gs('addRecord',token,data)
-        :await gs('updateRecord',token,el('editEventId').value,data,Number(el('editRevision').value||0));
-      if(token!==sessionToken||!currentUser)return;
+      const data={};
+      fields.forEach(f=>{const x=el('in'+f[0]);data['col'+f[0]]=f[2]==='date'?toThai(x.value):x.value});
+      dispatched=true;
+      const msg=mode==='add'
+        ?await gs('addRecord',sessionToken,data)
+        :await gs('updateRecord',sessionToken,eventId,data,revision);
+      confirmed=true;
+      if(request!==recordSaveRequest||token!==sessionToken||currentUser!==user)return;
       recordDraftSnapshot=recordDraftValues();
-      closeModal('recordModal');toast(msg);await loadDashboard()
+      closeModal('recordModal');toast(msg);
+      try{await loadDashboard()}
+      catch(_){toast('บันทึกแล้ว แต่โหลดรายการใหม่ไม่สำเร็จ กรุณารีเฟรช Dashboard')}
     }catch(e){
-      if(token===sessionToken&&currentUser)toast('บันทึกไม่สำเร็จ: '+(e.message||e));
+      failure=String(e&&e.message||e);
+      if(request===recordSaveRequest&&token===sessionToken&&currentUser===user)
+        toast(dispatched?'ยังยืนยันผลการบันทึกไม่ได้ โปรดตรวจสอบข้อมูลจากระบบก่อนทำซ้ำ':
+          'ไม่สามารถเตรียมข้อมูลสำหรับบันทึกได้: '+failure);
     }finally{
-      recordSaveInFlight=false;btn.disabled=false;cancel.disabled=false;
-      btn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> บันทึก';
+      if(request===recordSaveRequest){
+        recordSaveInFlight=false;
+        if(token===sessionToken&&currentUser===user){
+          const state=confirmed?'success':dispatched?'unknown':'error';
+          uiFinishAction(lease,state,confirmed?'บันทึกเหตุการณ์สำเร็จ':
+            dispatched?'ไม่ทราบผลการบันทึก กรุณาตรวจสอบ EventID/Revision ก่อนส่งคำขออีกครั้ง':
+              'ไม่สามารถเตรียมข้อมูลสำหรับบันทึกได้',{canEnable:()=>!!roleCanRecord()});
+          cancel.disabled=false;
+        }else uiInvalidateAction(lease);
+      }else uiInvalidateAction(lease);
     }
   }
   function deleteEvent(eventId,revision){
