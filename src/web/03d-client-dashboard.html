@@ -43,14 +43,14 @@
         if(!dashboardButtonOriginals.has(id))dashboardButtonOriginals.set(id,button.innerHTML);
         button.textContent=label;
         button.disabled=true;
-        button.setAttribute('aria-busy','true');
+        if(typeof button.setAttribute==='function')button.setAttribute('aria-busy','true');
       }else{
         if(dashboardButtonOriginals.has(id)){
           button.innerHTML=dashboardButtonOriginals.get(id);
           dashboardButtonOriginals.delete(id);
         }
         button.disabled=false;
-        button.setAttribute('aria-busy','false');
+        if(typeof button.setAttribute==='function')button.setAttribute('aria-busy','false');
       }
     }
     if(message){message.hidden=state==='ready';message.textContent=messages[state]||''}

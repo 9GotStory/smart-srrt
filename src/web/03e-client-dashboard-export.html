@@ -21,7 +21,9 @@
   async function exportServerFile(format){
     if(!currentUser||!token){toast('กรุณาเข้าสู่ระบบเพื่อ Export ข้อมูล');return}
     const session=token,user=currentUser;
-    const lease=uiBeginAction('dashboard:serverExport:'+format,
+    // Keep an unverified export from an old auth epoch from blocking another user.
+    const epoch=typeof authRequestEpoch==='number'?authRequestEpoch:0;
+    const lease=uiBeginAction('dashboard:serverExport:'+format+':'+epoch,
       {buttonId:'dashboardServerExportBtn',statusId:'dashboardExportStatus',pendingText:'กำลังสร้างไฟล์ใน Google Drive...'});
     if(!lease)return;
     const link=el('dashboardExportLink');

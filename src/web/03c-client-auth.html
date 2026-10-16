@@ -82,7 +82,7 @@
     const startToken=token,startEpoch=authRequestEpoch,startUser=currentUser;
     const lease=uiBeginAction('app:boot',{statusId:'appBootStatus',pendingText:'กำลังเตรียมระบบและโหลดข้อมูล...'});
     if(!lease)return;
-    const retry=el('appBootRetryBtn');if(retry)retry.hidden=true;
+    const retry=el('appBootRetryBtn');if(retry){retry.hidden=true;if(retry.style)retry.style.display='none'}
     let failed=false;
     try{
       const b=await gs('getAppBoot',startToken);
@@ -98,7 +98,7 @@
       if(authResultCurrent(startEpoch,startToken,startUser)){
         uiFinishAction(lease,failed?'error':'ready',
           failed?'ไม่สามารถเริ่มต้นระบบได้ กรุณาลองโหลดใหม่':'');
-        if(retry)retry.hidden=!failed;
+        if(retry){retry.hidden=!failed;if(retry.style)retry.style.display=failed?'inline-flex':'none'}
       }else uiInvalidateAction(lease)
     }
   }
@@ -174,6 +174,8 @@
     if(typeof resetAuthPending==='function')resetAuthPending();
     if(typeof resetAuthFields==='function')resetAuthFields();
     if(typeof uiInvalidateAllActions==='function')uiInvalidateAllActions();
+    const exportLink=typeof el==='function'?el('dashboardExportLink'):null;
+    if(exportLink){exportLink.hidden=true;if(typeof exportLink.removeAttribute==='function')exportLink.removeAttribute('href')}
     closeModal('loginModal');
     if(typeof authReturnFocus!=='undefined')authReturnFocus=null;
     ++reportJobCreateRequest;reportJobCreateInFlight=false;++reportWarningContinueRequest;reportWarningContinueInFlight=false;pendingReportExplicitRegeneration=false;pendingReportRegenerationConsentId='';++dashboardLoadRequest;++reportJobRecoveryRequest;++reportSummaryRequest;reportSummaryState={status:'idle',summaries:{}};reportUnknownNeedsVerification=false;reportHistoryEventId='';reportNewConfirmSubmitting=false;reportNewConfirmReturnFocus=null;closeModal('reportNewConfirmModal');el('reportNewConfirmBtn').disabled=false;el('reportNewConfirmBackBtn').disabled=false;closeModal('reportReadinessModal');hideReportCancelConfirm();stopReportPolling();activeReportJob=null;reportReadinessInFlight.clear();reportActionPreflightInFlight.clear();reportGenerationInFlight.clear();localStorage.removeItem(REPORT_JOB_LOCAL_KEY);el('reportTaskIndicator').style.display='none';++reportHistoryRequest;closeModal('reportHistoryModal');
