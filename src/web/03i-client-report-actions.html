@@ -32,13 +32,13 @@
   async function refreshReportSummaries(){
     const request=++reportSummaryRequest,session=token;
     reportSummaryState={status:'loading',summaries:{}};
-    typeof uiSetSectionState==='function'&&uiSetSectionState(null,'reportRegistryLoadStatus','loading','กำลังตรวจสอบทะเบียนรายงาน...');
+    typeof uiSetSectionState==='function'&&uiSetSectionState('reportBody','reportRegistryLoadStatus','loading','กำลังตรวจสอบทะเบียนรายงาน...');
     refreshReportActionButtons();
     if(!currentUser||!roleCanRecord()){
-      reportSummaryState={status:'idle',summaries:{}};typeof uiSetSectionState==='function'&&uiSetSectionState(null,'reportRegistryLoadStatus','idle','');return;
+      reportSummaryState={status:'idle',summaries:{}};typeof uiSetSectionState==='function'&&uiSetSectionState('reportBody','reportRegistryLoadStatus','idle','');return;
     }
     const ids=[...new Set(allData.map(e=>String(e.eventId||'').trim()).filter(Boolean))];
-    if(!ids.length){reportSummaryState={status:'ready',summaries:{}};typeof uiSetSectionState==='function'&&uiSetSectionState(null,'reportRegistryLoadStatus','empty','ยังไม่มีเหตุการณ์ที่ต้องตรวจทะเบียนรายงาน');refreshReportActionButtons();return}
+    if(!ids.length){reportSummaryState={status:'ready',summaries:{}};typeof uiSetSectionState==='function'&&uiSetSectionState('reportBody','reportRegistryLoadStatus','empty','ยังไม่มีเหตุการณ์ที่ต้องตรวจทะเบียนรายงาน');refreshReportActionButtons();return}
     try {
       // The server limits a single request to 500 IDs. One bounded request per batch,
       // not an N+1 history RPC per Event. Publish only after ALL batches succeeded.
@@ -54,11 +54,11 @@
         batch.forEach(id=>{summaries[id]=response.summaries[id]});
       }
       reportSummaryState={status:'ready',summaries:summaries};
-      typeof uiSetSectionState==='function'&&uiSetSectionState(null,'reportRegistryLoadStatus','ready','ตรวจสอบทะเบียนรายงานแล้ว '+ids.length+' เหตุการณ์');
+      typeof uiSetSectionState==='function'&&uiSetSectionState('reportBody','reportRegistryLoadStatus','ready','ตรวจสอบทะเบียนรายงานแล้ว '+ids.length+' เหตุการณ์');
     }catch(e){
       if(request!==reportSummaryRequest||session!==token||!currentUser)return;
       reportSummaryState={status:'error',summaries:{}};
-      typeof uiSetSectionState==='function'&&uiSetSectionState(null,'reportRegistryLoadStatus','error','ตรวจสอบทะเบียนรายงานไม่ได้ กรุณารีเฟรชข้อมูลก่อนสร้างรายงาน');
+      typeof uiSetSectionState==='function'&&uiSetSectionState('reportBody','reportRegistryLoadStatus','error','ตรวจสอบทะเบียนรายงานไม่ได้ กรุณารีเฟรชข้อมูลก่อนสร้างรายงาน');
       toast('ยังตรวจสอบประวัติรายงานไม่ได้ กรุณาลองรีเฟรชก่อนสร้างรายงาน');
      }finally{
       if(request===reportSummaryRequest&&session===token&&currentUser){
