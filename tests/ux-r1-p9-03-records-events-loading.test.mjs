@@ -102,7 +102,12 @@ test('P9-03 owner chooser coalesces same row, shows pending and ignores old sess
   await Promise.all([one,two]);
   assert.equal(opener.disabled,false);
   assert.equal(h.el('ownerModal').classList.contains('open'),true);
+  const nonButton=h.el('nonButton');
+  nonButton.tagName='BODY';
+  h.ctx.document.activeElement=nonButton;
   const third=vm.runInContext('openOwnerModal(0)',h.ctx);
+  assert.equal(nonButton.disabled,false,'owner action must not disable document body');
+  assert.equal(nonButton.innerHTML,'<i>original</i>','owner action must never replace body markup');
   vm.runInContext('token="";currentUser=null;invalidateEventActionUi()',h.ctx);
   h.calls[1].resolve([{userId:'hidden',name:'NEVER DISPLAY',role:'Admin'}]);
   await third;
