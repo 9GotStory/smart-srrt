@@ -13,12 +13,12 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('G-34 native Apps Script release is 7 .gs + 16 HTML partials + Index.html', () => {
+test('G-34 native Apps Script release is 8 .gs + 16 HTML partials + Index.html', () => {
   const entries = buildGasMultiFileEntries();
-  assert.equal(GAS_SERVER_SOURCES.length,7);
+  assert.equal(GAS_SERVER_SOURCES.length,8);
   assert.equal(GAS_HTML_SOURCES.length,16);
-  assert.equal(entries.size,24);
-  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).length,7);
+  assert.equal(entries.size,25);
+  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).length,8);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.html')).length,17);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).sort(),
     GAS_SERVER_SOURCES.map(x => path.basename(x)).sort());
