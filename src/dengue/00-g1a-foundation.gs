@@ -47,10 +47,10 @@ function d331IsoInstant_(value) {
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) {
     throw new Error('D331_INVALID_DATE');
   }
+  var parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
+  var canonical = parts[1] + '.' + ((parts[2] || '') + '000').slice(0, 3) + 'Z';
   var date = new Date(value);
-  if (!isFinite(date.getTime()) || date.toISOString() !==
-      value.replace(/Z$/, function () { return value.indexOf('.') < 0 ? '.000Z' :
-        '.' + (value.split('.')[1].slice(0, -1) + '00').slice(0, 3) + 'Z'; })) {
+  if (!isFinite(date.getTime()) || date.toISOString() !== canonical) {
     throw new Error('D331_INVALID_DATE');
   }
   return date.toISOString();
@@ -59,6 +59,9 @@ function d331LocalDate_(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error('D331_INVALID_LOCAL_DATE');
   }
+  // Thai Buddhist Era years such as 2569 must be converted by an explicit UI boundary.
+  var year = Number(value.slice(0, 4));
+  if (year < 1900 || year > 2100) throw new Error('D331_INVALID_LOCAL_DATE');
   var date = new Date(value + 'T00:00:00.000Z');
   if (!isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
     throw new Error('D331_INVALID_LOCAL_DATE');
@@ -137,7 +140,8 @@ function d331Authorize_(principal, event, capability, isWrite) {
       !event || !d331IsUuid_(event.eventId) || !Array.isArray(principal.capabilities) ||
       typeof capability !== 'string' || !/^dengue\.[a-z.]+$/.test(capability) ||
       principal.capabilities.indexOf(capability) < 0) throw new Error('D331_FORBIDDEN');
-  if (event.eligibleDisease !== true || event.recordStatus === 'void' ||
+  if (event.eligibleDisease !== true ||
+      (event.recordStatus !== 'active' && event.recordStatus !== 'closed') ||
       (isWrite === true && event.recordStatus !== 'active')) throw new Error('D331_FORBIDDEN');
   if (typeof event.areaId !== 'string' || !event.areaId ||
       !Array.isArray(principal.allowedAreaIds) ||
