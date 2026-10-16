@@ -127,3 +127,48 @@ test('P9-04 public Library filters remain purely local and exclude drafts',()=>{
   h.read('resetLibraryFilters()');
   assert.equal(h.calls.length,0,'public Library filter/reset must not dispatch RPC or spinner');
 });
+
+test('P9-04 repair and Archive retain independent pending locks and fail-closed unknown',async()=>{
+  const h=fixture();login(h);
+  h.context.confirm=()=>true;
+  const repair=h.read('repairSystem()');
+  const archive=h.read('archiveAuditNow()');
+  assert.deepEqual(h.calls.map(x=>x.name).sort(),['archiveAuditLogs','repairInstallation']);
+  assert.equal(h.el('adminRepairBtn').disabled,true);
+  assert.equal(h.el('archiveAuditBtn').disabled,true);
+  assert.match(h.el('adminRepairStatus').textContent,/กำลังตรวจสอบ/);
+  assert.match(h.el('adminArchiveStatus').textContent,/Archive/);
+  await Promise.all([h.read('repairSystem()'),h.read('archiveAuditNow()')]);
+  assert.equal(h.calls.length,2);
+  h.calls[0].reject(new Error('uncertain'));
+  h.calls[1].reject(new Error('uncertain'));
+  await Promise.all([repair,archive]);
+  assert.equal(h.el('adminRepairBtn').disabled,true);
+  assert.equal(h.el('archiveAuditBtn').disabled,true);
+  assert.match(h.el('adminRepairStatus').textContent,/ไม่สามารถยืนยันผล/);
+  assert.match(h.el('adminArchiveStatus').textContent,/ผล Archive ยังไม่แน่ชัด/);
+  await Promise.all([h.read('repairSystem()'),h.read('archiveAuditNow()')]);
+  assert.equal(h.calls.length,2,'unverified mutation must remain blocked');
+});
+test('P9-04 partial 200-row Import exposes completed chunks and unknown with no retry',async()=>{
+  const h=fixture();login(h);
+  h.context.confirm=()=>true;
+  const rows=Array.from({length:201},(_,i)=>({province:'Synthetic',amphoe:'X',tambon:'Y',moo:i+1,village:'V'}));
+  h.context.XLSX={read(){return {SheetNames:['sheet'],Sheets:{sheet:{}}}},utils:{sheet_to_json(){return rows}}};
+  const input={files:[{arrayBuffer:async()=>new Uint8Array([1,2]).buffer}],value:'synthetic.xlsx'};
+  const pending=h.read('importAreaFile')(input);
+  for(let i=0;i<5 && h.calls.length<1;i++)await Promise.resolve();
+  assert.equal(h.calls[0].name,'importAreas');
+  assert.equal(h.calls[0].args[1].length,200);
+  h.calls[0].resolve('200 imported');
+  for(let i=0;i<5 && h.calls.length<2;i++)await Promise.resolve();
+  assert.equal(h.calls.length,2);
+  assert.equal(h.calls[1].args[1].length,1);
+  h.calls[1].reject(new Error('uncertain final batch'));
+  await pending;
+  assert.match(h.el('adminImportStatus').textContent,/1 จาก 2/);
+  assert.equal(h.read('adminBusy.import'),false);
+  assert.equal(input.value,'');
+  await h.read('importAreaFile')(input);
+  assert.equal(h.calls.length,2,'unknown import must not resubmit any batch');
+});
