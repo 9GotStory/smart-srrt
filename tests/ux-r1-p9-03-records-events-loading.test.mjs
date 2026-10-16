@@ -64,6 +64,9 @@ test('P9-03 record create is single-flight; ambiguous rejection stays unknown an
   assert.equal(h.el('in6').value,'synthetic-draft');
   await vm.runInContext('saveRecord()',h.ctx);
   assert.equal(h.calls.length,1,'unknown must not dispatch a second create');
+  vm.runInContext('token="";currentUser=null;discardRecordFormOnLogout()',h.ctx);
+  assert.equal(h.el('saveRecordBtn').disabled,false,'later sessions must not inherit disabled private controls');
+  assert.equal(h.el('recordSaveStatus').textContent,'');
 });
 test('P9-03 lifecycle reason and Revision preserved; failure cannot double-dispatch',async()=>{
   const h=fixture();login(h);records(h);
@@ -173,6 +176,13 @@ test('P9-03 upload separates local read error from unknown server commit',async(
   assert.match(h.el('attachmentUploadStatus').textContent,/ยังยืนยันผลอัปโหลดไม่ได้/);
   await vm.runInContext('uploadAttachment()',h.ctx);
   assert.equal(h.calls.length,1,'unknown must not create a second upload');
+  vm.runInContext("closeModal('attachmentModal')",h.ctx);
+  const reopened=vm.runInContext('openAttachmentModal(0)',h.ctx);
+  assert.equal(h.el('uploadAttachmentBtn').disabled,true,
+    'reopening the same Event/Revision must show unknown instead of allowing retry');
+  assert.match(h.el('attachmentUploadStatus').textContent,/ยังยืนยันผลอัปโหลดก่อนหน้าไม่ได้/);
+  h.calls[1].resolve([]);
+  await reopened;
 });
 test('P9-03 download same file uses one RPC and stale logout never makes Blob',async()=>{
   const h=fixture();login(h,'Admin');
