@@ -147,7 +147,7 @@ test('P9-02 PNG capture locks repeated clicks, discards stale session, and never
   const second=vm.runInContext('captureDashboard()',h.ctx);
   assert.equal(frames.length,1);
   h.ctx.token='NEW-AUTH';
-  h.ctx.dashboardLoadRequest++;
+  vm.runInContext('dashboardLoadRequest++',h.ctx);
   image.resolve({toDataURL:()=>{throw Error('stale must not encode')}});
   await Promise.all([first,second]);
   assert.equal(h.downloads.length,0);
