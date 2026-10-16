@@ -72,7 +72,7 @@
         result=await gs('removeEventAttachment',action.session,action.attachmentId,reason,action.revision);
       else {
         const fn={close:'closeEvent',reopen:'reopenEvent',void:'deleteRecord'}[action.kind];
-        result=await gs(fn,action.session,action.eventId,reason,action.revision)
+        result=await gs(fn,token,action.eventId,reason,action.revision)
       }
       confirmed=true;
       if(request!==eventActionRequest||token!==action.session||!currentUser)return;
