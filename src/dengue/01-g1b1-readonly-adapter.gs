@@ -40,8 +40,8 @@ function d331B1ValidHeaders_(headers) {
 
 /**
  * ONLY structured metadata from a PRE-VERIFIED read-only test reader.
- * The adapter never reads row/cell content and does not call getDb_(),
- * ensureSheet_(), or spreadsheet/script property mutation facilities.
+ * The adapter never reads row/cell content and has no database locator,
+ * auto-schema, spreadsheet writer or Script Property mutation facility.
  *
  * Interface: listTableNames(), readModuleVersion(),
  * readTableHeaders(knownTableName), readTableRowCount(knownTableName).
