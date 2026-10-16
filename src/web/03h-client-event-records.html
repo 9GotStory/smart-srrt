@@ -206,7 +206,7 @@
     // Unknown action keys remain scoped to the old token; a later session must
     // not inherit disabled controls or a private status message.
     for(const id of ['saveRecordBtn','cancelRecordBtn']){
-      const button=el(id);if(button){button.disabled=false;button.setAttribute('aria-busy','false')}
+      const button=el(id);if(button){button.disabled=false;if(typeof button.setAttribute==='function')button.setAttribute('aria-busy','false')}
     }
     const saveStatus=el('recordSaveStatus');
     if(saveStatus){saveStatus.textContent='';saveStatus.hidden=true}
