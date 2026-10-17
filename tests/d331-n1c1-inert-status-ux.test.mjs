@@ -111,7 +111,7 @@ test('no patient input, HTML injection, RPC, auth mutation or Google/Apps Script
 });
 test('no DOM mutation before explicitly injected root and no unexpected hooks',()=>{
   assert.deepEqual(Object.keys(context).sort(),['d331N1cStatusWorkspace_']);
-  assert.deepEqual(Object.keys(ui).sort(),['knownState','render','reset']);
+  assert.deepEqual(Object.keys(ui).sort(),['closedReadiness','createOfflineController','invalidateSession','knownState','render','reset']);
   assert.throws(()=>ui.render(null,'OFF'),/D331_N1C_INVALID_ROOT/);
   assert.throws(()=>ui.render({replaceChildren(){}},'OFF'),/D331_N1C_INVALID_ROOT/);
 });

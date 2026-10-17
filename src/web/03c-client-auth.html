@@ -97,6 +97,8 @@
       const b=await gs('getAppBoot',startToken);
       if(!authResultCurrent(startEpoch,startToken,startUser))return;
       if(!b||typeof b!=='object')throw new Error('Invalid application bootstrap response');
+      // C2C-B: invalidate any offline status-only request before session refresh.
+      if(typeof d331N1cStatusWorkspace_!=='undefined')d331N1cStatusWorkspace_.invalidateSession();
       settings=b.settings||{};master=b.master||{};areas=b.areas||[];currentContent=b.content||[];currentUser=b.user;
       syncAuthRegistration();applyTheme();updateAuthBox();buildRecordForm();setupDashboardFilters();
       if(currentUser)void recoverReportJob();
@@ -149,6 +151,7 @@
         setAuthStatus('authLoginStatus',r&&r.message||'ไม่สามารถเข้าสู่ระบบได้');
         return
       }
+      if(typeof d331N1cStatusWorkspace_!=='undefined')d331N1cStatusWorkspace_.invalidateSession();
       token=r.token;currentUser=r.user;localStorage.setItem('SRRT_TOKEN',token);
       closeAuthDialog();updateAuthBox();toast('เข้าสู่ระบบสำเร็จ');
       void recoverReportJob();await loadDashboard()
@@ -180,6 +183,8 @@
     // The G-33 isolated logout harness extracts only this function.
     // Guard optional Auth UI state while preserving synchronous invalidation in Native24.
     if(typeof authRequestEpoch!=='undefined')++authRequestEpoch;
+    // Synchronous, no RPC: stale D331 mock readiness must never repaint after logout.
+    if(typeof d331N1cStatusWorkspace_!=='undefined')d331N1cStatusWorkspace_.invalidateSession();
     if(typeof resetAuthPending==='function')resetAuthPending();
     if(typeof resetAuthFields==='function')resetAuthFields();
     if(typeof uiInvalidateAllActions==='function')uiInvalidateAllActions();
