@@ -1,0 +1,807 @@
+/**
+ * P0-02A draft: Pure OFFLINE contract only; no Google APIs, schema apply or RPC.
+ * Unregistered in Native manifest. Never implies grant, policy, DDL or release approval.
+ * Does not change registered provisional G1-A schema v1.
+ */
+var D331_P002A_SCHEMA_VERSION_ = 2;
+var D331_P002A_APPROVAL_ = 'DRAFT_ONLY';
+var D331_P002A_FIELDS_ = {
+  "DengueCases": [
+    [
+      "CaseID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "CaseRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "CaseStatus",
+      "Enum",
+      "Y"
+    ],
+    [
+      "Classification",
+      "Enum",
+      "C"
+    ],
+    [
+      "OnsetLocalDate",
+      "Date",
+      "N"
+    ],
+    [
+      "DetectedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ReportedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ReceivedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ReportingUnit",
+      "Text",
+      "N"
+    ],
+    [
+      "ReceivingUnit",
+      "Text",
+      "N"
+    ],
+    [
+      "CreatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "CreatedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "UpdatedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "LastMutationID",
+      "UUID",
+      "Y"
+    ]
+  ],
+  "DenguePlans": [
+    [
+      "PlanID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "TriggerCaseID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EpisodeKey",
+      "Text",
+      "Y"
+    ],
+    [
+      "PolicyVersion",
+      "Text",
+      "Y"
+    ],
+    [
+      "PlanRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "PlanStatus",
+      "Enum",
+      "Y"
+    ],
+    [
+      "AreaID",
+      "AreaID",
+      "Y"
+    ],
+    [
+      "AnchorAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ResponsibleUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "CreatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "CreatedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "UpdatedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "LastMutationID",
+      "UUID",
+      "Y"
+    ]
+  ],
+  "DengueControlActions": [
+    [
+      "ActionID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "PlanID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "ActionRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "ActionStatus",
+      "Enum",
+      "Y"
+    ],
+    [
+      "StageKey",
+      "Enum",
+      "Y"
+    ],
+    [
+      "ActivityType",
+      "Enum",
+      "Y"
+    ],
+    [
+      "StartedAtUTC",
+      "UTC",
+      "N"
+    ],
+    [
+      "CompletedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ScopeCode",
+      "Enum",
+      "Y"
+    ],
+    [
+      "AreaID",
+      "AreaID",
+      "Y"
+    ],
+    [
+      "OutcomeCode",
+      "Enum",
+      "C"
+    ],
+    [
+      "ResponsibleUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "EvidenceRef",
+      "Opaque",
+      "N"
+    ],
+    [
+      "RecordedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "RecordedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "LastMutationID",
+      "UUID",
+      "Y"
+    ]
+  ],
+  "DengueEntomology": [
+    [
+      "SurveyID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "PlanID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "AreaID",
+      "AreaID",
+      "Y"
+    ],
+    [
+      "SurveyRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "SurveyStatus",
+      "Enum",
+      "Y"
+    ],
+    [
+      "CheckpointKey",
+      "Enum",
+      "Y"
+    ],
+    [
+      "SurveyedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "ScopeCode",
+      "Enum",
+      "Y"
+    ],
+    [
+      "HousesInspected",
+      "UInt",
+      "Y"
+    ],
+    [
+      "HousesPositive",
+      "UInt",
+      "Y"
+    ],
+    [
+      "ContainersInspected",
+      "UInt",
+      "Y"
+    ],
+    [
+      "ContainersPositive",
+      "UInt",
+      "Y"
+    ],
+    [
+      "SurveyorUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "RecordedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "LastMutationID",
+      "UUID",
+      "Y"
+    ]
+  ],
+  "DengueFollowups": [
+    [
+      "FollowupID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "PlanID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "CheckpointKey",
+      "Enum",
+      "Y"
+    ],
+    [
+      "FollowupRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "FollowupStatus",
+      "Enum",
+      "Y"
+    ],
+    [
+      "DueAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "CompletedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "OutcomeCode",
+      "Enum",
+      "C"
+    ],
+    [
+      "ResponsibleUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "LinkedActionID",
+      "UUID",
+      "N"
+    ],
+    [
+      "LinkedSurveyID",
+      "UUID",
+      "N"
+    ],
+    [
+      "EvidenceRef",
+      "Opaque",
+      "N"
+    ],
+    [
+      "RecordedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "LastMutationID",
+      "UUID",
+      "Y"
+    ]
+  ],
+  "DengueRequestLedger": [
+    [
+      "RequestID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "PrincipalID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "Operation",
+      "Enum",
+      "Y"
+    ],
+    [
+      "PayloadDigest",
+      "SHA256",
+      "Y"
+    ],
+    [
+      "Phase",
+      "Enum",
+      "Y"
+    ],
+    [
+      "EntityType",
+      "Enum",
+      "C"
+    ],
+    [
+      "EntityID",
+      "UUID",
+      "C"
+    ],
+    [
+      "CreatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ]
+  ],
+  "D331AccessGrants": [
+    [
+      "SchemaVersion",
+      "Int+",
+      "Y"
+    ],
+    [
+      "GrantID",
+      "Opaque",
+      "Y"
+    ],
+    [
+      "UserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "Capability",
+      "Enum",
+      "Y"
+    ],
+    [
+      "AreaID",
+      "AreaID",
+      "Y"
+    ],
+    [
+      "EventID",
+      "UUID",
+      "Y"
+    ],
+    [
+      "State",
+      "Enum",
+      "Y"
+    ],
+    [
+      "ValidFromUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "ExpiresAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "GrantRevision",
+      "Int+",
+      "Y"
+    ],
+    [
+      "PolicyRevision",
+      "Text",
+      "Y"
+    ],
+    [
+      "RequestedByUserID",
+      "UserID",
+      "Y"
+    ],
+    [
+      "RequestedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "ApprovedByUserID",
+      "UserID",
+      "C"
+    ],
+    [
+      "ApprovedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "IssuedByUserID",
+      "UserID",
+      "C"
+    ],
+    [
+      "IssuedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "UpdatedAtUTC",
+      "UTC",
+      "Y"
+    ],
+    [
+      "RevokedByUserID",
+      "UserID",
+      "C"
+    ],
+    [
+      "RevokedAtUTC",
+      "UTC",
+      "C"
+    ],
+    [
+      "RevocationReasonCode",
+      "Enum",
+      "C"
+    ],
+    [
+      "MutationID",
+      "UUID",
+      "Y"
+    ]
+  ]
+};
+var D331_P002A_ENUMS_ = {
+  "CaseStatus": [
+    "ACTIVE",
+    "VOID"
+  ],
+  "Classification": [
+    "SUSPECTED",
+    "PROBABLE",
+    "CONFIRMED",
+    "UNKNOWN"
+  ],
+  "PlanStatus": [
+    "OPEN",
+    "CLOSED",
+    "VOID"
+  ],
+  "ActionStatus": [
+    "PLANNED",
+    "IN_PROGRESS",
+    "COMPLETED",
+    "CANCELLED"
+  ],
+  "StageKey": [
+    "SECOND_3H",
+    "WITHIN_1D",
+    "DAY_3",
+    "DAY_7",
+    "DAY_14",
+    "OTHER"
+  ],
+  "ActivityType": [
+    "INVESTIGATION",
+    "LARVAL_CONTROL",
+    "SPRAY",
+    "EDUCATION",
+    "FIELD_VISIT",
+    "OTHER"
+  ],
+  "ScopeCode": [
+    "PATIENT_HOME",
+    "RADIUS_100M",
+    "COMMUNITY",
+    "SCHOOL",
+    "HEALTH_FACILITY",
+    "OTHER"
+  ],
+  "OutcomeCode": [
+    "DONE",
+    "PARTIAL",
+    "NOT_DONE",
+    "NOT_APPLICABLE"
+  ],
+  "SurveyStatus": [
+    "DRAFT",
+    "FINAL",
+    "VOID"
+  ],
+  "CheckpointKey": [
+    "DAY_0",
+    "DAY_3",
+    "DAY_7",
+    "DAY_14",
+    "DAY_21",
+    "DAY_28",
+    "OTHER"
+  ],
+  "FollowupStatus": [
+    "PENDING",
+    "IN_PROGRESS",
+    "COMPLETE",
+    "SKIPPED"
+  ],
+  "Operation": [
+    "dengue.case.write",
+    "dengue.plan.write",
+    "dengue.action.write",
+    "dengue.survey.write",
+    "dengue.followup.write"
+  ],
+  "Phase": [
+    "PENDING",
+    "UNKNOWN",
+    "COMMITTED"
+  ],
+  "EntityType": [
+    "CASE",
+    "PLAN",
+    "ACTION",
+    "SURVEY",
+    "FOLLOWUP"
+  ],
+  "Capability": [
+    "dengue.case.read",
+    "dengue.case.write",
+    "dengue.plan.read",
+    "dengue.plan.write",
+    "dengue.action.read",
+    "dengue.action.write",
+    "dengue.survey.read",
+    "dengue.survey.write",
+    "dengue.followup.read",
+    "dengue.followup.write"
+  ],
+  "State": [
+    "PENDING",
+    "ACTIVE",
+    "REVOKED"
+  ],
+  "RevocationReasonCode": [
+    "ACCESS_REMOVED",
+    "ROLE_CHANGE",
+    "POLICY_REVOKED",
+    "SECURITY_HOLD"
+  ]
+};
+
+// Identical field names in different sheets do NOT share the same allowed values.
+var D331_P002A_SCOPED_ENUMS_ = {
+  DengueControlActions:{
+    ScopeCode:['PATIENT_HOME','RADIUS_100M','COMMUNITY','OTHER'],
+    OutcomeCode:['DONE','PARTIAL','NOT_DONE']
+  },
+  DengueEntomology:{
+    ScopeCode:['RADIUS_100M','COMMUNITY','SCHOOL','HEALTH_FACILITY','OTHER']
+  },
+  DengueFollowups:{
+    CheckpointKey:['DAY_3','DAY_7','DAY_14','DAY_21','DAY_28','OTHER'],
+    OutcomeCode:['DONE','PARTIAL','NOT_DONE','NOT_APPLICABLE']
+  }
+};
+function d331P002aNames_(){return Object.keys(D331_P002A_FIELDS_);}
+function d331P002aSpec_(name){
+  if(typeof name !== 'string' ||
+     !Object.prototype.hasOwnProperty.call(D331_P002A_FIELDS_,name)){
+    throw new Error('D331_P002A_UNKNOWN_SHEET');
+  }
+  return D331_P002A_FIELDS_[name];
+}
+function d331P002aHeaders_(name){
+  return d331P002aSpec_(name).map(function(f){return f[0];});
+}
+function d331P002aInspect_(snapshot){
+  if(!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) ||
+     Object.keys(snapshot).some(function(k){return k!=='schemaVersion'&&k!=='headers';}) ||
+     !snapshot.headers || typeof snapshot.headers!=='object' ||
+     Array.isArray(snapshot.headers)) throw new Error('D331_P002A_INVALID_SNAPSHOT');
+  var issues=[],names=d331P002aNames_();
+  if(snapshot.schemaVersion!==D331_P002A_SCHEMA_VERSION_)issues.push('VERSION_MISMATCH');
+  Object.keys(snapshot.headers).forEach(function(n){
+    if(names.indexOf(n)<0)issues.push('UNEXPECTED_SHEET:'+n);
+  });
+  names.forEach(function(n){
+    var actual=snapshot.headers[n],expected=d331P002aHeaders_(n);
+    if(!Array.isArray(actual)){issues.push('MISSING_SHEET:'+n);return;}
+    if(actual.length!==expected.length||actual.some(function(h,i){
+      return typeof h!=='string'||h!==expected[i];
+    }))issues.push('HEADER_MISMATCH:'+n);
+  });
+  return {status:'HOLD',canApply:false,canEnable:false,
+    inspectedDataRows:false,expectedVersion:D331_P002A_SCHEMA_VERSION_,
+    validDraftShape:issues.length===0,issues:issues};
+}
+function d331P002aBlank_(v){return v===null||v===undefined||v==='';}
+function d331P002aScalar_(sheet,type,field,v){
+  if(type==='UUID')return typeof v==='string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
+  if(type==='Int+')return typeof v==='number'&&Number.isSafeInteger(v)&&v>=1;
+  if(type==='UInt')return typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
+  if(type==='SHA256')return typeof v==='string'&&/^[0-9a-f]{64}$/.test(v);
+  if(type==='UTC')return typeof v==='string'&&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)&&
+    !isNaN(Date.parse(v))&&new Date(v).toISOString()===v;
+  if(type==='Date')return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&
+    Number(v.slice(0,4))>=1900&&Number(v.slice(0,4))<=2100&&
+    !isNaN(Date.parse(v+'T00:00:00.000Z'))&&
+    new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v;
+  if(type==='Enum'){
+    var scoped=D331_P002A_SCOPED_ENUMS_[sheet];
+    var allowed=scoped&&Object.prototype.hasOwnProperty.call(scoped,field)
+      ?scoped[field]:D331_P002A_ENUMS_[field];
+    return typeof v==='string'&&Array.isArray(allowed)&&allowed.indexOf(v)>=0;
+  }
+  return (type==='Text'||type==='UserID'||type==='AreaID'||type==='Opaque')&&
+    typeof v==='string'&&v.length>0&&v.length<=256&&v.trim()===v;
+}
+function d331P002aValidateSyntheticRow_(name,row){
+  // Only candidate scalar/lifecycle shape; no FK/authorization/clinical proofs.
+  var spec=d331P002aSpec_(name),values=Object.create(null);
+  if(!Array.isArray(row)||row.length!==spec.length)throw new Error('D331_P002A_ROW_WIDTH');
+  spec.forEach(function(f,i){
+    var key=f[0],type=f[1],required=f[2],v=row[i];
+    if(d331P002aBlank_(v)){
+      if(required==='Y')throw new Error('D331_P002A_REQUIRED:'+key);
+      return;
+    }
+    if(!d331P002aScalar_(name,type,key,v))throw new Error('D331_P002A_INVALID:'+key);
+    values[key]=v;
+  });
+  if(name==='DengueEntomology'&&
+     (values.HousesPositive>values.HousesInspected||
+      values.ContainersPositive>values.ContainersInspected))throw new Error('D331_P002A_INVALID_COUNTS');
+  if(name==='DengueControlActions'&&values.ActionStatus==='COMPLETED'&&
+     (!values.CompletedAtUTC||!values.OutcomeCode))throw new Error('D331_P002A_INCOMPLETE_ACTION');
+  if(name==='DengueFollowups'&&values.FollowupStatus==='COMPLETE'&&
+     (!values.CompletedAtUTC||!values.OutcomeCode))throw new Error('D331_P002A_INCOMPLETE_FOLLOWUP');
+  if(name==='DengueEntomology'&&values.SurveyStatus==='FINAL'&&
+     !values.SurveyedAtUTC)throw new Error('D331_P002A_INCOMPLETE_SURVEY');
+  if(name==='DengueRequestLedger'&&values.Phase==='COMMITTED'&&
+     (!values.EntityType||!values.EntityID))throw new Error('D331_P002A_UNPROVEN_COMMIT');
+  if(name==='D331AccessGrants'){
+    if(values.SchemaVersion!==1)throw new Error('D331_P002A_GRANT_SCHEMA_VERSION');
+    if(values.ValidFromUTC>=values.ExpiresAtUTC)throw new Error('D331_P002A_INVALID_GRANT_WINDOW');
+    if(values.State==='ACTIVE'&&(!values.ApprovedByUserID||!values.ApprovedAtUTC||
+       !values.IssuedByUserID||!values.IssuedAtUTC))throw new Error('D331_P002A_GRANT_PROVENANCE');
+    if(values.State==='REVOKED'&&(!values.RevokedByUserID||
+       !values.RevokedAtUTC||!values.RevocationReasonCode))throw new Error('D331_P002A_REVOKE_PROVENANCE');
+  }
+  return {status:'SYNTHETIC_SHAPE_ONLY',table:name,approved:false};
+}
