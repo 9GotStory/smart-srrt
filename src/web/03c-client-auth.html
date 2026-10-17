@@ -55,11 +55,20 @@
   }
 
   function showPage(page,btn){
+    // D331 N1-C2A: a closed-world route list. D331 is OFF/unregistered;
+    // never treat a synthetic client state, injected button or string as
+    // authority to open a future patient workspace.
+    if(typeof page!=='string'||!['dashboard','records','reporter','admin','library'].includes(page))return;
+    const target=el('page-'+page);
+    if(!target||!target.classList)return;
     if(page==='admin'&&!roleCanManage()){toast('สิทธิ์ไม่เพียงพอสำหรับจัดการระบบ');return}
-    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));el('page-'+page).classList.add('active');
+    if((page==='records'||page==='reporter')&&!roleCanRecord()){
+      toast('กรุณาเข้าสู่ระบบด้วยสิทธิ์บันทึกข้อมูล');return
+    }
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));target.classList.add('active');
     const navButtons=[...document.querySelectorAll('.nav button')];
     navButtons.forEach(b=>{b.classList.remove('active');b.removeAttribute('aria-current')});
-    const selected=btn||navButtons.find(b=>b.dataset.page===page);
+    const selected=navButtons.find(b=>b.dataset.page===page);
     if(selected){selected.classList.add('active');selected.setAttribute('aria-current','page')}
     toggleSidebar(false);
     if(page==='admin')loadAdmin();if(page==='library')renderLibrary();if(page==='records'||page==='reporter')renderTables()

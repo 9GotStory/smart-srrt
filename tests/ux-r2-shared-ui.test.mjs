@@ -49,7 +49,7 @@ test('R2-02 navigation updates aria-current without redefining business routing'
   const sections=pages.map((page,i)=>node({},i===0?['active']:[]));
   const map=new Map(pages.map((p,i)=>['page-'+p,sections[i]]));
   const calls=[];
-  const ctx={document:{querySelectorAll:q=>q==='.section'?sections:buttons},el:id=>map.get(id),toggleSidebar:s=>calls.push(['sidebar',s]),loadAdmin:()=>calls.push('admin'),renderLibrary:()=>calls.push('library'),renderTables:()=>calls.push('tables')};
+  const ctx={document:{querySelectorAll:q=>q==='.section'?sections:buttons},el:id=>map.get(id),roleCanRecord:()=>true,roleCanManage:()=>true,toggleSidebar:s=>calls.push(['sidebar',s]),loadAdmin:()=>calls.push('admin'),renderLibrary:()=>calls.push('library'),renderTables:()=>calls.push('tables')};
   vm.createContext(ctx);
   vm.runInContext(script.slice(a,b),ctx,{timeout:1000});
   ctx.showPage('library',buttons[4]);
