@@ -1,22 +1,22 @@
 # D331 N1-C3-A — Trusted Readiness Architecture (DESIGN ONLY)
 
-**Issue:** #203 · **Exact baseline:** \`main@735d9529047a5b8bf1e1f4f8114006216194e909\` · **Predecessor:** #200 / PRs #201–#202.  
+**Issue:** #203 · **Exact baseline:** `main@735d9529047a5b8bf1e1f4f8114006216194e909` · **Predecessor:** #200 / PRs #201–#202.  
 **Classification:** proposed future server trust boundary; this document authorizes **zero** runtime, Cloud, data or schema actions. No Production exists.
 
 ## Non-negotiable existing state
 
 - One **existing** Smart SRRT Native Apps Script and existing DEV Spreadsheet, never a separate application, login, or database. Native26 consists of **8 GS + 17 HTML partials + generated Index**; actual navigation remains five pages. The D331 HTML partial is registered but **not mounted** or navigable.
-- \`D331_G1A_ENABLED=false\`. No clinical policy, grant provider, D331 RPC, patient DTO or D331 physical migration is active.
-- N1-C2C-B's V1 status envelope \`{version,requestId,state,issuedAtMs,expiresAtMs}\` is **synthetic and deny-only**. \`OFF/AUTH_REQUIRED/POLICY_HOLD/NO_GRANT/ERROR\` are allowed server-denial concepts; \`LOADING\` is client-only and \`READY/ENABLED\` are rejected. Even a syntactically valid envelope is **not** evidence of server authenticity.
-- The unregistered \`src/dengue/03-n1b1-trusted-event-contract.gs\` and \`04-n1b2b-mock-trusted-adapter.gs\` are offline evaluators, not source/provenance attestations; mock providers are caller-forgeable.
-- Existing \`getUserByToken_\` transitively reaches \`getDb_\`, which may persist a Script Property when \`DATABASE_SPREADSHEET_ID\` is missing. No real read-only identity inspection may use this path until a separately approved safe pinned reader exists. Likewise, do not reuse first-match EventID or permissive AreaMaster Active logic as D331 authority.
+- `D331_G1A_ENABLED=false`. No clinical policy, grant provider, D331 RPC, patient DTO or D331 physical migration is active.
+- N1-C2C-B's V1 status envelope `{version,requestId,state,issuedAtMs,expiresAtMs}` is **synthetic and deny-only**. `OFF/AUTH_REQUIRED/POLICY_HOLD/NO_GRANT/ERROR` are allowed server-denial concepts; `LOADING` is client-only and `READY/ENABLED` are rejected. Even a syntactically valid envelope is **not** evidence of server authenticity.
+- The unregistered `src/dengue/03-n1b1-trusted-event-contract.gs` and `04-n1b2b-mock-trusted-adapter.gs` are offline evaluators, not source/provenance attestations; mock providers are caller-forgeable.
+- Existing `getUserByToken_` transitively reaches `getDb_`, which may persist a Script Property when `DATABASE_SPREADSHEET_ID` is missing. No real read-only identity inspection may use this path until a separately approved safe pinned reader exists. Likewise, do not reuse first-match EventID or permissive AreaMaster Active logic as D331 authority.
 - Actual DEV Script↔Deployment↔Spreadsheet binding is pending #187/#189, not verified by CI or a private evidence file alone.
 
 ## Trust boundaries: status-only vs patient/event operations
 
 **This is a proposed future sequence, NOT deployed code.** Not all actors exist or are authorized yet.
 
-\`\`\`text
+```text
 Existing browser                 Existing GAS server                        Existing pinned DEV store
   |                                   |                                             |
   | [future authenticated request]    |                                             |
@@ -36,9 +36,9 @@ Existing browser                 Existing GAS server                        Exis
   |                                   |-- disease + per-user grant intersection X--| (HOLD)
   |                                   |-- if write, recheck under lock + ledger X--| (HOLD)
   |<--- generic denial (today) ---------|                                             |
-\`\`\`
+```
 
-A server-origin response is established by an authenticated server execution using independently verified target identity, current server-owned session and policy/grant provider. **No browser-provided signature, object, \`origin:"server"\`, UI role or \`simulationOnly:true\` can attest that origin.** A status response is advisory and **never** a bearer token or reusable Event-access permit. A future server must independently re-authorize each private request, including grant revocation since readiness.
+A server-origin response is established by an authenticated server execution using independently verified target identity, current server-owned session and policy/grant provider. **No browser-provided signature, object, `origin:"server"`, UI role or `simulationOnly:true` can attest that origin.** A status response is advisory and **never** a bearer token or reusable Event-access permit. A future server must independently re-authorize each private request, including grant revocation since readiness.
 
 ## Proposed closed-world call contract — conceptual, not callable
 
@@ -46,9 +46,9 @@ A server-origin response is established by an authenticated server execution usi
 | --- | --- |
 | Transport | Future explicit GAS private RPC only after separate Product Owner, security, clinical, privacy and DEV-target gates; **none registered now** |
 | Browser request fields | Existing opaque session token + server-bounded opaque request correlation; for a later Event endpoint, canonical EventID UUID + fixed operation allowlist; expectedRevision only for separately approved writes |
-| Forbidden browser authority | \`userId\`, role, grant/capability list, allowed AreaID/EventID, disease labels, owner identity, raw MainData/AreaMaster rows, Script/Spreadsheet IDs, arbitrary method/collection |
+| Forbidden browser authority | `userId`, role, grant/capability list, allowed AreaID/EventID, disease labels, owner identity, raw MainData/AreaMaster rows, Script/Spreadsheet IDs, arbitrary method/collection |
 | Status-only response | Closed versioned, bounded timestamp and request correlation, **deny states only until formally changed**; no grants, patient fields, target IDs, row counts, coordinates, attachments or token |
-| Unknown/error outcome | Generic \`D331_UNAVAILABLE\` or \`D331_FORBIDDEN\` internally mapped to safe UI deny; no detailed authorization failure, patient ID, exact area or underlying exception rendered |
+| Unknown/error outcome | Generic `D331_UNAVAILABLE` or `D331_FORBIDDEN` internally mapped to safe UI deny; no detailed authorization failure, patient ID, exact area or underlying exception rendered |
 | Privacy/audit | PHI-free category, policy/grant version identifiers only if approved as nonsensitive; no raw token, person name, disease notes or query body in logs |
 | Lifetime | Short bounded expiry from current source V1: 60 s maximum window; exact skew/replay tolerance needs security approval; expiry never extends grant/session validity |
 | Revocation | Compare authoritative grant and policy revision plus current account/session state **per sensitive request**. Client auth/request epochs cancel stale display only; never replace backend revocation |
@@ -66,10 +66,10 @@ A server-origin response is established by an authenticated server execution usi
 
 ## State/invalidation requirements
 
-- \`OFF\` remains mandatory while \`D331_G1A_ENABLED=false\`; absence of a live provider is not \`READY\`.
+- `OFF` remains mandatory while `D331_G1A_ENABLED=false`; absence of a live provider is not `READY`.
 - User logs out, logs in again, changes token/identity/role, or local auth epoch advances → synchronously clear status, pending lease and private cache; late replies discarded. Any status derived from outdated server grant/policy revision must be refused on future live request.
 - Invalid/extra-field/expired/unsupported response, replayed correlation, disclosure-prone error or unknown server condition → a generic deny UI with permanently disabled actions.
-- Browser \`aria-busy\`, \`aria-live\` and Thai static \`textContent\` remain accessibility/display concerns, **not authorization**.
+- Browser `aria-busy`, `aria-live` and Thai static `textContent` remain accessibility/display concerns, **not authorization**.
 
 ## Human gates and cross-references
 

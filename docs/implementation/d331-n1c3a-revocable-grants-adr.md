@@ -1,18 +1,18 @@
 # D331 N1-C3-A — Revocable Grants ADR (OPTIONS / DECISION PENDING)
 
-**Status:** PROPOSED, **NOT ACCEPTED** · **Issue:** #203 · **Base:** \`main@735d9529047a5b8bf1e1f4f8114006216194e909\`  
+**Status:** PROPOSED, **NOT ACCEPTED** · **Issue:** #203 · **Base:** `main@735d9529047a5b8bf1e1f4f8114006216194e909`  
 **Decision owner:** Product Owner + Security/Data Owner + DEV custodian + DDL authority; privacy/clinical sign-off where capabilities expose PHI. This ADR does not select storage, create a grant or authorize any implementation.
 
 ## Context
 
-Existing Smart SRRT roles \`Staff/Manager/Admin/Super Admin\`, global \`view/edit\`, and \`UserAccounts\` free-text area are insufficient for D331 patient privileges. Only approved **per-user, revocable, scoped, expiring, independently verified** D331 grants may permit future operations; until an authoritative registry is approved and verified, the entire D331 grant set is **empty**, including for Super Admin. C2C-B readiness remains deny-only and cannot upgrade grants.
+Existing Smart SRRT roles `Staff/Manager/Admin/Super Admin`, global `view/edit`, and `UserAccounts` free-text area are insufficient for D331 patient privileges. Only approved **per-user, revocable, scoped, expiring, independently verified** D331 grants may permit future operations; until an authoritative registry is approved and verified, the entire D331 grant set is **empty**, including for Super Admin. C2C-B readiness remains deny-only and cannot upgrade grants.
 
 ## Proposed grant assertions (requirements; not a storage schema)
 
-- **Principal:** exact current server-validated \`UserAccounts.userId\` and active token/session; deny inactive, revoked, unknown or ambiguous user. Never accept \`userId\`/role from browser.
-- **Capability:** explicitly approved fixed lower-case namespace, initially only design examples \`dengue.case.read\` / \`dengue.case.write\`; each new operation (export, geo, AI, analytics, bulk) requires distinct policy approval and should otherwise be absent.
-- **Scope:** approved \`allowedAreaIds\` and optionally exact \`allowedEventIds\`; server must intersect both, not union. Exact unique active AreaMaster ID; event owner or explicitly authorized event scope; no wildcard \`*\`, implicit district grants or inferred area text.
-- **Time:** immutable \`grantId\`, independent monotonic \`revision\`, \`validFrom\`, \`expiresAt\`, explicit \`revoked\` + revocation time/reason category; all require current server-side checking. Any missing/malformed/duplicate/unknown field or version → DENY.
+- **Principal:** exact current server-validated `UserAccounts.userId` and active token/session; deny inactive, revoked, unknown or ambiguous user. Never accept `userId`/role from browser.
+- **Capability:** explicitly approved fixed lower-case namespace, initially only design examples `dengue.case.read` / `dengue.case.write`; each new operation (export, geo, AI, analytics, bulk) requires distinct policy approval and should otherwise be absent.
+- **Scope:** approved `allowedAreaIds` and optionally exact `allowedEventIds`; server must intersect both, not union. Exact unique active AreaMaster ID; event owner or explicitly authorized event scope; no wildcard `*`, implicit district grants or inferred area text.
+- **Time:** immutable `grantId`, independent monotonic `revision`, `validFrom`, `expiresAt`, explicit `revoked` + revocation time/reason category; all require current server-side checking. Any missing/malformed/duplicate/unknown field or version → DENY.
 - **Provenance:** approval actor and authority distinct from recipient; issuer cannot self-escalate. Proposed dual control or equivalent evidence policy is a decision to sign, **not assumed to exist**.
 - **Audit:** record PHI-free grant lifecycle event type, bounded non-sensitive correlation and version, accountable actor evidence in restricted custody; avoid raw token, patient/event narratives, complete area roster or public URL.
 - **Race:** readiness is not a capability. Actual read rechecks current session/grant/policy; future write rechecks under lock immediately before mutation, with durable idempotency and reconciliation for UNKNOWN outcomes. No claim of multi-sheet ACID transactions.
@@ -23,8 +23,8 @@ Existing Smart SRRT roles \`Staff/Manager/Admin/Super Admin\`, global \`view/edi
 
 | Candidate | Benefit | Blocker / risk | Gate |
 | --- | --- | --- | --- |
-| A. New \`D331AccessGrants\` Spreadsheet tab in **existing DEV database** | Independent table and revocation trail | **Potential eighth D331 tab** beyond seven provisional domain tables; schema, ACL, atomicity and backup/lifecycle design need signed DDL | Security + DDL + owner + rollback |
-| B. Extend existing \`UserAccounts\` with scoped columns | Co-located user identity | Modifies existing shared auth schema, increases risk of accidental role inheritance, mixed account/grant lifecycles | Security + DDL + full regression + migration |
+| A. New `D331AccessGrants` Spreadsheet tab in **existing DEV database** | Independent table and revocation trail | **Potential eighth D331 tab** beyond seven provisional domain tables; schema, ACL, atomicity and backup/lifecycle design need signed DDL | Security + DDL + owner + rollback |
+| B. Extend existing `UserAccounts` with scoped columns | Co-located user identity | Modifies existing shared auth schema, increases risk of accidental role inheritance, mixed account/grant lifecycles | Security + DDL + full regression + migration |
 | C. External policy/ACL service | Better separation and lifecycle in principle | Conflicts with goal of minimal integrated environment unless approved; adds service, credentials, dependencies, identity proof and operational failures | New architecture/security/provider approval |
 | D. Script Properties with ACL JSON | No added table superficially | Unsuitable as default: size, mutation/fallback and audit/revocation complexity; risk of privilege leakage, not endorsed | Reject as implementation candidate absent new explicit risk exception |
 
@@ -55,4 +55,4 @@ Existing Smart SRRT roles \`Staff/Manager/Admin/Super Admin\`, global \`view/edi
 7. Does the registry require a new eighth table, or an explicitly approved alternative?
 8. Who signs clinical eligibility, privacy/legal basis and Event/Area ambiguity resolution before any personal data?
 
-**Decision:** PENDING. \`D331_GRANT_REGISTRY=NOT_APPROVED\`, \`GRANTS=EMPTY\`, \`D331_G1A_ENABLED=false\`, \`DDL=HOLD\`, \`TEST_DEPLOY=HOLD\`.
+**Decision:** PENDING. `D331_GRANT_REGISTRY=NOT_APPROVED`, `GRANTS=EMPTY`, `D331_G1A_ENABLED=false`, `DDL=HOLD`, `TEST_DEPLOY=HOLD`.

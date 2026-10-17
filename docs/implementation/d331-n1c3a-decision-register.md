@@ -1,6 +1,6 @@
 # D331 N1-C3-A — Security, Clinical and Operational Decision Register
 
-**Scope:** Issue #203 docs-only · **Base:** \`main@735d9529047a5b8bf1e1f4f8114006216194e909\`.  
+**Scope:** Issue #203 docs-only · **Base:** `main@735d9529047a5b8bf1e1f4f8114006216194e909`.  
 **This is an inventory / proposed decision framework, NOT signatures.** Every unverified entry remains **HOLD**. Source-only prior merges do not endorse any clinical, grant, DDL or Cloud target decision. Evidence and owner names are intentionally not invented.
 
 ## Existing authoritative crosswalk: B2-D01–D10 (#183)
@@ -9,8 +9,8 @@
 | --- | --- | --- | --- | --- |
 | B2-D01 | Exact Dengue diagnosis labels/codes, synonyms, exclusions, version and effective dates (MainData col6) | Epidemiology / clinical approver | No signed eligible set; empty allowlist | CLINICAL HOLD |
 | B2-D02 | Authoritative per-user grant registry, grant issuer, revoker and lifecycle | Security + Product Owner | No backing selected; no grants | SECURITY HOLD |
-| B2-D03 | New \`D331AccessGrants\` tab vs alternate backing; seven provisional D331 tabs impact | DDL owner + Product Owner | Eighth table **not** approved | DDL HOLD |
-| B2-D04 | Exact \`AreaID\`, village code / leading-zero preservation, active boolean and uniqueness | Data Owner | No signed canonicalization; exact/deny only | DATA HOLD |
+| B2-D03 | New `D331AccessGrants` tab vs alternate backing; seven provisional D331 tabs impact | DDL owner + Product Owner | Eighth table **not** approved | DDL HOLD |
+| B2-D04 | Exact `AreaID`, village code / leading-zero preservation, active boolean and uniqueness | Data Owner | No signed canonicalization; exact/deny only | DATA HOLD |
 | B2-D05 | Legacy owner, village code, Revision and void/closed row semantics | Data/Migration Owner | Unknown/blank denied, no backfill | MIGRATION HOLD |
 | B2-D06 | Verified **existing DEV** Script–Deployment–Spreadsheet ID/ACL/property and non-Production classification | DEV custodian + Product Owner | #187/#189 remain actual binding HOLD; no Google read performed here | DEV BINDING HOLD |
 | B2-D07 | Per-user operation privileges, allowed Area/Event, issue/expiry/revoke/audit | Security approver | No signed grant policy or inheritance | SECURITY HOLD |
@@ -33,7 +33,7 @@ Issue #171 says **D01–D15 remain open**, but its available description does **
 | Parent status, Event ownership and closed/void lifecycle | Data Owner + Security | 39-column raw MainData, exact EventID, status/revision and owner | DATA HOLD |
 | Source release and TEST gate | Product Owner + operations | 26-file parity, explicit approved SHA, rollback, non-production proof | RELEASE HOLD |
 
-**G1 D01–D15 crosswalk status:** \`CANONICAL_ID_TITLES=NOT_VERIFIED\`; \`OWNER_SIGNOFF=NONE_RECORDED\`. The headings above are documented topic families, **not** asserted numbering or approvals. Record accepted/denied/waived with evidence only after owner review.
+**G1 D01–D15 crosswalk status:** `CANONICAL_ID_TITLES=NOT_VERIFIED`; `OWNER_SIGNOFF=NONE_RECORDED`. The headings above are documented topic families, **not** asserted numbering or approvals. Record accepted/denied/waived with evidence only after owner review.
 
 ## New C3 decisions that must not be silently resolved
 
@@ -59,7 +59,7 @@ For each decision, future *restricted* custody records must contain: stable ID; 
 1. C3-A design review and **separate Product Owner docs-only Merge gate**.
 2. Named owner decisions / signatures for target, disease, grants, AreaID and privacy. Unresolved = HOLD.
 3. Later separately approved C3-B unregistered **pure offline** evaluator (no I/O).
-4. Separately approved #189 **real read-only identity** attestation, without unsafe \`getDb_\`/fallback or patient rows.
+4. Separately approved #189 **real read-only identity** attestation, without unsafe `getDb_`/fallback or patient rows.
 5. Independently approved DDL/grant backing with backup/rollback, then authenticated server status-only RPC, then a different sensitive Event read gate, then a different write gate with lock/ledger, then TEST deploy/UAT gate.
 
-**STOP:** C3-A has no source, Schema, Google, data, TEST or runtime approval. \`D331_G1A_ENABLED=false\`, \`LIVE_RPC=OFF\`, \`CLINICAL=HOLD\`, \`GRANTS=HOLD\`, \`PRIVACY=HOLD\`, \`DDL=HOLD\`.
+**STOP:** C3-A has no source, Schema, Google, data, TEST or runtime approval. `D331_G1A_ENABLED=false`, `LIVE_RPC=OFF`, `CLINICAL=HOLD`, `GRANTS=HOLD`, `PRIVACY=HOLD`, `DDL=HOLD`.
