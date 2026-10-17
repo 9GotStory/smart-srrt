@@ -1,0 +1,94 @@
+<!-- D331 N1-C1: OFFLINE-ONLY native-compatible partial. DO NOT register or deploy. -->
+<style>
+  .srrt-d331-workspace{display:grid;gap:1rem;max-width:60rem;margin-inline:auto}
+  .srrt-d331-workspace__head{display:grid;gap:.5rem}
+  .srrt-d331-workspace__title{font-size:1.5rem;line-height:1.3;font-weight:700;margin:0}
+  .srrt-d331-workspace__note{margin:0;color:var(--muted,#64748b)}
+  .srrt-d331-workspace__card{border:1px solid var(--border,#cbd5e1);border-radius:1rem;padding:1.25rem;background:var(--card,#fff)}
+  .srrt-d331-workspace__status{margin:0;line-height:1.6}
+  .srrt-d331-workspace__actions{display:flex;flex-wrap:wrap;gap:.625rem}
+  .srrt-d331-workspace__action{padding:.625rem 1rem;border:1px solid var(--border,#cbd5e1);border-radius:.65rem;font:inherit;background:transparent;color:inherit}
+  .srrt-d331-workspace__action:disabled{cursor:not-allowed;opacity:.55}
+  .srrt-d331-workspace__skeleton{display:grid;gap:.625rem}
+  .srrt-d331-workspace__skeleton-item{height:1rem;max-width:24rem;border-radius:.4rem;background:var(--border,#e2e8f0)}
+  .srrt-d331-workspace__skeleton-item:last-child{max-width:14rem}
+  @media(max-width:35rem){.srrt-d331-workspace__actions{flex-direction:column}.srrt-d331-workspace__action{width:100%}}
+</style>
+<script>
+/**
+ * Offline-only UI prototype, not an authority and not mounted by Smart SRRT.
+ * No credentials, token, EventID, disease, AreaID, PHI or network input.
+ * A later separate gate must register a trusted server-derived capability
+ * contract before any record view/action can be enabled.
+ */
+var d331N1cStatusWorkspace_=(function(){
+  'use strict';
+  var STATES=Object.freeze({
+    OFF:'โมดูล Dengue 3-3-1 ยังไม่เปิดใช้งาน',
+    AUTH_REQUIRED:'กรุณาเข้าสู่ระบบก่อนใช้งานส่วนนี้',
+    POLICY_HOLD:'อยู่ระหว่างทบทวนนโยบายและสิทธิ์การเข้าถึงข้อมูล',
+    NO_GRANT:'บัญชีนี้ยังไม่มีสิทธิ์สำหรับส่วน Dengue 3-3-1',
+    LOADING:'กำลังตรวจสอบความพร้อมของส่วน Dengue 3-3-1...',
+    EMPTY:'ยังไม่มีรายการที่สามารถแสดงได้',
+    ERROR:'ไม่สามารถตรวจสอบสถานะได้ กรุณาลองใหม่ภายหลัง'
+  });
+  function knownState(input){
+    return typeof input==='string' && Object.prototype.hasOwnProperty.call(STATES,input)
+      ? input : 'OFF';
+  }
+  function element(doc,tag,className,textContent){
+    var node=doc.createElement(tag);
+    if(className)node.className=className;
+    if(typeof textContent==='string')node.textContent=textContent;
+    return node;
+  }
+  function render(root,input){
+    if(!root || typeof root.replaceChildren!=='function' ||
+       typeof root.setAttribute!=='function' || !root.ownerDocument ||
+       typeof root.ownerDocument.createElement!=='function'){
+      throw new Error('D331_N1C_INVALID_ROOT');
+    }
+    var state=knownState(input);
+    var doc=root.ownerDocument;
+    var wrap=element(doc,'div','srrt-d331-workspace');
+    var header=element(doc,'header','srrt-d331-workspace__head');
+    var heading=element(doc,'h2','srrt-d331-workspace__title','Dengue 3-3-1');
+    var subtitle=element(doc,'p','srrt-d331-workspace__note',
+      'พื้นที่ทำงานอยู่ระหว่างการพัฒนาและตรวจสอบความพร้อม');
+    header.appendChild(heading);
+    header.appendChild(subtitle);
+    wrap.appendChild(header);
+    var card=element(doc,'section','srrt-d331-workspace__card');
+    card.setAttribute('aria-label','สถานะการเปิดใช้งาน Dengue 3-3-1');
+    var status=element(doc,'p','srrt-d331-workspace__status',STATES[state]);
+    status.setAttribute('role','status');
+    status.setAttribute('aria-live','polite');
+    card.appendChild(status);
+    if(state==='LOADING'){
+      var skeleton=element(doc,'div','srrt-d331-workspace__skeleton');
+      skeleton.setAttribute('aria-hidden','true');
+      skeleton.appendChild(element(doc,'span','srrt-d331-workspace__skeleton-item'));
+      skeleton.appendChild(element(doc,'span','srrt-d331-workspace__skeleton-item'));
+      card.appendChild(skeleton);
+    }
+    wrap.appendChild(card);
+    var actions=element(doc,'div','srrt-d331-workspace__actions');
+    for(var labels=['ดูรายการ','บันทึกข้อมูล'],i=0;i<labels.length;i++){
+      var button=element(doc,'button','srrt-d331-workspace__action',labels[i]);
+      button.setAttribute('type','button');
+      button.disabled=true;
+      button.setAttribute('aria-disabled','true');
+      actions.appendChild(button);
+    }
+    wrap.appendChild(actions);
+    // Replace all prior UI, including any stale placeholder cards and buttons.
+    root.replaceChildren(wrap);
+    root.setAttribute('aria-busy',state==='LOADING'?'true':'false');
+    return Object.freeze({state:state,actionsEnabled:false,patientDataRendered:false});
+  }
+  function reset(root){
+    return render(root,'OFF');
+  }
+  return Object.freeze({knownState:knownState,render:render,reset:reset});
+})();
+</script>
