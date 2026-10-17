@@ -42,9 +42,9 @@ function buttons(node){return descendants(node).filter(n=>n.tagName==='button');
 test('D331 UX prototype remains UNREGISTERED and feature OFF',()=>{
   const manifest=fs.readFileSync(path.join(rootDir,'tools/native-sources.mjs'),'utf8');
   const foundation=fs.readFileSync(path.join(rootDir,'src/dengue/00-g1a-foundation.gs'),'utf8');
-  const index=fs.readFileSync(path.join(rootDir,'src/web/Index.html'),'utf8');
+  const layout=fs.readFileSync(path.join(rootDir,'src/web/02-app-layout.html'),'utf8');
   assert.doesNotMatch(manifest,/03l-client-d331-status|03-n1b1-trusted|04-n1b2b-mock/);
-  assert.doesNotMatch(index,/03l-client-d331-status/);
+  assert.doesNotMatch(layout,/03l-client-d331-status|page-dengue|data-page="dengue"/);
   assert.match(foundation,/var D331_G1A_ENABLED = false;/);
   assert.ok(code.includes('OFFLINE-ONLY native-compatible partial'));
 });
