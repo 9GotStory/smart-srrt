@@ -19,6 +19,7 @@ const CLIENT=[
   '03i-client-report-actions',
   '03j-client-report-job',
   '03k-client-report-generation',
+  '03l-client-d331-status',
   '04-browser-app',
 ].map(name=>'src/web/'+name+'.html');
 const FINAL=CLIENT.at(-1);
@@ -101,12 +102,12 @@ function assertHandlers(context,handlers){
   }
 }
 
-test('M01-05 Native 25-file topology is exact and globally collision-characterized',()=>{
+test('M01-05 Native 26-file inert topology is exact and globally collision-characterized',()=>{
   const scripts=readOrderedClientScripts();
-  assert.equal(GAS_HTML_SOURCES.length,16);
+  assert.equal(GAS_HTML_SOURCES.length,17);
   assertClientTopology(GAS_HTML_SOURCES,scripts);
   const entries=buildGasMultiFileEntries();
-  assert.equal(entries.size,25);
+  assert.equal(entries.size,26);
   assert.deepEqual(renderGasIndexOffline(entries),
     Buffer.concat(GAS_HTML_SOURCES.map(source=>
       entries.get(source.split('/').at(-1)))));

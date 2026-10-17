@@ -81,7 +81,7 @@ test('G-34 legacy backup gate accepts exactly one Code.gs or Thai รหัส.g
   assert.notEqual(oldRuntime.status,0,'Non-V8 runtime must fail');
 });
 
-test('G-34 future clasp stage allowlist matches canonical Native manifest (14 + preserved appsscript.json)',()=>{
+test('G-34 future clasp stage allowlist matches canonical Native26 manifest (26 + preserved appsscript.json)',()=>{
   const match=source.match(/const expected = \[([\s\S]*?)\]\.sort\(\);/);
   assert.ok(match,'Guarded clasp stage allowlist missing');
   const names=[...match[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
@@ -160,11 +160,12 @@ function native24BackupFixture(options={}) {
   try{
     fs.writeFileSync(path.join(root,'appsscript.json'),
       JSON.stringify({runtimeVersion:options.v8===false?'DEPRECATED_ES5':'V8'}));
-    const nativeFiles=options.layout25 ? expectedNativeFiles() :
-      expectedNativeFiles().filter(name=>name!=='00-g1a-foundation.gs');
+    const nativeFiles=options.layout26 ? expectedNativeFiles() : options.layout25
+      ? expectedNativeFiles().filter(name=>name!=='03l-client-d331-status.html')
+      : expectedNativeFiles().filter(name=>!['00-g1a-foundation.gs','03l-client-d331-status.html'].includes(name));
     const canonicalIndex=nativeFiles.filter(x=>x.endsWith('.html')&&x!=='Index.html')
       .map(x=>path.parse(x).name);
-    assert.equal(canonicalIndex.length,16);
+    assert.equal(canonicalIndex.length,options.layout26?17:16);
     const canonicalOrder=[
       '00-document-head','01-styles','02-app-layout','03-modals',
       '03a-dashboard-mobile','03b-client-core','03c-client-auth',
@@ -174,7 +175,9 @@ function native24BackupFixture(options={}) {
       '03j-client-report-job','03k-client-report-generation','04-browser-app'
     ];
     assert.deepEqual(canonicalIndex.sort(),[...canonicalOrder].sort());
-    let parts=canonicalOrder;
+    let parts=options.layout26
+      ?[...canonicalOrder.slice(0,-1),'03l-client-d331-status','04-browser-app']
+      :canonicalOrder;
     if(options.indexReorder)parts=[...parts.slice(1),parts[0]];
     if(options.indexMissing)parts=parts.filter(x=>x!==options.indexMissing);
     if(options.indexDuplicate)parts=[...parts,parts[0]];
@@ -189,6 +192,11 @@ function native24BackupFixture(options={}) {
           'var D331_G1A_ENABLED = false;',
           'var D331_G1A_ENABLED = true;');
         if(options.d331Tail)content+=options.d331Tail;
+      }
+      if(name==='03l-client-d331-status.html'){
+        content=fs.readFileSync(path.join(ROOT,'src/web/03l-client-d331-status.html'),'utf8');
+        if(options.badStatus)content=content.replace('button.disabled=true;','button.disabled=false;');
+        if(options.statusTail)content+=options.statusTail;
       }
       if(name==='00-bootstrap.gs')content=options.badEntrypoints
         ? 'function doGet(e) {}\n'
@@ -275,6 +283,54 @@ test('G-34 N1-A accepts only exact inert Native25 backup and rejects unsafe vari
     assert.notEqual(r.status,0,JSON.stringify(bad));
     assert.doesNotMatch(r.stdout,/BACKED_UP_NATIVE_25_LAYOUT=PASS/);
     if(bad.badD331||bad.d331Tail)assert.match(
-      r.stderr,/Native25 D331 source differs from exact approved main bytes/);
+      r.stderr,/Native25\/26 D331 source differs from exact approved main bytes/);
   }
+});
+
+test('G-34 N1-C2C-A accepts exact Native26 backup and rejects all forged variants',()=>{
+  const good=native24BackupFixture({layout26:true});
+  assert.equal(good.status,0,good.stderr);
+  assert.match(good.stdout,/BACKED_UP_NATIVE_26_LAYOUT=PASS/);
+  assert.match(good.stdout,/SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS/);
+  const cases=[
+    [{missing:'03l-client-d331-status.html'},/BACKED_UP_NATIVE_25_LAYOUT=PASS/],
+    [{extra:'rogue.html'},/exact known 26-file Native layout/],
+    [{extra:'rogue.gs'},/exact known 26-file Native layout/],
+    [{indexMissing:'03l-client-d331-status'},/Index template missing, extra, reordered or untrusted/],
+    [{indexDuplicate:true},/Index template missing, extra, reordered or untrusted/],
+    [{indexReorder:true},/Index template missing, extra, reordered or untrusted/],
+    [{badStatus:true},/Native26 inert status source differs/],
+    [{statusTail:'\\n<script>google.script.run.anything()</script>'},/Native26 inert status source differs/],
+    [{badD331:true},/Native25\\/26 D331 source differs/],
+    [{d331Tail:'\\nD331_G1A_ENABLED=true;'},/Native25\\/26 D331 source differs/],
+    [{badEntrypoints:true},/expected doGet\\/include entrypoints/],
+    [{empty:'03l-client-d331-status.html'},/empty or invalid source/],
+    [{v8:false},/runtimeVersion must be V8/],
+  ];
+  for(const [bad,message] of cases){
+    const res=native24BackupFixture({...bad,layout26:true});
+    if(bad.missing){
+      // Removing only the new HTML is an allowed historical Native25 rollback;
+      // approval of backup alone never authorizes a deployment.
+      assert.equal(res.status,0,res.stderr);
+      assert.match(res.stdout,message);
+    }else{
+      assert.notEqual(res.status,0,JSON.stringify(bad));
+      assert.match(res.stderr,message,JSON.stringify(bad));
+      assert.doesNotMatch(res.stdout,/BACKED_UP_NATIVE_26_LAYOUT=PASS/);
+    }
+  }
+});
+test('G-34 C2C-A stage gate retains exact 26-file whitelist plus manifest and explicit human deploy confirmation',()=>{
+  const match=source.match(/const expected = \\[([\\s\\S]*?)\\]\\.sort\\(\\);/);
+  assert.ok(match);
+  const names=[...match[1].matchAll(/'([^']+\\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
+  assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort());
+  assert.equal(names.length,27);
+  assert.match(source,/STAGE=PASS \\(26 files \\+ preserved manifest/);
+  assert.match(source,/Native26 inert status source differs from approved main bytes/);
+  assert.ok(source.includes('fs.readFileSync(oldManifest)'));
+  assert.ok(source.includes('SMART_SRRT_CONFIRM_DEPLOY'));
+  assert.ok(source.includes('"$CLASP" list-versions > "$WORK/versions.before.txt"'));
+  assert.doesNotMatch(source,/create-project|create-deployment/);
 });

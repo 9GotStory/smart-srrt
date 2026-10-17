@@ -13,13 +13,13 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('G-34 native Apps Script release is 8 .gs + 16 HTML partials + Index.html', () => {
+test('G-34 native Apps Script release is 8 .gs + 17 inert HTML partials + Index.html', () => {
   const entries = buildGasMultiFileEntries();
   assert.equal(GAS_SERVER_SOURCES.length,8);
-  assert.equal(GAS_HTML_SOURCES.length,16);
-  assert.equal(entries.size,25);
+  assert.equal(GAS_HTML_SOURCES.length,17);
+  assert.equal(entries.size,26);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).length,8);
-  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.html')).length,17);
+  assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.html')).length,18);
   assert.deepEqual([...entries.keys()].filter(name => name.endsWith('.gs')).sort(),
     GAS_SERVER_SOURCES.map(x => path.basename(x)).sort());
   assert.ok(entries.has('Index.html'));
@@ -58,7 +58,7 @@ test('G-34 trusted template expands HTML partials in exact original order and by
   const entries = buildGasMultiFileEntries();
   const template = gasIndexTemplate();
   assert.equal(entries.get('Index.html').toString('utf8'),template);
-  assert.equal((template.match(/<\?!= include\('/g)||[]).length,16);
+  assert.equal((template.match(/<\?!= include\('/g)||[]).length,17);
   assert.ok(!template.includes('\n'),'Index expansion should add no bytes');
   assert.deepEqual(renderGasIndexOffline(entries),
     Buffer.concat(GAS_HTML_SOURCES.map(source=>entries.get(path.basename(source)))));

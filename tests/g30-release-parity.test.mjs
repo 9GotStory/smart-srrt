@@ -13,13 +13,13 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const snapshot=()=>inspectNativeRelease(root);
 const {server,html}=snapshot();
 
-test('G-30 current release uses the ordered Native 25-file manifest and exact stage bytes',()=>{
+test('G-30 current release uses the ordered Native 26-file inert manifest and exact stage bytes',()=>{
   const data=snapshot();
   assert.equal(GAS_SERVER_SOURCES.length,8);
-  assert.equal(GAS_HTML_SOURCES.length,16);
-  assert.equal(expectedNativeFiles().length,25);
-  assert.equal(expectedNativeIndex().match(/include\('/g).length,16);
-  assert.equal(data.artifacts.length,25,'Native stage must be prepared by CI before contract tests');
+  assert.equal(GAS_HTML_SOURCES.length,17);
+  assert.equal(expectedNativeFiles().length,26);
+  assert.equal(expectedNativeIndex().match(/include\('/g).length,17);
+  assert.equal(data.artifacts.length,26,'Native stage must be prepared by CI before contract tests');
   assert.deepEqual(data.checks.filter(x=>x.status!=='PASS'),[]);
   assert.ok(html.includes('srrtDashboardCards'),'native-only responsive module missing');
 });
