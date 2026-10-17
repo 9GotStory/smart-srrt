@@ -62,7 +62,7 @@ function syntheticC3bAllow(ctx){
     revokedGrantIds:[],
     mainHeaders:Array.from(ctx.D331_N1B2B_MAIN_HEADERS_),
     areaHeaders:Array.from(ctx.D331_N1B2B_AREA_HEADERS_),
-    mainRows:[row()],
+    mainRows:[row],
     areaRows:[['synthetic-area','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
       '002','หมู่บ้านจำลอง','SYN-001',true,'','']]
   };
