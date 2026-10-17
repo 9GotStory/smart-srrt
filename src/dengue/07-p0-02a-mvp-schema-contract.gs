@@ -702,6 +702,20 @@ var D331_P002A_ENUMS_ = {
   ]
 };
 
+// Identical field names in different sheets do NOT share the same allowed values.
+var D331_P002A_SCOPED_ENUMS_ = {
+  DengueControlActions:{
+    ScopeCode:['PATIENT_HOME','RADIUS_100M','COMMUNITY','OTHER'],
+    OutcomeCode:['DONE','PARTIAL','NOT_DONE']
+  },
+  DengueEntomology:{
+    ScopeCode:['RADIUS_100M','COMMUNITY','SCHOOL','HEALTH_FACILITY','OTHER']
+  },
+  DengueFollowups:{
+    CheckpointKey:['DAY_3','DAY_7','DAY_14','DAY_21','DAY_28','OTHER'],
+    OutcomeCode:['DONE','PARTIAL','NOT_DONE','NOT_APPLICABLE']
+  }
+};
 function d331P002aNames_(){return Object.keys(D331_P002A_FIELDS_);}
 function d331P002aSpec_(name){
   if(typeof name !== 'string' ||
@@ -735,7 +749,7 @@ function d331P002aInspect_(snapshot){
     validDraftShape:issues.length===0,issues:issues};
 }
 function d331P002aBlank_(v){return v===null||v===undefined||v==='';}
-function d331P002aScalar_(type,field,v){
+function d331P002aScalar_(sheet,type,field,v){
   if(type==='UUID')return typeof v==='string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
   if(type==='Int+')return typeof v==='number'&&Number.isSafeInteger(v)&&v>=1;
@@ -748,9 +762,12 @@ function d331P002aScalar_(type,field,v){
     Number(v.slice(0,4))>=1900&&Number(v.slice(0,4))<=2100&&
     !isNaN(Date.parse(v+'T00:00:00.000Z'))&&
     new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v;
-  if(type==='Enum')return typeof v==='string'&&
-    Object.prototype.hasOwnProperty.call(D331_P002A_ENUMS_,field)&&
-    D331_P002A_ENUMS_[field].indexOf(v)>=0;
+  if(type==='Enum'){
+    var scoped=D331_P002A_SCOPED_ENUMS_[sheet];
+    var allowed=scoped&&Object.prototype.hasOwnProperty.call(scoped,field)
+      ?scoped[field]:D331_P002A_ENUMS_[field];
+    return typeof v==='string'&&Array.isArray(allowed)&&allowed.indexOf(v)>=0;
+  }
   return (type==='Text'||type==='UserID'||type==='AreaID'||type==='Opaque')&&
     typeof v==='string'&&v.length>0&&v.length<=256&&v.trim()===v;
 }
@@ -764,7 +781,7 @@ function d331P002aValidateSyntheticRow_(name,row){
       if(required==='Y')throw new Error('D331_P002A_REQUIRED:'+key);
       return;
     }
-    if(!d331P002aScalar_(type,key,v))throw new Error('D331_P002A_INVALID:'+key);
+    if(!d331P002aScalar_(name,type,key,v))throw new Error('D331_P002A_INVALID:'+key);
     values[key]=v;
   });
   if(name==='DengueEntomology'&&
@@ -779,6 +796,7 @@ function d331P002aValidateSyntheticRow_(name,row){
   if(name==='DengueRequestLedger'&&values.Phase==='COMMITTED'&&
      (!values.EntityType||!values.EntityID))throw new Error('D331_P002A_UNPROVEN_COMMIT');
   if(name==='D331AccessGrants'){
+    if(values.SchemaVersion!==1)throw new Error('D331_P002A_GRANT_SCHEMA_VERSION');
     if(values.ValidFromUTC>=values.ExpiresAtUTC)throw new Error('D331_P002A_INVALID_GRANT_WINDOW');
     if(values.State==='ACTIVE'&&(!values.ApprovedByUserID||!values.ApprovedAtUTC||
        !values.IssuedByUserID||!values.IssuedAtUTC))throw new Error('D331_P002A_GRANT_PROVENANCE');
