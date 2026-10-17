@@ -23,20 +23,20 @@ function reject(args){
   assert.throws(()=>inspectOfflineNative26(args),/D331_N1C2B_OFFLINE_PREVIEW_DENIED/);
 }
 
-test('N1-C2B returns status-only deterministic memory preview; Native25 stays unchanged',()=>{
+test('N1-C2B historical memory preview remains read-only after inert Native26 source registration',()=>{
   const first=inspectOfflineNative26(),second=inspectOfflineNative26();
   assert.deepEqual(first,second);
   assert.deepEqual(first,{
     localCandidateStructure:'PASS',candidateCount:26,candidateServerFiles:8,
-    candidateHtmlPartials:17,currentNativeCount:25,
-    currentLiveSourceManifest:'UNCHANGED_BY_PREVIEW',d331Feature:'OFF',
+    candidateHtmlPartials:17,currentNativeCount:26,
+    currentLiveSourceManifest:'NATIVE26_INERT_SOURCE_ONLY',d331Feature:'OFF',
     newD331PageRegistered:false,actualGoogleBinding:'NOT_ATTESTED',
     authorizationForStageOrDeploy:'HOLD'
   });
   assert.equal(Object.isFrozen(first),true);
   assert.equal(GAS_SERVER_SOURCES.length,8);
-  assert.equal(GAS_HTML_SOURCES.length,16);
-  assert.equal(GAS_HTML_SOURCES.includes(STATUS),false);
+  assert.equal(GAS_HTML_SOURCES.length,17);
+  assert.equal(GAS_HTML_SOURCES.includes(STATUS),true);
 });
 test('in-memory candidate never mutates manifest, current page or deployment stage',()=>{
   const before=fs.readFileSync(path.join(REPO,'tools/native-sources.mjs'));
@@ -50,8 +50,9 @@ test('in-memory candidate never mutates manifest, current page or deployment sta
   assert.doesNotMatch(SOURCE,/\b(?:google\.script\.run|SpreadsheetApp|DriveApp|PropertiesService|UrlFetchApp|googleapis|clasp|writeFileSync|mkdirSync|rmSync|spawnSync|execSync)\s*\(/);
 });
 test('wrong candidate partial order, duplicate, extra, missing or forged manifest DENY',()=>{
-  const correct=[...GAS_HTML_SOURCES.slice(0,-1),STATUS,FINAL];
-  reject({candidateOrder:[...GAS_HTML_SOURCES]});
+  const correct=[...GAS_HTML_SOURCES];
+  assert.equal(inspectOfflineNative26().candidateCount,26);
+  reject({candidateOrder:correct.filter(x=>x!==STATUS)});
   reject({candidateOrder:[...GAS_HTML_SOURCES,STATUS]});
   reject({candidateOrder:[STATUS,...GAS_HTML_SOURCES]});
   reject({candidateOrder:[...GAS_HTML_SOURCES.slice(0,-1),STATUS,STATUS]});
@@ -103,7 +104,7 @@ test('CLI fails safely on arguments and successful output contains no source or 
   const good=spawnSync(process.execPath,[TOOL],{cwd:REPO,encoding:'utf8'});
   assert.equal(good.status,0,good.stderr);
   assert.match(good.stdout,/D331_N1C2B_OFFLINE_NATIVE26_CANDIDATE=PASS/);
-  assert.match(good.stdout,/NATIVE25_MANIFEST=UNCHANGED; D331_FEATURE=OFF/);
+  assert.match(good.stdout,/NATIVE26_MANIFEST=INERT_SOURCE_ONLY; D331_FEATURE=OFF/);
   assert.match(good.stdout,/D331_STAGE_DEPLOY=HOLD/);
   assert.doesNotMatch(good.stdout+good.stderr,/<script|scriptId|spreadsheetId|AKfycb|patient|\.gs\n/);
   const bad=spawnSync(process.execPath,[TOOL,'--deploy'],{cwd:REPO,encoding:'utf8'});

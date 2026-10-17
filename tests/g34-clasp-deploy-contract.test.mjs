@@ -301,9 +301,9 @@ test('G-34 N1-C2C-A accepts exact Native26 backup and rejects all forged variant
     [{indexReorder:true},/Index template missing, extra, reordered or untrusted/],
     [{badStatus:true},/Native26 inert status source differs/],
     [{statusTail:'\\n<script>google.script.run.anything()</script>'},/Native26 inert status source differs/],
-    [{badD331:true},/Native25\\/26 D331 source differs/],
-    [{d331Tail:'\\nD331_G1A_ENABLED=true;'},/Native25\\/26 D331 source differs/],
-    [{badEntrypoints:true},/expected doGet\\/include entrypoints/],
+    [{badD331:true},/Native25\/26 D331 source differs/],
+    [{d331Tail:'\\nD331_G1A_ENABLED=true;'},/Native25\/26 D331 source differs/],
+    [{badEntrypoints:true},/expected doGet\/include entrypoints/],
     [{empty:'03l-client-d331-status.html'},/empty or invalid source/],
     [{v8:false},/runtimeVersion must be V8/],
   ];
@@ -322,12 +322,12 @@ test('G-34 N1-C2C-A accepts exact Native26 backup and rejects all forged variant
   }
 });
 test('G-34 C2C-A stage gate retains exact 26-file whitelist plus manifest and explicit human deploy confirmation',()=>{
-  const match=source.match(/const expected = \\[([\\s\\S]*?)\\]\\.sort\\(\\);/);
+  const match=source.match(/const expected = \[([\s\S]*?)\]\.sort\(\);/);
   assert.ok(match);
-  const names=[...match[1].matchAll(/'([^']+\\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
+  const names=[...match[1].matchAll(/'([^']+\.(?:gs|html|json))'/g)].map(x=>x[1]).sort();
   assert.deepEqual(names,[...expectedNativeFiles(),'appsscript.json'].sort());
   assert.equal(names.length,27);
-  assert.match(source,/STAGE=PASS \\(26 files \\+ preserved manifest/);
+  assert.match(source,/STAGE=PASS \(26 files \+ preserved manifest/);
   assert.match(source,/Native26 inert status source differs from approved main bytes/);
   assert.ok(source.includes('fs.readFileSync(oldManifest)'));
   assert.ok(source.includes('SMART_SRRT_CONFIRM_DEPLOY'));

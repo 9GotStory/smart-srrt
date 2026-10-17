@@ -191,6 +191,23 @@ const expected = [
   'Index.html','appsscript.json'].sort();
 const actual = fs.readdirSync(stage).sort();
 if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('Wrong stage file set: '+JSON.stringify(actual));
+// Fail closed if stage Index ordering drifts despite plausible file names.
+const htmlOrder = [
+  '00-document-head','01-styles','02-app-layout','03-modals',
+  '03a-dashboard-mobile','03b-client-core','03c-client-auth',
+  '03d-client-dashboard','03e-client-dashboard-export',
+  '03f-client-event-controls','03g-client-event-history',
+  '03h-client-event-records','03i-client-report-actions',
+  '03j-client-report-job','03k-client-report-generation',
+  '03l-client-d331-status','04-browser-app'
+];
+const expectedIndex = htmlOrder.map(x=>"<?!= include('"+x+"') ?>").join('');
+if(fs.readFileSync(path.join(stage,'Index.html'),'utf8')!==expectedIndex)
+  throw new Error('Wrong staged Native26 Index template');
+for(const name of expected.filter(x=>x!=='appsscript.json')){
+  const stat=fs.statSync(path.join(stage,name));
+  if(!stat.isFile()||stat.size===0)throw new Error('Empty or invalid staged Native26 file');
+}
 if(!fs.readFileSync(path.join(stage,'appsscript.json')).equals(fs.readFileSync(oldManifest))) {
   throw new Error('Manifest was modified in the staged package');
 }
