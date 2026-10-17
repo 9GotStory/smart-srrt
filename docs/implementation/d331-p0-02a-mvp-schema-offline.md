@@ -22,3 +22,5 @@ Only `src/dengue/07-p0-02a-mvp-schema-contract.gs` owns proposed 113 field tripl
 **Later distinct gates:** validate 113 fields with Product/Data/Clinical/Privacy/Security owners; verify existing DEV binding privately under #189; independent DDL + backup/rollback approval; trusted Server Auth/Event/Area read/write; clinical 3-3-1 time policy; Development browser E2E; Independent SHA/diff/CI and separate merge/deploy authority.
 
 Tests: `node --test tests/d331-p0-02a-mvp-schema-contract.test.mjs`, then `npm test`. No PHI/IDs/secrets appear in fixtures.
+
+**Independent review tightening:** Enum values for CheckpointKey, ScopeCode and OutcomeCode are validated per owning sheet (not via one shared union); candidate grant row SchemaVersion is exactly 1. These are still synthetic draft-only checks.
