@@ -16,8 +16,8 @@
 </style>
 <script>
 /**
- * Source-integrated inert status UI, not an authority and not auto-mounted.
- * No credentials, token, EventID, disease, AreaID, PHI or network input.
+ * Inert readiness/status preview, not a permission authority or auto-mounted page.
+ * Uses only optional synthetic adapters: no real RPC, PHI or patient input.
  * A later separate gate must register a trusted server-derived capability
  * contract before any record view/action can be enabled.
  */
@@ -89,6 +89,109 @@ var d331N1cStatusWorkspace_=(function(){
   function reset(root){
     return render(root,'OFF');
   }
-  return Object.freeze({knownState:knownState,render:render,reset:reset});
+  // C2C-B: status-only *offline* contract. This is NOT proof of server origin:
+  // authenticated signature/grant verification must live server-side in a later gate.
+  // No READY/ENABLED value, patient DTO, navigation, or active read/write path.
+  var activeControllers=new Set(),sessionInvalidationEpoch=0;
+  var SERVER_STATUS=Object.freeze({
+    OFF:true,AUTH_REQUIRED:true,POLICY_HOLD:true,NO_GRANT:true,ERROR:true
+  });
+  function closedReadiness(reply,requestId,now){
+    try{
+      if(!reply||typeof reply!=='object'||Array.isArray(reply))return 'ERROR';
+      var fields=Object.keys(reply).sort().join(',');
+      if(fields!=='expiresAtMs,issuedAtMs,requestId,state,version')return 'ERROR';
+      if(reply.version!==1||reply.requestId!==requestId||
+         !Object.prototype.hasOwnProperty.call(SERVER_STATUS,reply.state))return 'ERROR';
+      if(!Number.isSafeInteger(reply.issuedAtMs)||!Number.isSafeInteger(reply.expiresAtMs)||
+         !Number.isSafeInteger(now)||reply.issuedAtMs>now||
+         now>=reply.expiresAtMs||reply.expiresAtMs-reply.issuedAtMs>60000)return 'ERROR';
+      return reply.state;
+    }catch(_){return 'ERROR';}
+  }
+  function createOfflineController(root,adapters){
+    // Deliberately no real transport or startup invocation. A test-only
+    // injected adapter provides mock promises and the existing UI action lease.
+    if(!root||typeof root.replaceChildren!=='function'||!adapters||
+       typeof adapters.readSession!=='function'||typeof adapters.requestMock!=='function'||
+       typeof adapters.beginAction!=='function'||typeof adapters.finishAction!=='function'||
+       typeof adapters.invalidateAction!=='function')throw new Error('D331_N1C_INVALID_ADAPTER');
+    var localEpoch=0,nextRequest=0,lease=null,disposed=false;
+    function snapshot(){
+      var s;
+      try{s=adapters.readSession();}catch(_){return null;}
+      if(!s||typeof s!=='object'||typeof s.token!=='string'||!s.token||
+         !s.user||typeof s.user!=='object'||typeof s.user.role!=='string'||
+         !Number.isSafeInteger(s.authEpoch)||s.authEpoch<0)return null;
+      // Identity reference + role and auth epoch are an *invalidation fence*
+      // only; never D331 authorization, scope, consent, or backend proof.
+      return {token:s.token,user:s.user,role:s.user.role,authEpoch:s.authEpoch};
+    }
+    function matches(start,epoch,globalEpoch){
+      var s=snapshot();
+      return !disposed&&epoch===localEpoch&&globalEpoch===sessionInvalidationEpoch&&
+        !!start&&!!s&&start.token===s.token&&start.user===s.user&&
+        start.role===s.role&&start.authEpoch===s.authEpoch;
+    }
+    function invalidate(){
+      ++localEpoch;
+      if(lease){var old=lease;lease=null;adapters.invalidateAction(old);}
+      if(!disposed)reset(root);
+      return false;
+    }
+    async function check(){
+      if(disposed||lease)return false; // no duplicate or disposed actions
+      var start=snapshot();
+      if(!start){reset(root);render(root,'AUTH_REQUIRED');return false;}
+      var requestId=++nextRequest,epoch=localEpoch,globalEpoch=sessionInvalidationEpoch;
+      var next=adapters.beginAction('d331:readiness',{region:root,
+        pendingText:'กำลังตรวจสอบความพร้อมของส่วน Dengue 3-3-1...'});
+      if(!next)return false;
+      lease=next;
+      render(root,'LOADING');
+      var state='ERROR';
+      try{
+        // The injected requestMock is synthetic-only, never a live transport
+        // or trusted authorization. No data may flow from the reply.
+        var result=await adapters.requestMock(requestId);
+        if(!matches(start,epoch,globalEpoch)||lease!==next)return false;
+        state=closedReadiness(result,requestId,Date.now());
+        render(root,state);
+        return state;
+      }catch(_){
+        if(!matches(start,epoch,globalEpoch)||lease!==next)return false;
+        render(root,'ERROR');
+        return 'ERROR';
+      }finally{
+        if(lease===next){
+          lease=null;
+          if(matches(start,epoch,globalEpoch))
+            adapters.finishAction(next,state==='ERROR'?'error':'ready','',
+              {canEnable:function(){return false;}});
+          else {
+            // A token/role/epoch switch with no explicit logout hook also
+            // clears the obsolete loading placeholder; no successor exists.
+            adapters.invalidateAction(next);
+            reset(root);
+          }
+        }
+      }
+    }
+    var controller=Object.freeze({
+      check:check,
+      invalidate:invalidate,
+      dispose:function(){if(disposed)return;invalidate();disposed=true;activeControllers.delete(controller);}
+    });
+    activeControllers.add(controller);
+    return controller;
+  }
+  function invalidateSession(){
+    ++sessionInvalidationEpoch;
+    for(var controller of activeControllers)controller.invalidate();
+    return false;
+  }
+  return Object.freeze({knownState:knownState,render:render,reset:reset,
+    closedReadiness:closedReadiness,createOfflineController:createOfflineController,
+    invalidateSession:invalidateSession});
 })();
 </script>
