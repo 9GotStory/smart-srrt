@@ -38,4 +38,4 @@ No user, EventID, AreaID, PHI, Script ID, Deployment ID, Spreadsheet ID or other
 
 **N1-B2D / physical DDL / DEV-TEST deploy:** Still require actual Script→Deployment→`DATABASE_SPREADSHEET_ID` attestation, signed disease label allowlist and per-user revocable D331 grant model, privacy/retention and AreaID binding, plus schema and deployment-specific Human Gates. `D331_G1A_ENABLED=false` stays unchanged.
 
-**This PR:** only navigation guard, one offline synthetic test and this document. No Native25 registration, no Google APIs or metadata read, no `clasp`, no Script/Sheet changes, no new page, no UI feature enable, and no deployment. Source review and CI must pass before a distinct approval to Merge.
+**This PR:** navigation guard, one offline synthetic test, one **existing R2 navigation harness fixture correction** supplying explicit authorized role mocks (previous harness had no `roleCanRecord()`), and this document. No Native25 registration, no Google APIs or metadata read, no `clasp`, no Script/Sheet changes, no new page, no UI feature enable, and no deployment. Source review and CI must pass before a distinct approval to Merge.
