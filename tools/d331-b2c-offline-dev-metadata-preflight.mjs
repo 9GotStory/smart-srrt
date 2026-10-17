@@ -149,7 +149,7 @@ function cli(){
     console.log('B2C_PRIVATE_EVIDENCE_SHAPE=PASS');
     console.log('B2C_ACTUAL_DEV_CLOUD_IDENTITY=NOT_VERIFIED');
     console.log('B2C_GOOGLE_API=NOT_CALLED; B2C_LIVE_ACCESS=HOLD');
-    console.log('D331_FEATURE=OFF; DDL_TEST_PRODUCTION=HOLD');
+    console.log('D331_FEATURE=OFF; DDL_TEST=HOLD; PRODUCTION=NOT_CONFIGURED');
   }catch {
     // Fail-closed and NO attacker-controlled exception text, paths, IDs,
     // patient information, headers or account details printed.
