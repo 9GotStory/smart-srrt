@@ -12,23 +12,25 @@ import {MAIN_HEADERS,AREA_HEADERS,evaluateOfflineEvidence,
 const REPO=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const TOOL=path.join(REPO,'tools/d331-b2c-offline-dev-metadata-preflight.mjs');
 const SOURCE=fs.readFileSync(TOOL,'utf8');
-const MAIN_SHA='8b36a22cd2ce3d1584d4ed38190bc6dfb2ea7d41';
+const MAIN_SHA='6843367c3824f118743a302ba9a5caef789e5285';
 const CLOCK=Date.parse('2026-10-17T00:00:00.000Z');
 function sample(){
   return {
-    format:'D331_B2C_PRIVATE_METADATA_V1',
+    format:'D331_B2C_PRIVATE_METADATA_V2',
     sourceSha:MAIN_SHA,
     observedAt:'2026-10-17T00:00:00.000Z',
+    environment:{productionStatus:'NOT_CONFIGURED',
+      testingTopology:'SHARED_DEVELOPMENT_TESTING'},
     script:{
       expectedDevId:'DEV-SCRIPT-AAAAAAAAAAAA',
       observedId:'DEV-SCRIPT-AAAAAAAAAAAA',
       expectedDeploymentId:'DEV-DEPLOY-AAAAAAAAAAAA',
       observedDeploymentId:'DEV-DEPLOY-AAAAAAAAAAAA',
       deploymentParentScriptId:'DEV-SCRIPT-AAAAAAAAAAAA',
-      knownProdScriptIds:['PROD-SCRIPT-BBBBBBBBBBBB'],
-      knownTestScriptIds:['TEST-SCRIPT-CCCCCCCCCCCC'],
-      knownProdDeploymentIds:['PROD-DEPLOY-BBBBBBBBBBBB'],
-      knownTestDeploymentIds:['TEST-DEPLOY-CCCCCCCCCCCC']
+      knownProdScriptIds:[],
+      knownTestScriptIds:[],
+      knownProdDeploymentIds:[],
+      knownTestDeploymentIds:[]
     },
     database:{
       expectedDevId:'DEV-SHEET-AAAAAAAAAAAA',
@@ -38,8 +40,8 @@ function sample(){
       mimeType:'application/vnd.google-apps.spreadsheet',
       ownerReviewedAsDev:true,
       aclReviewedAsDev:true,
-      knownProdSpreadsheetIds:['PROD-SHEET-BBBBBBBBBBBB'],
-      knownTestSpreadsheetIds:['TEST-SHEET-CCCCCCCCCCCC']
+      knownProdSpreadsheetIds:[],
+      knownTestSpreadsheetIds:[]
     },
     headers:{main:[...MAIN_HEADERS],areas:[...AREA_HEADERS]},
     readScope:{metadataOnly:true,patientRowsRead:false,
@@ -99,6 +101,53 @@ test('reject missing/wrong source SHA, unknown fields, malformed timestamps and 
   assert.throws(()=>evaluateOfflineEvidence(sample(),{expectedSourceSha:'notsha',nowMs:CLOCK}),
     /D331_B2C_EVIDENCE_DENIED/);
 });
+test('development-only with no Production IDs and shared Development/Testing is accepted',()=>{
+  const e=sample();
+  assert.deepEqual(e.script.knownProdScriptIds,[]);
+  assert.deepEqual(e.database.knownProdSpreadsheetIds,[]);
+  assert.deepEqual(e.script.knownTestScriptIds,[]);
+  assert.deepEqual(e.database.knownTestSpreadsheetIds,[]);
+  assert.equal(evaluate(e).actualCloudIdentity,'NOT_VERIFIED');
+});
+test('separate TEST topology must have a complete distinct inventory',()=>{
+  const e=sample();
+  e.environment.testingTopology='SEPARATE_TEST';
+  for(const field of ['knownTestScriptIds','knownTestDeploymentIds'])
+    e.script[field]=[field==='knownTestScriptIds'
+      ? 'TEST-SCRIPT-CCCCCCCCCCCC' : 'TEST-DEPLOY-CCCCCCCCCCCC'];
+  e.database.knownTestSpreadsheetIds=['TEST-SHEET-CCCCCCCCCCCC'];
+  assert.equal(evaluate(e).authorizationForLiveOperations,'HOLD');
+  deny(x=>{x.environment.testingTopology='SEPARATE_TEST';});
+  deny(x=>{x.environment.testingTopology='SEPARATE_TEST';
+    x.script.knownTestScriptIds=[x.script.expectedDevId];
+    x.script.knownTestDeploymentIds=['TEST-DEPLOY-CCCCCCCCCCCC'];
+    x.database.knownTestSpreadsheetIds=['TEST-SHEET-CCCCCCCCCCCC'];});
+  deny(x=>{x.environment.testingTopology='SEPARATE_TEST';
+    x.script.knownTestScriptIds=['TEST-SCRIPT-CCCCCCCCCCCC'];
+    x.script.knownTestDeploymentIds=[x.script.expectedDeploymentId];
+    x.database.knownTestSpreadsheetIds=['TEST-SHEET-CCCCCCCCCCCC'];});
+  deny(x=>{x.environment.testingTopology='SEPARATE_TEST';
+    x.script.knownTestScriptIds=['TEST-SCRIPT-CCCCCCCCCCCC'];
+    x.script.knownTestDeploymentIds=['TEST-DEPLOY-CCCCCCCCCCCC'];
+    x.database.knownTestSpreadsheetIds=[x.database.expectedDevId];});
+});
+test('no Production is explicit: missing/forged mode or phantom IDs always DENY',()=>{
+  deny(x=>delete x.environment);
+  deny(x=>x.environment={productionStatus:'NOT_CONFIGURED'});
+  deny(x=>x.environment.productionStatus='CONFIGURED');
+  deny(x=>x.environment.productionStatus='UNKNOWN');
+  deny(x=>x.environment.testingTopology='UNKNOWN');
+  deny(x=>x.environment.testingTopology='SEPARATE_TEST');
+  deny(x=>x.environment.testingTopology='SHARED_DEVELOPMENT_TESTING_FAKE');
+  deny(x=>x.environment.untrusted='CLIENT');
+  deny(x=>x.format='D331_B2C_PRIVATE_METADATA_V1');
+  deny(x=>x.script.knownProdScriptIds=['PROD-SCRIPT-BBBBBBBBBBBB']);
+  deny(x=>x.script.knownProdDeploymentIds=['PROD-DEPLOY-BBBBBBBBBBBB']);
+  deny(x=>x.database.knownProdSpreadsheetIds=['PROD-SHEET-BBBBBBBBBBBB']);
+  deny(x=>x.script.knownTestScriptIds=['TEST-SCRIPT-CCCCCCCCCCCC']);
+  deny(x=>x.script.knownTestDeploymentIds=['TEST-DEPLOY-CCCCCCCCCCCC']);
+  deny(x=>x.database.knownTestSpreadsheetIds=['TEST-SHEET-CCCCCCCCCCCC']);
+});
 test('reject arbitrary alternate script/deployment identity, mismatched parent and same IDs',()=>{
   deny(e=>e.script.expectedDevId='OTHER-SCRIPT-AAAAAAAAAAA');
   deny(e=>e.script.observedDeploymentId='OTHER-DEPLOY-AAAAAAAAAAA');
@@ -109,10 +158,11 @@ test('reject arbitrary alternate script/deployment identity, mismatched parent a
   deny(e=>e.script.knownTestScriptIds=[e.script.expectedDevId]);
   deny(e=>e.script.knownProdDeploymentIds=[e.script.expectedDeploymentId]);
   deny(e=>e.script.knownTestDeploymentIds=[e.script.expectedDeploymentId]);
-  deny(e=>e.script.knownProdScriptIds=[]);
-  deny(e=>e.script.knownTestScriptIds=[]);
-  deny(e=>{e.script.knownProdScriptIds=['same-isolation-id-AAAAA'];
-    e.script.knownTestScriptIds=['same-isolation-id-AAAAA'];});
+  deny(e=>e.script.knownProdScriptIds=null);
+  deny(e=>e.script.knownTestScriptIds=null);
+  deny(e=>{e.environment.testingTopology='SEPARATE_TEST';
+    e.script.knownTestScriptIds=['same-isolation-id-AAAAA'];
+    e.script.knownProdScriptIds=['same-isolation-id-AAAAA'];});
   deny(e=>e.script.knownProdScriptIds=['PROD-SCRIPT-BBBBBBBBBBBB','PROD-SCRIPT-BBBBBBBBBBBB']);
   deny(e=>e.script.unexpectedSource='UNCHECKED');
 });
@@ -123,7 +173,7 @@ test('reject script property fallback, Production/TEST database alias, owner and
   deny(e=>e.database.expectedDevId='OTHER-SHEET-AAAAAAAAAAAA');
   deny(e=>e.database.knownProdSpreadsheetIds=[e.database.expectedDevId]);
   deny(e=>e.database.knownTestSpreadsheetIds=[e.database.expectedDevId]);
-  deny(e=>e.database.knownProdSpreadsheetIds=[]);
+  deny(e=>e.database.knownProdSpreadsheetIds=null);
   deny(e=>e.database.ownerReviewedAsDev=false);
   deny(e=>e.database.aclReviewedAsDev=false);
   deny(e=>e.database.mimeType='text/plain');

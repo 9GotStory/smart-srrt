@@ -11,7 +11,7 @@ import {fileURLToPath} from 'node:url';
 
 const MODULE_PATH=fileURLToPath(import.meta.url);
 const REPO_ROOT=fs.realpathSync(path.resolve(path.dirname(MODULE_PATH),'..'));
-const FORMAT='D331_B2C_PRIVATE_METADATA_V1';
+const FORMAT='D331_B2C_PRIVATE_METADATA_V2';
 const MIME='application/vnd.google-apps.spreadsheet';
 const IDENT=/^[A-Za-z0-9_-]{15,200}$/;
 const SHA=/^[0-9a-f]{40}$/;
@@ -49,8 +49,9 @@ function recordWithKeys(value,keys) {
       keys.some(key=>!Object.hasOwn(value,key))) deny();
 }
 function id(value){if(typeof value!=='string'||!IDENT.test(value))deny();return value;}
-function ids(values){
-  if(!Array.isArray(values)||values.length<1||values.length>100)deny();
+function ids(values,requireNonEmpty){
+  if(!Array.isArray(values)||values.length>100 ||
+     (requireNonEmpty && values.length<1))deny();
   const seen=new Set();
   for(const value of values){id(value);if(seen.has(value))deny();seen.add(value);}
   return seen;
@@ -59,10 +60,13 @@ function equalHeaders(actual,wanted){
   if(!Array.isArray(actual)||actual.length!==wanted.length ||
      actual.some((v,i)=>v!==wanted[i]))deny();
 }
-function compareIdSet(expected,observed,foreignA,foreignB){
-  const e=id(expected),o=id(observed),a=ids(foreignA),b=ids(foreignB);
-  if(e!==o||a.has(e)||b.has(e))deny();
-  for(const x of a){if(b.has(x))deny();}
+function compareIdSet(expected,observed,foreignA,foreignB,testingSeparate){
+  const e=id(expected),o=id(observed);
+  // The Product Owner confirmed that there is NO Production. Nonempty
+  // Production IDs are contradictory, and made-up placeholders are forbidden.
+  const prod=ids(foreignA,false),test=ids(foreignB,testingSeparate);
+  if(prod.size!==0 || (testingSeparate===false && test.size!==0) ||
+     e!==o || test.has(e))deny();
 }
 function evidenceInstant(value){
   if(typeof value!=='string'||!/^20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value))deny();
@@ -78,23 +82,29 @@ function evidenceInstant(value){
 export function evaluateOfflineEvidence(evidence,{expectedSourceSha,nowMs=Date.now()}={}){
   if(typeof expectedSourceSha!=='string'||!SHA.test(expectedSourceSha)||
      !Number.isFinite(nowMs))deny();
-  recordWithKeys(evidence,['format','sourceSha','observedAt','script',
-    'database','headers','readScope']);
+  recordWithKeys(evidence,['format','sourceSha','observedAt','environment',
+    'script','database','headers','readScope']);
   if(evidence.format!==FORMAT||evidence.sourceSha!==expectedSourceSha)deny();
   const age=nowMs-evidenceInstant(evidence.observedAt);
   if(age<0||age>24*60*60*1000)deny();
 
+  // All flags are untrusted operator claims; even a local PASS does not
+  // verify a live Script Property, Deployment or owner identity.
+  recordWithKeys(evidence.environment,['productionStatus','testingTopology']);
+  if(evidence.environment.productionStatus!=='NOT_CONFIGURED' ||
+     !['SHARED_DEVELOPMENT_TESTING','SEPARATE_TEST'].includes(evidence.environment.testingTopology))deny();
+  const testingSeparate=evidence.environment.testingTopology==='SEPARATE_TEST';
   const s=evidence.script,d=evidence.database;
   recordWithKeys(s,SCRIPT_KEYS);
   recordWithKeys(d,DATABASE_KEYS);
   compareIdSet(s.expectedDevId,s.observedId,
-    s.knownProdScriptIds,s.knownTestScriptIds);
+    s.knownProdScriptIds,s.knownTestScriptIds,testingSeparate);
   compareIdSet(s.expectedDeploymentId,s.observedDeploymentId,
-    s.knownProdDeploymentIds,s.knownTestDeploymentIds);
+    s.knownProdDeploymentIds,s.knownTestDeploymentIds,testingSeparate);
   if(id(s.deploymentParentScriptId)!==s.observedId ||
      s.observedId===s.observedDeploymentId)deny();
   compareIdSet(d.expectedDevId,d.observedId,
-    d.knownProdSpreadsheetIds,d.knownTestSpreadsheetIds);
+    d.knownProdSpreadsheetIds,d.knownTestSpreadsheetIds,testingSeparate);
   if(d.propertyPresent!==true||id(d.scriptPropertyId)!==d.observedId||
      d.observedId===s.observedId||d.observedId===s.observedDeploymentId||
      d.mimeType!==MIME||
@@ -139,7 +149,7 @@ function cli(){
     console.log('B2C_PRIVATE_EVIDENCE_SHAPE=PASS');
     console.log('B2C_ACTUAL_DEV_CLOUD_IDENTITY=NOT_VERIFIED');
     console.log('B2C_GOOGLE_API=NOT_CALLED; B2C_LIVE_ACCESS=HOLD');
-    console.log('D331_FEATURE=OFF; DDL_TEST_PRODUCTION=HOLD');
+    console.log('D331_FEATURE=OFF; DDL_TEST=HOLD; PRODUCTION=NOT_CONFIGURED');
   }catch {
     // Fail-closed and NO attacker-controlled exception text, paths, IDs,
     // patient information, headers or account details printed.
