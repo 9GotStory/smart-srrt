@@ -174,7 +174,10 @@ function native24BackupFixture(options={}) {
       '03h-client-event-records','03i-client-report-actions',
       '03j-client-report-job','03k-client-report-generation','04-browser-app'
     ];
-    assert.deepEqual(canonicalIndex.sort(),[...canonicalOrder].sort());
+    const approvedOrder=options.layout26
+      ?[...canonicalOrder.slice(0,-1),'03l-client-d331-status','04-browser-app']
+      :canonicalOrder;
+    assert.deepEqual(canonicalIndex.sort(),[...approvedOrder].sort());
     let parts=options.layout26
       ?[...canonicalOrder.slice(0,-1),'03l-client-d331-status','04-browser-app']
       :canonicalOrder;
@@ -243,7 +246,8 @@ test('G-34 Native24 rejects unknown, missing, duplicate and malformed backups be
 });
 test('G-34 new Native24 backup gate does not weaken deploy approval, rollback evidence or exact staged file guard',()=>{
   assert.match(source,/BACKED_UP_NATIVE_24_LAYOUT=PASS/);
-  assert.match(source,/expectedIndex = native24Partials\.map/);
+  assert.ok(source.includes('isNative26 ? native26Partials : native24Partials'));
+  assert.match(source,/const expectedIndex = /);
   assert.match(source,/index\.trim\(\) !== expectedIndex/);
   assert.ok(source.includes('"$CLASP" list-deployments > "$WORK/deployments.before.txt"'));
   assert.ok(source.includes('"$CLASP" list-versions > "$WORK/versions.before.txt"'));

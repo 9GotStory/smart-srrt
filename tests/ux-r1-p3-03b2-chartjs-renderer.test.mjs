@@ -36,9 +36,9 @@ function fixture(){
   vm.runInContext(exp.slice(exp.indexOf('  async function captureDashboard(){'),exp.lastIndexOf('</script>')),ctx);
   return {ctx,el,instances};
 }
-test('P3-03B2 25-file stage contains pinned inline UMD before Dashboard scripts',()=>{
+test('P3-03B2 Native26 stage contains pinned inline UMD before Dashboard scripts',()=>{
   const entries=buildGasMultiFileEntries();
-  assert.equal(entries.size,25);
+  assert.equal(entries.size,26);
   const head=entries.get('00-document-head.html').toString('utf8'),vendored=chartVendorBytes().toString('utf8');
   assert.ok(head.includes(vendored));assert.ok(head.length>200000);
   assert.ok(!head.includes('SMART_SRRT_CHARTJS_VENDOR_INLINED_AT_BUILD'));
