@@ -178,7 +178,7 @@ function native24BackupFixture(options={}) {
       ?[...canonicalOrder.slice(0,-1),'03l-client-d331-status','04-browser-app']
       :canonicalOrder;
     assert.deepEqual(canonicalIndex.sort(),[...approvedOrder].sort());
-    let parts=options.layout26
+    let parts=options.layout26&&!options.rollback25
       ?[...canonicalOrder.slice(0,-1),'03l-client-d331-status','04-browser-app']
       :canonicalOrder;
     if(options.indexReorder)parts=[...parts.slice(1),parts[0]];
@@ -297,7 +297,8 @@ test('G-34 N1-C2C-A accepts exact Native26 backup and rejects all forged variant
   assert.match(good.stdout,/BACKED_UP_NATIVE_26_LAYOUT=PASS/);
   assert.match(good.stdout,/SOURCE_ENTRYPOINTS=PASS; REMOTE_MANIFEST_V8=PASS/);
   const cases=[
-    [{missing:'03l-client-d331-status.html'},/BACKED_UP_NATIVE_25_LAYOUT=PASS/],
+    [{missing:'03l-client-d331-status.html',rollback25:true},/BACKED_UP_NATIVE_25_LAYOUT=PASS/],
+    [{missing:'03l-client-d331-status.html'},/Index template missing, extra, reordered or untrusted/],
     [{extra:'rogue.html'},/exact known 26-file Native layout/],
     [{extra:'rogue.gs'},/exact known 26-file Native layout/],
     [{indexMissing:'03l-client-d331-status'},/Index template missing, extra, reordered or untrusted/],
@@ -313,8 +314,8 @@ test('G-34 N1-C2C-A accepts exact Native26 backup and rejects all forged variant
   ];
   for(const [bad,message] of cases){
     const res=native24BackupFixture({...bad,layout26:true});
-    if(bad.missing){
-      // Removing only the new HTML is an allowed historical Native25 rollback;
+    if(bad.rollback25){
+      // Historical Native25 rollback requires both the old file set AND old Index;
       // approval of backup alone never authorizes a deployment.
       assert.equal(res.status,0,res.stderr);
       assert.match(res.stdout,message);
