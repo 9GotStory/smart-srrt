@@ -21,7 +21,11 @@ function row(n){
    if(type==='UTC')return key==='ExpiresAtUTC'?'2027-10-17T00:00:00.000Z':instant;
    if(type==='Date')return '2026-10-17';
    if(type==='SHA256')return 'a'.repeat(64);
-   if(type==='Enum')return Array.from(ctx.D331_P002A_ENUMS_[key])[0];
+   if(type==='Enum'){
+     const scoped=ctx.D331_P002A_SCOPED_ENUMS_[n];
+     const allowed=scoped&&scoped[key]?scoped[key]:ctx.D331_P002A_ENUMS_[key];
+     return Array.from(allowed)[0];
+   }
    return 'synthetic-only';
  });
 }
@@ -109,8 +113,20 @@ test('ledger COMMITTED draft lacks proof; pending status is not authorization',(
  set(n,r,'EntityType','CASE');set(n,r,'EntityID',uuid);
  assert.equal(ctx.d331P002aValidateSyntheticRow_(n,r).approved,false);
 });
+test('same-named enums must be scoped to their actual sheet',()=>{
+ let n='DengueFollowups',r=row(n);
+ set(n,r,'CheckpointKey','DAY_0');
+ assert.throws(()=>ctx.d331P002aValidateSyntheticRow_(n,r),/INVALID:CheckpointKey/);
+ n='DengueEntomology';r=row(n);set(n,r,'ScopeCode','PATIENT_HOME');
+ assert.throws(()=>ctx.d331P002aValidateSyntheticRow_(n,r),/INVALID:ScopeCode/);
+ n='DengueControlActions';r=row(n);set(n,r,'OutcomeCode','NOT_APPLICABLE');
+ assert.throws(()=>ctx.d331P002aValidateSyntheticRow_(n,r),/INVALID:OutcomeCode/);
+});
 test('grants require ordered window and provenance, never confer permission',()=>{
  const n='D331AccessGrants',r=row(n);
+ set(n,r,'SchemaVersion',2);
+ assert.throws(()=>ctx.d331P002aValidateSyntheticRow_(n,r),/GRANT_SCHEMA_VERSION/);
+ set(n,r,'SchemaVersion',1);
  set(n,r,'ExpiresAtUTC','2026-10-16T00:00:00.000Z');
  assert.throws(()=>ctx.d331P002aValidateSyntheticRow_(n,r),/INVALID_GRANT_WINDOW/);
  set(n,r,'ExpiresAtUTC','2027-10-17T00:00:00.000Z');set(n,r,'State','ACTIVE');
