@@ -56,7 +56,8 @@ function blobHash(content){
   return crypto.createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
 }
 function stringSource(readSource,name){
-  const content=readSource(name);
+  let content;
+  try{content=readSource(name);}catch{deny();}
   if(typeof content!=='string'||content.length===0||content.length>350000)deny();
   return content;
 }
