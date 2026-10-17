@@ -139,6 +139,8 @@ test('C2C-B token switch, role mutation, user switch, auth epoch and error fail 
     assert.equal(await pending,false,'stale session response must be discarded');
     assert.equal(f.finished.length,0);
     assert.equal(f.invalidated.length,1);
+    assert.match(text(f.node),/ยังไม่เปิดใช้งาน/);
+    assert.equal(f.node.getAttribute('aria-busy'),'false');
     // No terminal success/authorized data/controls may appear.
     assert.deepEqual(buttons(f.node).map(b=>b.disabled),[true,true]);
     f.controller.dispose();

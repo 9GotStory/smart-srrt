@@ -151,8 +151,8 @@ var d331N1cStatusWorkspace_=(function(){
       render(root,'LOADING');
       var state='ERROR';
       try{
-        // requestMock is supplied only by synthetic tests, NEVER gs() or a
-        // Browser-provided permission/grant. No data may flow from the reply.
+        // The injected requestMock is synthetic-only, never a live transport
+        // or trusted authorization. No data may flow from the reply.
         var result=await adapters.requestMock(requestId);
         if(!matches(start,epoch,globalEpoch)||lease!==next)return false;
         state=closedReadiness(result,requestId,Date.now());
@@ -168,7 +168,12 @@ var d331N1cStatusWorkspace_=(function(){
           if(matches(start,epoch,globalEpoch))
             adapters.finishAction(next,state==='ERROR'?'error':'ready','',
               {canEnable:function(){return false;}});
-          else adapters.invalidateAction(next);
+          else {
+            // A token/role/epoch switch with no explicit logout hook also
+            // clears the obsolete loading placeholder; no successor exists.
+            adapters.invalidateAction(next);
+            reset(root);
+          }
         }
       }
     }
