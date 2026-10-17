@@ -61,14 +61,15 @@ function harness({canRecord=false,canManage=false}={}){
     currentNav:()=>navigation.filter(n=>n.getAttribute('aria-current')==='page').map(n=>n.id)
   };
 }
-test('N1-C2A keeps five actual page sections, no Dengue nav or source registration',()=>{
+test('N1-C2A keeps five actual page sections, no Dengue nav or accessible route',()=>{
   for(const id of ['dashboard','records','reporter','admin','library']){
     assert.match(layout,new RegExp('id="page-'+id+'"'));
     assert.match(layout,new RegExp('data-page="'+id+'"'));
   }
   assert.doesNotMatch(layout,/id="page-dengue"|data-page="dengue"/);
-  assert.doesNotMatch(manifest,/03l-client-d331-status|03-n1b1-trusted-event|04-n1b2b-mock/);
-  assert.match(d331,/D331 N1-C1: OFFLINE-ONLY/);
+  assert.match(manifest,/03l-client-d331-status/);
+  assert.doesNotMatch(manifest,/03-n1b1-trusted-event|04-n1b2b-mock/);
+  assert.match(d331,/D331 N1-C2C-A: Inert Native26 source partial/);
   const foundation=fs.readFileSync(path.join(REPO,'src/dengue/00-g1a-foundation.gs'),'utf8');
   assert.match(foundation,/var D331_G1A_ENABLED = false;/);
 });

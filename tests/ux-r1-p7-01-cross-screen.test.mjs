@@ -22,10 +22,10 @@ const MODAL_IDS=[
 const ADMIN_MODAL_IDS=['userModal','masterDataModal','areaModal','contentModal'];
 const WORKSPACES=['overview','settings','users','master','areas','content','audit'];
 
-test('P7-01 Native25 uses 8 GS, 16 ordered native HTML and one Index; legacy OneClick untouched',()=>{
+test('P7-01 Native26 uses 8 GS, 17 ordered native HTML and one Index; legacy OneClick untouched',()=>{
   assert.equal(GAS_SERVER_SOURCES.length,8);
-  assert.equal(GAS_HTML_SOURCES.length,16);
-  assert.equal(GAS_SERVER_SOURCES.length+GAS_HTML_SOURCES.length+1,25);
+  assert.equal(GAS_HTML_SOURCES.length,17);
+  assert.equal(GAS_SERVER_SOURCES.length+GAS_HTML_SOURCES.length+1,26);
   assert.equal(GAS_HTML_SOURCES[0],'src/web/00-document-head.html');
   assert.equal(GAS_HTML_SOURCES.at(-1),'src/web/04-browser-app.html');
   assert.ok(GAS_HTML_SOURCES.includes('src/web/03-modals.html'));

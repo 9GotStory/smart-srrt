@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * D331 N1-C2B: deterministic, strictly OFFLINE Native26 integration preview.
+ * D331 N1-C2B/C2C-A: deterministic, strictly OFFLINE Native26 source-shape check.
  * Does not stage or generate files, import Google clients, execute Apps Script,
- * modify the live Native25 source manifest, access data or deploy.
+ * modify the current Native26 source manifest, access data or deploy.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,7 @@ const FOUNDATION='src/dengue/00-g1a-foundation.gs';
 const LAYOUT='src/web/02-app-layout.html';
 const AUTH='src/web/03c-client-auth.html';
 const FINAL='src/web/04-browser-app.html';
-const EXPECTED_STATUS_BLOB='e048ac0029e52e98733bb12c89f3dc67bf2e4065';
+const EXPECTED_STATUS_BLOB='0b0ab1342ec1caf7fd049ec7c62887965451954e';
 const EXPECTED_FOUNDATION_BLOB='916ca88f76fc5a9b3b7f20bd6037d3aa58a6f97d';
 const PAGE_ORDER=Object.freeze(['dashboard','records','reporter','admin','library']);
 const EXPECTED_SERVER=Object.freeze([
@@ -45,6 +45,7 @@ const EXPECTED_HTML=Object.freeze([
   'src/web/03i-client-report-actions.html',
   'src/web/03j-client-report-job.html',
   'src/web/03k-client-report-generation.html',
+  STATUS,
   FINAL
 ]);
 function deny(){throw new Error('D331_N1C2B_OFFLINE_PREVIEW_DENIED');}
@@ -62,10 +63,10 @@ function stringSource(readSource,name){
   return content;
 }
 function expectedCandidateOrder(){
-  return Object.freeze([...EXPECTED_HTML.slice(0,-1),STATUS,FINAL]);
+  return Object.freeze([...EXPECTED_HTML]);
 }
 /**
- * Pure read-only in-memory preview. Optional injectable sources/order support
+ * Pure read-only in-memory compatibility check. Optional injectable sources/order support
  * synthetic negative tests; none is a real Google or deployment attestation.
  */
 export function inspectOfflineNative26({
@@ -99,7 +100,8 @@ export function inspectOfflineNative26({
   // Script Properties, runtime calls and real user/clinical data are absent.
   const candidateIndex=candidateOrder.map(name=>
     "<?!= include('"+path.parse(name).name+"') ?>").join('');
-  const currentIndex=htmlSources.map(name=>
+  // Compare the registered inert Native26 source with the historical Native25 layout.
+  const currentIndex=htmlSources.filter(name=>name!==STATUS).map(name=>
     "<?!= include('"+path.parse(name).name+"') ?>").join('');
   if(candidateIndex===currentIndex||candidateIndex.includes('\n')||
      candidateIndex.split("<?!= include('").length!==18 ||
@@ -114,8 +116,8 @@ export function inspectOfflineNative26({
     candidateCount:26,
     candidateServerFiles:8,
     candidateHtmlPartials:17,
-    currentNativeCount:25,
-    currentLiveSourceManifest:'UNCHANGED_BY_PREVIEW',
+    currentNativeCount:26,
+    currentLiveSourceManifest:'NATIVE26_INERT_SOURCE_ONLY',
     d331Feature:'OFF',
     newD331PageRegistered:false,
     actualGoogleBinding:'NOT_ATTESTED',
@@ -127,7 +129,7 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
     if(process.argv.length!==2)deny();
     inspectOfflineNative26();
     console.log('D331_N1C2B_OFFLINE_NATIVE26_CANDIDATE=PASS');
-    console.log('NATIVE25_MANIFEST=UNCHANGED; D331_FEATURE=OFF');
+    console.log('NATIVE26_MANIFEST=INERT_SOURCE_ONLY; D331_FEATURE=OFF');
     console.log('D331_GOOGLE_BINDING=NOT_ATTESTED; D331_STAGE_DEPLOY=HOLD');
   }catch{
     // Never print user-controlled source, identifiers, paths or exception text.
