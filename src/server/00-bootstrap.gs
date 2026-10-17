@@ -199,7 +199,7 @@ function doGet(e) {
 
 function include(filename) {
   // GS-S1: HTML Service requires a public include(), so restrict to trusted native partials.
-  var trusted = ["00-document-head","01-styles","02-app-layout","03-modals","03a-dashboard-mobile","03b-client-core","03c-client-auth","03d-client-dashboard","03e-client-dashboard-export","03f-client-event-controls","03g-client-event-history","03h-client-event-records","03i-client-report-actions","03j-client-report-job","03k-client-report-generation","04-browser-app"];
+  var trusted = ["00-document-head","01-styles","02-app-layout","03-modals","03a-dashboard-mobile","03b-client-core","03c-client-auth","03d-client-dashboard","03e-client-dashboard-export","03f-client-event-controls","03g-client-event-history","03h-client-event-records","03i-client-report-actions","03j-client-report-job","03k-client-report-generation","03l-client-d331-status","04-browser-app"];
   if (typeof filename !== 'string' || trusted.indexOf(filename) < 0) {
     throw new Error('ไม่อนุญาตให้โหลดไฟล์ HTML นี้');
   }
