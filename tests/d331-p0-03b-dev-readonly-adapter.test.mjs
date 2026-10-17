@@ -87,7 +87,7 @@ function setup(options={}){
  const props={getProperty(k){
    trace.props++;
    assert.equal(k,'DATABASE_SPREADSHEET_ID');
-   return options.propertyId??SPREADSHEET;
+   return Object.hasOwn(options,'propertyId')?options.propertyId:SPREADSHEET;
  }};
  const mockDb={getId:()=>options.actualDatabaseId??SPREADSHEET,
   getSheetByName:n=>sheets[n]||null};
