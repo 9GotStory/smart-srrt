@@ -17,8 +17,103 @@
       else buttons.push(`<button class="btn gray" onclick='closeEventFlow(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิดเหตุการณ์</button>`);
       buttons.push(`<button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`);
     }
+    if(roleCanRecord())buttons.push(`<button type="button" class="btn light" onclick="openDengueP020Mock(${i})">ดูตัวอย่าง 3-3-1</button>`);
     return buttons.join(' ')||'-'
   }
+
+  // P0-20: presentation-only adapter. It uses the same five count keys
+  // returned by getDengueWorkspace, but NEVER calls GAS or reads D331 rows.
+  // Existing original Records event object is only an in-memory selection fence.
+  let d331P020Epoch_=0,d331P020Pending_=false,d331P020Selection_=null;
+  const d331P020CountKeys_=['cases','plans','actions','surveys','followups'];
+
+  function d331P020ValidateCounts_(counts){
+    if(!counts||typeof counts!=='object'||Array.isArray(counts)||
+       Object.keys(counts).length!==5||
+       Object.keys(counts).some(k=>!d331P020CountKeys_.includes(k)))
+      throw new Error('D331_P020_INVALID_DTO');
+    const result={};
+    for(const k of d331P020CountKeys_){
+      if(!Object.prototype.hasOwnProperty.call(counts,k)||
+         !Number.isSafeInteger(counts[k])||counts[k]<0||counts[k]>500)
+        throw new Error('D331_P020_INVALID_DTO');
+      result[k]=counts[k];
+    }
+    return result;
+  }
+
+  // Pure normalizer for the P0-19 Backend read-only contract. Intentionally
+  // NOT called by the mock UI; approval for a real RPC is a separate gate.
+  function d331P020ValidateBackendDto_(reply,expectedEventId){
+    if(!reply||typeof reply!=='object'||Array.isArray(reply)||
+       Object.keys(reply).length!==9||
+       Object.keys(reply).some(k=>!['status','eventId','revision','areaId',
+         'counts','slaAssessment','clinicalPolicyApproved','canWrite','canEnable'].includes(k))||
+       reply.status!=='READ_ONLY'||typeof expectedEventId!=='string'||
+       !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(expectedEventId)||
+       reply.eventId!==expectedEventId||
+       !Number.isSafeInteger(reply.revision)||reply.revision<1||
+       typeof reply.areaId!=='string'||!reply.areaId.trim()||
+       reply.areaId!==reply.areaId.trim()||
+       reply.slaAssessment!=='NOT_EVALUATED'||
+       reply.clinicalPolicyApproved!==false||
+       reply.canWrite!==false||reply.canEnable!==false)
+      throw new Error('D331_P020_INVALID_DTO');
+    return d331P020ValidateCounts_(reply.counts);
+  }
+
+  function d331P020MockRead_(){
+    // Pure fixture: same COUNT shape, different status from the real RPC.
+    // It is NEVER joined to the selected event or Google Sheets.
+    return Promise.resolve({status:'SYNTHETIC_ONLY',
+      counts:{cases:1,plans:1,actions:2,surveys:1,followups:0}});
+  }
+  function d331P020Reset_(){
+    ++d331P020Epoch_;d331P020Pending_=false;d331P020Selection_=null;
+    const panel=el('d331-p020-mock-panel'),summary=el('d331-p020-summary');
+    if(panel)panel.hidden=true;
+    if(summary)summary.hidden=true;
+    for(const k of d331P020CountKeys_){
+      const cell=el('d331-p020-'+k);
+      if(cell)cell.textContent='—';
+    }
+    uiSetSectionState('d331-p020-summary','d331-p020-status','idle','');
+  }
+  async function openDengueP020Mock(i){
+    if(d331P020Pending_||!Number.isSafeInteger(i)||i<0||
+       !currentUser||!token||!roleCanRecord()||!Array.isArray(allData)||
+       i>=allData.length||!allData[i])return;
+    const selected=allData[i],user=currentUser,session=token;
+    const epoch=++d331P020Epoch_;
+    const panel=el('d331-p020-mock-panel'),summary=el('d331-p020-summary');
+    if(!panel||!summary)return;
+    d331P020Pending_=true;d331P020Selection_=selected;
+    panel.hidden=false;summary.hidden=true;
+    uiSetSectionState('d331-p020-summary','d331-p020-status',
+      'loading','กำลังเตรียมตัวอย่างข้อมูลจำลอง...');
+    const current=()=>epoch===d331P020Epoch_&&d331P020Selection_===selected&&
+      currentUser===user&&token===session&&roleCanRecord()&&allData[i]===selected;
+    try{
+      const reply=await d331P020MockRead_();
+      if(!current())return;
+      if(!reply||reply.status!=='SYNTHETIC_ONLY'||Object.keys(reply).length!==2)
+        throw new Error('D331_P020_INVALID_DTO');
+      const counts=d331P020ValidateCounts_(reply.counts);
+      for(const k of d331P020CountKeys_)el('d331-p020-'+k).textContent=String(counts[k]);
+      summary.hidden=false;
+      const empty=d331P020CountKeys_.every(k=>counts[k]===0);
+      uiSetSectionState('d331-p020-summary','d331-p020-status',empty?'empty':'ready',
+        empty?'ตัวอย่างว่าง — ไม่มีรายการจำลอง':'ตัวอย่างจำลองพร้อมแสดง (ไม่ใช่ข้อมูลของเหตุการณ์จริง)');
+    }catch(_){
+      if(!current())return;
+      summary.hidden=true;
+      uiSetSectionState('d331-p020-summary','d331-p020-status',
+        'error','ไม่สามารถแสดงตัวอย่างได้');
+    }finally{
+      if(current())d331P020Pending_=false;
+    }
+  }
+
   function closeEventFlow(eventId,revision){
     openEventActionDialog('close',eventId,revision)
   }
@@ -121,7 +216,7 @@
   }
 
   function renderTables(){
-    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
+    if(!currentUser){d331P020Reset_();el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
     const visibleRecords=filteredRecordEntries();
