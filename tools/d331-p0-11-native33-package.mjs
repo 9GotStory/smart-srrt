@@ -27,7 +27,7 @@ const native26=[...native25,'03l-client-d331-status.html'].sort();
 
 /** In-memory only. Syntactic source compatibility, NOT runtime authorization. */
 export function inspectNative33Candidate({
- native=GAS_SERVER_SOURCES,html=GAS_HTML_SOURCES,
+ native=CURRENT_NATIVE_SERVER,html=GAS_HTML_SOURCES,
  added=CANDIDATE_D331_DEPENDENCIES,
  read=filename=>fs.readFileSync(path.join(ROOT,filename))
 }={}){
@@ -37,16 +37,17 @@ export function inspectNative33Candidate({
  // Requires a second, separate source-only validator to prove flags remain OFF.
  try{inspectP010Candidate({native,html,added,read:name=>read(name).toString('utf8')});}
  catch{deny();}
- const base=buildGasMultiFileEntries();
- if(base.size!==26)deny();
- const all=new Map(base);
+ // Native33 is now registered in canonical source-only manifest. Verify
+ // all seven candidate files match the canonical builder byte-for-byte.
+ const all=buildGasMultiFileEntries();
+ if(all.size!==EXPECTED_COUNT)deny();
  for(const filename of added){
    const name=basename(filename);
-   if(!/^[\w-]+\.gs$/.test(name)||all.has(name))deny();
+   if(!/^[\w-]+\.gs$/.test(name)||!all.has(name))deny();
    let bytes;
    try{bytes=read(filename);}catch{deny();}
-   if(!Buffer.isBuffer(bytes)||!bytes.length)deny();
-   all.set(name,bytes);
+   if(!Buffer.isBuffer(bytes)||!bytes.length||
+      !all.get(name).equals(bytes))deny();
  }
  if(all.size!==EXPECTED_COUNT||
     [...all.keys()].filter(x=>x.endsWith('.gs')).length!==15||
@@ -57,7 +58,7 @@ export function inspectNative33Candidate({
  return {status:Object.freeze({
    preview:'NATIVE33_OFFLINE_READY',serverFiles:15,htmlFiles:18,
    candidateFiles:33,sourceFeature:'OFF',
-   runtimeManifest:'UNCHANGED_NATIVE26',legacyGuardedDeploy:'UNCHANGED',
+   runtimeManifest:'REGISTERED_NATIVE33_SOURCE_ONLY',legacyGuardedDeploy:'UNCHANGED',
    rollbackMode:'BACKUP_ONLY_NO_AUTO_RESTORE',
    canPush:false,canUpdateDeployment:false,canEnableD331:false
  }),entries:all,serverPushOrder:Object.freeze(order)};
