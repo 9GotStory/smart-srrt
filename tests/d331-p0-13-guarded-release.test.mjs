@@ -169,3 +169,90 @@ test('release does not register a new public D331 RPC or change legacy deploy to
  assert.doesNotMatch(manifest,/13-p0-08-dev-readonly-preflight/);
  assert.doesNotMatch(old,/d331-p0-13/);
 });
+
+
+function operatorFixture(){
+ const base=fs.mkdtempSync(path.join(os.tmpdir(),'srrt-p013-operator-'));
+ const bin=path.join(base,'bin'),repo=path.join(base,'repo'),backup=path.join(base,'backup');
+ fs.mkdirSync(bin);fs.mkdirSync(path.join(repo,'.git'),{recursive:true});fs.mkdirSync(backup);
+ const calls=path.join(base,'calls.txt'),clasp=path.join(bin,'mock-clasp');
+ fs.writeFileSync(clasp,'#!/bin/sh\nprintf "%s\\n" "$*" >> "$MOCK_CLASP_CALLS"\nif [ "$1" = "--version" ]; then echo "3.3.0";exit 0;fi\nexit 98\n',{mode:0o700});
+ const defaults={
+  PATH:bin+path.delimiter+process.env.PATH,
+  HOME:base,MOCK_CLASP_CALLS:calls,
+  SMART_SRRT_REPO:repo,SMART_SRRT_P013_PRIVATE_BACKUP_DIR:backup,
+  SMART_SRRT_APPROVED_SOURCE_SHA:SHA,SMART_SRRT_SCRIPT_ID:SCRIPT,
+  SMART_SRRT_DEPLOYMENT_ID:DEPLOY,SMART_SRRT_CLASP:clasp,
+  SMART_SRRT_P013_READONLY_APPROVED:'',
+  SMART_SRRT_P013_PRIOR_VERSION_REVIEWED:'',
+  SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA:'',
+  SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA:'',
+  SMART_SRRT_P013_PRIOR_DEPLOYMENT_VERSION:''
+ };
+ return {
+  run: (mode,extra={})=>spawnSync('bash',[sh,mode],{
+   encoding:'utf8',timeout:5000,env:{...defaults,...extra}
+  }),
+  calls:()=>fs.existsSync(calls)?fs.readFileSync(calls,'utf8').trim():'',
+  cleanup:()=>fs.rmSync(base,{recursive:true,force:true})
+ };
+}
+
+
+test('operator --verify denies without explicit read-only approval before git or cloud',()=>{
+ const fake=operatorFixture();
+ try{
+  const r=fake.run('--verify',{SMART_SRRT_P013_READONLY_APPROVED:''});
+  assert.notEqual(r.status,0);
+  assert.match(r.stderr,/READONLY_APPROVAL_REQUIRED/);
+  assert.equal(fake.calls(),'--version');
+ }finally{fake.cleanup();}
+});
+test('operator --deploy denies without a separate exact-SHA approval before git or cloud',()=>{
+ const fake=operatorFixture();
+ try{
+  for(const e of [
+   {SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA:''},
+   {SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA:'b'.repeat(40)},
+   {SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA:SHA,SMART_SRRT_P013_PRIOR_VERSION_REVIEWED:'NO'}
+  ]){
+   const r=fake.run('--deploy',e);
+   assert.notEqual(r.status,0);
+   assert.match(r.stderr,/SEPARATE_DEV_DEPLOY_APPROVAL_REQUIRED/);
+   assert.ok(fake.calls().split('\n').every(x=>x==='--version'));
+  }
+ }finally{fake.cleanup();}
+});
+test('operator --rollback-version denies without its own independent exact-SHA approval',()=>{
+ const fake=operatorFixture();
+ try{
+  for(const e of [
+   {SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA:''},
+   {SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA:'b'.repeat(40)},
+   {SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA:SHA,SMART_SRRT_P013_PRIOR_VERSION_REVIEWED:'NO'}
+  ]){
+   const r=fake.run('--rollback-version',e);
+   assert.notEqual(r.status,0);
+   assert.match(r.stderr,/SEPARATE_REMOTE_ROLLBACK_APPROVAL_REQUIRED/);
+   assert.ok(fake.calls().split('\n').every(x=>x==='--version'));
+  }
+ }finally{fake.cleanup();}
+});
+test('missing or fabricated prior deployment version denies before any git fetch or cloud action',()=>{
+ const fake=operatorFixture();
+ try{
+  for(const mode of ['--deploy','--rollback-version']){
+   for(const version of ['', '0', 'abc', '10;rm', '999999999']){
+    const r=fake.run(mode,{
+     SMART_SRRT_P013_PRIOR_VERSION_REVIEWED:'YES',
+     SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA:SHA,
+     SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA:SHA,
+     SMART_SRRT_P013_PRIOR_DEPLOYMENT_VERSION:version
+    });
+    assert.notEqual(r.status,0);
+    assert.match(r.stderr,/EXACT_PRIOR_DEPLOYMENT_VERSION_REQUIRED/);
+    assert.ok(fake.calls().split('\n').every(x=>x==='--version'));
+   }
+  }
+ }finally{fake.cleanup();}
+});
