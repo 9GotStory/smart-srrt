@@ -126,6 +126,13 @@ fi
  stop 'ROLLBACK_TARGET_METADATA_UNAVAILABLE'
 grep -Fq -- "$DEPLOY_ID" "$BACKUP/p013-rollback-before.txt" ||
  stop 'ROLLBACK_EXISTING_DEPLOYMENT_NOT_FOUND'
+# Never overwrite another operator's post-release deployment update.
+# A failed/unknown initial update has no sealed after-inventory; require
+# manual reconciliation in that case, not an automatic speculative rollback.
+[[ -f "$BACKUP/p013-deployments.after.txt" ]] ||
+ stop 'NO_VERIFIED_POST_DEPLOY_BASELINE_MANUAL_RECONCILIATION_REQUIRED'
+cmp -s "$BACKUP/p013-deployments.after.txt" "$BACKUP/p013-rollback-before.txt" ||
+ stop 'POST_DEPLOYMENT_DRIFT_NO_ROLLBACK'
 # Version number was manually verified by the operator in original Deploy UI.
 (cd "$BACKUP" && "$CLASP" update-deployment "$DEPLOY_ID" \
  --versionNumber "$SMART_SRRT_P013_PRIOR_DEPLOYMENT_VERSION" \
