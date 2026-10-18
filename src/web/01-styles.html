@@ -1116,6 +1116,51 @@ body{background:#f4f7fb}
   .app #page-records .srrt-d331-preview__disabled-actions button{width:100%}
 }
 
+/* P0-20: strictly mock-only per-Records presentation, no patient data. */
+.app #page-records .srrt-d331-p020{
+  margin-top:1rem;
+  border:1px solid var(--border,#cbd5e1);
+  border-radius:1rem;
+  padding:1rem;
+  background:var(--card,#fff);
+}
+.app #page-records .srrt-d331-p020[hidden],
+.app #page-records .srrt-d331-p020__grid[hidden]{display:none!important}
+.app #page-records .srrt-d331-p020__head{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;gap:.75rem;
+}
+.app #page-records .srrt-d331-p020 h4{margin:0 0 .4rem;font-size:1.05rem}
+.app #page-records .srrt-d331-p020__head p,
+.app #page-records .srrt-d331-p020__foot{margin:0;color:var(--muted,#64748b)}
+.app #page-records .srrt-d331-p020__label{
+  padding:.35rem .6rem;border-radius:99px;
+  border:1px solid var(--border,#cbd5e1);font-size:.8rem;
+}
+.app #page-records .srrt-d331-p020__note{
+  border-left:3px solid var(--muted,#64748b);
+  padding:.65rem .85rem;
+  background:var(--bg,#f3f6f8);
+}
+.app #page-records .srrt-d331-p020__grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));
+  gap:.65rem;margin:.8rem 0;
+}
+.app #page-records .srrt-d331-p020__grid>div{
+  border:1px solid var(--border,#cbd5e1);
+  border-radius:.7rem;padding:.75rem;display:grid;gap:.35rem;
+}
+.app #page-records .srrt-d331-p020__grid strong{
+  font-size:1.45rem;font-variant-numeric:tabular-nums;
+}
+.app #page-records .srrt-d331-p020__grid span{color:var(--muted,#64748b);font-size:.83rem}
+.app #page-records #d331-p020-status{margin:.5rem 0;min-height:1.4em}
+@media(max-width:560px){
+  .app #page-records .srrt-d331-p020__label{order:-1}
+  .app #page-records .srrt-d331-p020 #d331-p020-reset{width:100%}
+}
+
 /* UX-R2 Tailwind CSS v4: prefixed, Preflight disabled */
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer theme{:root,:host{--tw-spacing:.25rem}}@layer base,components;@layer utilities{.tw\:flex{display:flex}.tw\:items-center{align-items:center}.tw\:gap-4{gap:calc(var(--tw-spacing) * 4)}}
