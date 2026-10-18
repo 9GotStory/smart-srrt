@@ -12,9 +12,9 @@ const manifest=fs.readFileSync(path.join(ROOT,'tools/native-sources.mjs'),'utf8'
 const pkg=JSON.parse(fs.readFileSync(path.join(ROOT,'package.json'),'utf8'));
 
 test('R2-03 native source is canonical, One-Click is frozen and not an active build target',()=>{
-  assert.equal(GAS_SERVER_SOURCES.length,15);
+  assert.equal(GAS_SERVER_SOURCES.length,8);
   assert.equal(GAS_HTML_SOURCES.length,17);
-  assert.equal(buildGasMultiFileEntries().size,33);
+  assert.equal(buildGasMultiFileEntries().size,26);
   assert.equal(path.basename(GAS_HTML_SOURCES[4]),'03a-dashboard-mobile.html');
   assert.equal(path.basename(GAS_HTML_SOURCES.at(-1)),'04-browser-app.html');
   assert.ok(renderGasIndexOffline(buildGasMultiFileEntries()).includes(Buffer.from('srrtDashboardCards')));
