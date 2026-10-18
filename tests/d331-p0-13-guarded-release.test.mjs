@@ -155,6 +155,8 @@ test('real deployment and rollback require two distinct SHA-specific human appro
  assert.match(source,/verifyP013PrivateSnapshot/);
  assert.match(source,/FRESH_REMOTE_SOURCE_DRIFT|REMOTE_SOURCE_DRIFT_NO_PUSH/);
  assert.match(source,/--versionNumber/);
+ assert.match(source,/POST_DEPLOYMENT_DRIFT_NO_ROLLBACK/);
+ assert.match(source,/NO_VERIFIED_POST_DEPLOY_BASELINE_MANUAL_RECONCILIATION_REQUIRED/);
  const executable=source.split('\n').filter(line=>!/^\s*#/.test(line)).join('\n');
  assert.doesNotMatch(executable,/\bclasp\s+(?:create-deployment|create-script)/);
  assert.doesNotMatch(executable,/\bclasp\s+(?:delete-deployment|delete-script)/);
