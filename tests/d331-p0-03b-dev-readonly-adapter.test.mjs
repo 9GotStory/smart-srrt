@@ -239,7 +239,7 @@ test('P0-05 exact seven-tab v2 contract is exercised before any Event/Session ro
  assert.equal(state.read().mode,'read');
  // All seven D331 tabs are read by row 1 only; only the authority/grant
  // tab can subsequently be used for data-row reads.
- assert.equal(state.trace.ranges.filter(([r,,,,])=>r===1).length,11);
+ assert.equal(state.trace.ranges.filter(range=>range[0]===1).length,10);
 });
 test('missing, extra or reordered headers in any of seven D331 tabs fail closed',()=>{
  const ctx=setup().ctx;
