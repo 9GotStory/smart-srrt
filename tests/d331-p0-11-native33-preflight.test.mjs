@@ -173,3 +173,37 @@ test('guarded script contains no executable clasp push, deployment or rollback',
  assert.match(executable,/sha256sum rollback-source-and-metadata\.tgz/);
  assert.match(executable,/SMART_SRRT_APPROVED_SOURCE_SHA/);
 });
+
+test('staged manifest must be the exact remote backup file',()=>{
+ const f=fixture();
+ try{
+  deny(()=>preparePrivateStage(f.work,{manifestFrom:path.join(f.work,'wrong.json')}));
+  assert.equal(fs.existsSync(path.join(f.work,'stage')),false);
+ }finally{f.cleanup();}
+});
+test('synthetic rollback tar archive survives local extraction byte-for-byte',()=>{
+ const f=fixture('NATIVE26');
+ try{
+  fs.writeFileSync(path.join(f.work,'deployments.before.txt'),'TEST_ONLY_DEPLOYMENT');
+  fs.writeFileSync(path.join(f.work,'versions.before.txt'),'TEST_ONLY_VERSION');
+  const name=path.join(f.work,'local-restore-check.tgz');
+  let r=spawnSync('tar',['-czf',name,'-C',f.work,
+    'remote','deployments.before.txt','versions.before.txt'],
+    {encoding:'utf8',timeout:10000});
+  assert.equal(r.status,0,r.stderr);
+  const extracted=path.join(f.work,'restored');
+  fs.mkdirSync(extracted,{mode:0o700});
+  r=spawnSync('tar',['-xzf',name,'-C',extracted],
+    {encoding:'utf8',timeout:10000});
+  assert.equal(r.status,0,r.stderr);
+  assert.equal(verifyNativeBackup(path.join(extracted,'remote')).layout,'NATIVE26');
+  for(const filename of fs.readdirSync(f.remote)){
+   assert.deepEqual(fs.readFileSync(path.join(f.remote,filename)),
+    fs.readFileSync(path.join(extracted,'remote',filename)));
+  }
+  for(const filename of ['deployments.before.txt','versions.before.txt']){
+   assert.deepEqual(fs.readFileSync(path.join(f.work,filename)),
+    fs.readFileSync(path.join(extracted,filename)));
+  }
+ }finally{f.cleanup();}
+});
