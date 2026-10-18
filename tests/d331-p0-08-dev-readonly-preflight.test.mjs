@@ -31,7 +31,7 @@ function setup(options={}) {
    const h=name===options.badHeader?[...original].reverse():original;
    const populated=name===options.extraHeader?[...h,'Unexpected']:h;
    sheets[name]={
-     getLastRow:()=>1,
+     getLastRow:()=>options.simulatedPopulatedRows?400:1,
      getLastColumn:()=>populated.length,
      getRange:(row,col,height,width)=>{
        trace.headerReads.push({name,row,col,height,width});
@@ -46,7 +46,7 @@ function setup(options={}) {
   getProperty:name=>{
     assert.equal(name,'DATABASE_SPREADSHEET_ID');
     trace.propertyReads++;
-    return options.propertyValue??ID;
+    return Object.hasOwn(options,'propertyValue')?options.propertyValue:ID;
   },
   setProperty:()=>{trace.writes++;throw Error('Unexpected Script Property write');}
  })};
@@ -106,7 +106,7 @@ test('missing approved DEV spreadsheet identifier denies before Google service c
  assert.equal(s.trace.propertyReads,0);
  assert.equal(s.trace.opens,0);
 });
-test('missing configured Script Property fails before opening Spreadsheet',()=>{
+test('mismatched configured Script Property fails before opening Spreadsheet',()=>{
  const s=deny({propertyValue:'WRONG_VALUE'});
  assert.equal(s.trace.propertyReads,1);
  assert.equal(s.trace.opens,0);
@@ -135,4 +135,19 @@ test('schema version mismatch fails closed without reading records',()=>{
  s.ctx.D331_P002A_SCHEMA_VERSION_=1;
  assert.throws(()=>s.run(),/D331_DEV_PREFLIGHT_UNAVAILABLE/);
  assert.equal(s.trace.rowReads,0);
+});
+
+test('missing or blank Script Property fails before opening spreadsheet',()=>{
+ for(const value of [null,'']){
+  const s=deny({propertyValue:value});
+  assert.equal(s.trace.propertyReads,1);
+  assert.equal(s.trace.opens,0);
+ }
+});
+test('preflight reads no clinical records when existing tabs report populated rows',()=>{
+ const s=setup({simulatedPopulatedRows:true});
+ assert.equal(s.run().status,'DEV_SCHEMA_HEADERS_PASS');
+ assert.equal(s.trace.headerReads.length,10);
+ assert.equal(s.trace.rowReads,0);
+ assert.equal(s.trace.writes,0);
 });
