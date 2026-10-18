@@ -135,8 +135,7 @@ export function inspectP010Candidate({
     canStage:false,canDeploy:false,canWrite:false
   });
 }
-if(process.argv[1]&&import.meta.url===fileURLToPath(import.meta.url) &&
-   process.argv[1]===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{
     const status=inspectP010Candidate();
     Object.entries(status).forEach(([key,value])=>{
