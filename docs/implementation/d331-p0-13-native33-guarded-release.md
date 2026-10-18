@@ -43,7 +43,7 @@ SMART_SRRT_P013_READONLY_APPROVED=YES \
 
 A **future, independently authorized** Development deployment needs **both** `SMART_SRRT_P013_DEV_DEPLOY_APPROVED_SHA` equal to the checked exact main SHA and `SMART_SRRT_P013_PRIOR_VERSION_REVIEWED=YES` plus `SMART_SRRT_P013_PRIOR_DEPLOYMENT_VERSION` exact positive version, *before* `--deploy`. Operator-only secrets/IDs must remain outside GitHub. It also reads fresh remote source/deployment/version metadata and denies any drift from the reviewed private backup before `clasp push`. Once `push` starts, Apps Script mutable HEAD can change, so interrupted operations must **stop for manual reconciliation**; the tool does not blindly retry or claim atomic rollout.
 
-A separate `--rollback-version` requires `SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA` equal to the reviewed main SHA, the same verified original version, and separate Product Owner authorization. It repoints the **existing Web App** only; it **does not restore mutable HEAD**, restore patient data, or assert application-level success without a new browser UAT. The local archive extraction drill is not proof of remote recovery.
+A separate `--rollback-version` requires `SMART_SRRT_P013_DEV_ROLLBACK_APPROVED_SHA` equal to the reviewed main SHA, the same verified original version, and separate Product Owner authorization. It repoints the **existing Web App** only, and only if the current deployment inventory matches the sealed post-deployment inventory (otherwise HOLD for manual reconciliation). It **does not restore mutable HEAD**, restore patient data, or assert application-level success without a new browser UAT. The local archive extraction drill is not proof of remote recovery.
 
 ## Outstanding runtime/test blockers
 
