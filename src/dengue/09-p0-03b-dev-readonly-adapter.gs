@@ -1,6 +1,8 @@
 /**
  * Smart SRRT D331 P0-03B — source-only candidate of DEV read-only GAS adapter.
- * NOT registered in native manifest, NO RPC, NO sheet writes or migrations.
+ * Private Native33 backend; P0-19 adds a public RPC that remains strictly
+ * blocked by hard-coded OFF flags, binding and grant/policy approval.
+ * No sheet writes or migrations.
  * FEATURE OFF, no approved DEV ID or disease policy in source by default.
  * Existing Smart SRRT Auth session-v2 semantics are rechecked against pinned DB.
  * `getDb_`, `getSheet_`, `getUserByToken_` and legacy first-hit Event
@@ -108,7 +110,7 @@ function d331P003bGrant_(sheet,userId,eventId,operation,now,policyRevision) {
       g.RevokedAtUTC||g.RevokedByUserID)d331P003bDeny_();
   return g;
 }
-function d331P003bReadOnly_(sessionToken,eventId) {
+function d331P003bAuthorizedContext_(sessionToken,eventId) {
   // A future source change + binding/clinical/access review is mandatory.
   // A browser cannot turn the hard-coded feature OFF to ON.
   if (D331_G1A_ENABLED!==true||D331_P003B_ENABLED_!==true)
@@ -154,7 +156,60 @@ function d331P003bReadOnly_(sessionToken,eventId) {
       D331_P003B_APPROVED_DISEASE_LABELS_,
       'dengue.case.read',false,undefined);
     if (allowed.areaId!==grant.AreaID)d331P003bDeny_();
+    // Internal-only context: NEVER return a Spreadsheet/Sheet handle through
+    // a google.script.run exposed function or allow the caller to supply one.
     return {eventId:allowed.eventId,revision:allowed.revision,
-      areaId:allowed.areaId,mode:'read'};
+      areaId:allowed.areaId,mode:'read',tables:d331Sheets};
   } catch(e) {d331P003bDeny_();}
+}
+
+/** Historical metadata contract: public payload contains no sheet handles. */
+function d331P003bReadOnly_(sessionToken,eventId) {
+  var context=d331P003bAuthorizedContext_(sessionToken,eventId);
+  return {eventId:context.eventId,revision:context.revision,
+    areaId:context.areaId,mode:'read'};
+}
+
+/**
+ * P0-19: bounded read-only EventID-column aggregation AFTER server grants.
+ * No full-domain row payloads, names, narrative, evidence or raw user data.
+ * Stage only; D331_G1A_ENABLED and D331_P003B_ENABLED_ remain false.
+ */
+function d331P019CountForEvent_(sheet,eventId) {
+  var rows=sheet.getLastRow()-1,limit=10000,matchCount=0;
+  if(!Number.isInteger(rows)||rows<0||rows>limit)d331P003bDeny_();
+  if(!rows)return 0;
+  // All 5 domain tables have EventID in their second column.
+  var values=sheet.getRange(2,2,rows,1).getValues();
+  if(!Array.isArray(values)||values.length!==rows)d331P003bDeny_();
+  values.forEach(function(row){
+    if(!Array.isArray(row)||row.length!==1)d331P003bDeny_();
+    if(row[0]===eventId)matchCount++;
+  });
+  // Limit one-event data volume without querying/returning its content.
+  if(matchCount>500)d331P003bDeny_();
+  return matchCount;
+}
+
+/**
+ * Public GAS RPC surface for a FUTURE authorized read-only UI.
+ * The currently deployed D331 OFF flags reject before any Google service.
+ * Returns counts only; no patient, grant, user, or ledger information.
+ */
+function getDengueWorkspace(sessionToken,eventId) {
+  try {
+    var ctx=d331P003bAuthorizedContext_(sessionToken,eventId);
+    var tables=ctx.tables;
+    var counts={
+      cases:d331P019CountForEvent_(tables.DengueCases,ctx.eventId),
+      plans:d331P019CountForEvent_(tables.DenguePlans,ctx.eventId),
+      actions:d331P019CountForEvent_(tables.DengueControlActions,ctx.eventId),
+      surveys:d331P019CountForEvent_(tables.DengueEntomology,ctx.eventId),
+      followups:d331P019CountForEvent_(tables.DengueFollowups,ctx.eventId)
+    };
+    return {status:'READ_ONLY',eventId:ctx.eventId,
+      revision:ctx.revision,areaId:ctx.areaId,counts:counts,
+      slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+      canWrite:false,canEnable:false};
+  }catch(e){d331P003bDeny_();}
 }
