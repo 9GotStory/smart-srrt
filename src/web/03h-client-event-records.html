@@ -77,7 +77,18 @@
       const cell=el('d331-p020-'+k);
       if(cell)cell.textContent='—';
     }
-    uiSetSectionState('d331-p020-summary','d331-p020-status','idle','');
+    // Historical isolated Auth/Report harnesses do not inject the optional
+    // shared state presenter. Reset must never block existing logout.
+    if(typeof uiSetSectionState==='function'){
+      uiSetSectionState('d331-p020-summary','d331-p020-status','idle','');
+    }else{
+      if(summary&&typeof summary.setAttribute==='function'){
+        summary.setAttribute('aria-busy','false');
+        summary.setAttribute('data-ui-state','idle');
+      }
+      const status=el('d331-p020-status');
+      if(status)status.textContent='';
+    }
   }
   async function openDengueP020Mock(i){
     if(d331P020Pending_||!Number.isSafeInteger(i)||i<0||
@@ -216,7 +227,7 @@
   }
 
   function renderTables(){
-    if(!currentUser){d331P020Reset_();el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
+    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();d331P020Reset_();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
     const visibleRecords=filteredRecordEntries();
