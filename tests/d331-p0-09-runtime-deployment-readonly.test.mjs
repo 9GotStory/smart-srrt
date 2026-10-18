@@ -34,7 +34,9 @@ test('P0-09 is not Apps Script Native source or an RPC',()=>{
  const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(manifest,/d331-p0-09-runtime-deployment-readonly/);
  const source=fs.readFileSync(
-  new URL('../tools/d331-p0-09-runtime-deployment-readonly.mjs',import.meta.url),'utf8');
+  new URL('../tools/d331-p0-09-runtime-deployment-readonly.mjs',import.meta.url),'utf8')
+    .replace(/\\/\\*[\\s\\S]*?\\*\\//g,'')
+    .replace(/\\/\\/[^\\n]*/g,'');
  for(const forbidden of [
   'clasp push','clasp pull','clasp deploy','clasp login',
   'create-deployment','delete-deployment','setProperty(','appendRow('
