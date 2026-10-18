@@ -256,3 +256,22 @@ test('missing or fabricated prior deployment version denies before any git fetch
   }
  }finally{fake.cleanup();}
 });
+
+
+test('P0-14 P011 exact-SHA marker writes one actual LF byte and round-trips for P013',()=>{
+ const script=fs.readFileSync(path.join(ROOT,'tools/deploy-d331-p011-preflight.sh'),'utf8');
+ const commands=script.split('\n').filter(s=>s.startsWith("printf ")&&s.includes('source-sha.txt'));
+ assert.equal(commands.length,1,'exactly one source SHA marker writer');
+ const work=fs.mkdtempSync(path.join(os.tmpdir(),'srrt-p014-marker-'));
+ try{
+  const run=spawnSync('bash',['-c',commands[0]],{
+   encoding:'utf8',timeout:3000,
+   env:{PATH:process.env.PATH,WORK:work,APPROVED_SHA:SHA}
+  });
+  assert.equal(run.status,0,run.stderr);
+  const bytes=fs.readFileSync(path.join(work,'source-sha.txt'));
+  assert.deepEqual(bytes,Buffer.from(SHA+'\n','utf8'),
+   'the exact SHA marker must end in LF (0a), not literal backslash-n (5c 6e)');
+  assert.equal(bytes.toString('utf8').trim(),SHA);
+ }finally{fs.rmSync(work,{recursive:true,force:true});}
+});
