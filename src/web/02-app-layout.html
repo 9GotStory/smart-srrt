@@ -164,6 +164,29 @@
           </div>
         </div>
       </details>
+
+      <!-- P0-20: opt-in mock-only read workspace for selected Records row.
+           No backend RPC, no real Dengue records, no clinical SLA. -->
+      <section id="d331-p020-mock-panel" class="srrt-d331-p020" aria-label="ตัวอย่างสรุป Dengue 3-3-1" hidden>
+        <div class="srrt-d331-p020__head">
+          <div>
+            <h4>สรุปงาน Dengue 3-3-1 — ตัวอย่างจำลอง</h4>
+            <p>เปิดจากแถว Records ที่เลือกเพื่อดูหน้าตาสรุปเท่านั้น ไม่อ่านข้อมูล Dengue ของเหตุการณ์นั้น</p>
+          </div>
+          <span class="srrt-d331-p020__label">Mock-only · D331 OFF</span>
+        </div>
+        <p class="srrt-d331-p020__note" role="note">จำนวนด้านล่างเป็นข้อมูลสมมติ ไม่ใช่สถิติหรือผลการควบคุมโรคจริง และยังไม่ประเมินเวลา 3-3-1</p>
+        <p id="d331-p020-status" role="status" aria-live="polite">ยังไม่ได้เปิดตัวอย่าง</p>
+        <div id="d331-p020-summary" class="srrt-d331-p020__grid" aria-busy="false" data-ui-state="idle" hidden>
+          <div><strong id="d331-p020-cases">—</strong><span>สอบสวนผู้ป่วย</span></div>
+          <div><strong id="d331-p020-plans">—</strong><span>แผนควบคุมโรค</span></div>
+          <div><strong id="d331-p020-actions">—</strong><span>การดำเนินมาตรการ</span></div>
+          <div><strong id="d331-p020-surveys">—</strong><span>สำรวจลูกน้ำ</span></div>
+          <div><strong id="d331-p020-followups">—</strong><span>การติดตามผล</span></div>
+        </div>
+        <p class="srrt-d331-p020__foot">ผลเวลา 3-3-1: รอนโยบายที่ได้รับการรับรอง · ไม่สามารถบันทึกหรือเปิดข้อมูลผู้ป่วยผ่านตัวอย่างนี้</p>
+        <button type="button" class="btn light" id="d331-p020-reset" onclick="d331P020Reset_()">ปิดตัวอย่าง</button>
+      </section>
     </section>
 
     <section id="page-reporter" class="section">
