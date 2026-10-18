@@ -41,7 +41,7 @@ export function verifyP013Candidate(){
 }
 
 /** Needs a P0-11 private preflight snapshot for the SAME exact source SHA. */
-export function verifyP013PrivateSnapshot({work,sourceSha,scriptId,deploymentId}={}){
+function verifyP013PrivateSnapshotImpl({work,sourceSha,scriptId,deploymentId}={}){
  if(typeof work!=='string'||!path.isAbsolute(work)||
     typeof sourceSha!=='string'||!SHA.test(sourceSha)||
     typeof scriptId!=='string'||!IDENT.test(scriptId)||
@@ -97,6 +97,11 @@ export function verifyP013PrivateSnapshot({work,sourceSha,scriptId,deploymentId}
   canDeployWithoutSeparateApproval:false,
   canUseClinicalData:false
  });
+}
+/** Fail closed with one stable status code, never leaked private filesystem paths. */
+export function verifyP013PrivateSnapshot(args={}){
+ try{return verifyP013PrivateSnapshotImpl(args);}
+ catch{no();}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  try{
