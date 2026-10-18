@@ -158,6 +158,20 @@
             </div>
             <p>ยังไม่มีการคำนวณเส้นตาย ผลตรงเวลา หรือเกินกำหนด</p>
           </div>
+          <!-- P0-20 offline contract preview. No live EventID, server RPC or input. -->
+          <section id="d331-p020-region" class="srrt-d331-preview__policy" aria-label="สรุปข้อมูลจำลอง Read-only" aria-busy="false" hidden>
+            <h4>ตัวอย่างการเชื่อมต่อ Backend แบบอ่านอย่างเดียว</h4>
+            <p>จำลองโครงสร้างผลลัพธ์เท่านั้น · ไม่อ่านเหตุการณ์จริง · ไม่ใช่ผลการดำเนินงาน</p>
+            <p id="d331-p020-status" role="status" aria-live="polite" hidden></p>
+            <dl aria-label="จำนวนรายการตัวอย่างห้าขั้นตอน">
+              <div><dt>สอบสวนผู้ป่วย</dt><dd id="d331-p020-cases">—</dd></div>
+              <div><dt>วางแผนควบคุมโรค</dt><dd id="d331-p020-plans">—</dd></div>
+              <div><dt>ดำเนินมาตรการ</dt><dd id="d331-p020-actions">—</dd></div>
+              <div><dt>สำรวจลูกน้ำยุงลาย</dt><dd id="d331-p020-surveys">—</dd></div>
+              <div><dt>ติดตามผล</dt><dd id="d331-p020-followups">—</dd></div>
+            </dl>
+            <p>การประเมินเกณฑ์เวลา 3-3-1: ยังไม่ประเมิน (NOT_EVALUATED)</p>
+          </section>
           <div class="srrt-d331-preview__disabled-actions" aria-label="ตัวอย่างการดำเนินการที่ยังปิดใช้งาน">
             <button type="button" disabled aria-disabled="true">เปิดข้อมูลสอบสวน</button>
             <button type="button" disabled aria-disabled="true">บันทึกข้อมูล</button>
