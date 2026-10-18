@@ -6,7 +6,6 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {GAS_SERVER_SOURCES,GAS_HTML_SOURCES} from '../tools/native-sources.mjs';
-import {CURRENT_NATIVE_SERVER} from '../tools/d331-p0-10-runtime-readiness.mjs';
 import {inspectNative33Candidate,verifyNativeBackup,preparePrivateStage}
  from '../tools/d331-p0-11-native33-package.mjs';
 
@@ -18,7 +17,7 @@ function fixture(layout='NATIVE26'){
  const work=fs.mkdtempSync(path.join(os.tmpdir(),'d331-p011-'));
  const remote=path.join(work,'remote');
  fs.mkdirSync(remote,{mode:0o700});
- const gs=layout==='NATIVE24'?CURRENT_NATIVE_SERVER.slice(0,7):CURRENT_NATIVE_SERVER;
+ const gs=layout==='NATIVE24'?GAS_SERVER_SOURCES.slice(0,7):GAS_SERVER_SOURCES;
  const html=layout==='NATIVE26'?GAS_HTML_SOURCES:
    GAS_HTML_SOURCES.filter(s=>!s.includes('03l-client-d331-status'));
  for(const source of [...gs,...html]){
@@ -39,11 +38,11 @@ test('current runtime is Native26; P011 returns an isolated 33-file candidate',(
  assert.deepEqual(after,before);
  assert.deepEqual({...status.status},{
   preview:'NATIVE33_OFFLINE_READY',serverFiles:15,htmlFiles:18,
-  candidateFiles:33,sourceFeature:'OFF',runtimeManifest:'REGISTERED_NATIVE33_SOURCE_ONLY',
+  candidateFiles:33,sourceFeature:'OFF',runtimeManifest:'UNCHANGED_NATIVE26',
   legacyGuardedDeploy:'UNCHANGED',rollbackMode:'BACKUP_ONLY_NO_AUTO_RESTORE',
   canPush:false,canUpdateDeployment:false,canEnableD331:false
  });
- assert.equal(GAS_SERVER_SOURCES.length,15);
+ assert.equal(GAS_SERVER_SOURCES.length,8);
  assert.equal(status.entries.size,33);
  assert.equal(new Set(status.serverPushOrder).size,15);
  assert.equal(status.serverPushOrder.at(-1),'13-p0-08-dev-readonly-preflight.gs');
