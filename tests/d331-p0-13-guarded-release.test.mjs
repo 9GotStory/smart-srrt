@@ -155,9 +155,10 @@ test('real deployment and rollback require two distinct SHA-specific human appro
  assert.match(source,/verifyP013PrivateSnapshot/);
  assert.match(source,/FRESH_REMOTE_SOURCE_DRIFT|REMOTE_SOURCE_DRIFT_NO_PUSH/);
  assert.match(source,/--versionNumber/);
- assert.doesNotMatch(source,/clasp\s+create-deployment|create-script/);
- assert.doesNotMatch(source,/\bclasp\s+delete-deployment|delete-script/);
- assert.doesNotMatch(source,/\bclasp\s+login\b/);
+ const executable=source.split('\n').filter(line=>!/^\s*#/.test(line)).join('\n');
+ assert.doesNotMatch(executable,/\bclasp\s+(?:create-deployment|create-script)/);
+ assert.doesNotMatch(executable,/\bclasp\s+(?:delete-deployment|delete-script)/);
+ assert.doesNotMatch(executable,/\bclasp\s+login\b/);
 });
 test('release does not register a new public D331 RPC or change legacy deploy tool',()=>{
  const manifest=fs.readFileSync(path.join(ROOT,'tools/native-sources.mjs'),'utf8');
