@@ -95,7 +95,7 @@ NODE
 # Bind this private snapshot to the exact reviewed canonical source commit.
 # P0-13 rejects any backup without this marker (earlier P0-12 snapshots remain valid
 # historical evidence but are not silently promoted as new deployment candidates).
-printf '%s\\n' "$APPROVED_SHA" > "$WORK/source-sha.txt"
+printf '%s\n' "$APPROVED_SHA" > "$WORK/source-sha.txt"
 
 # Immutable-in-practice local evidence: raw pulled files + original versions and
 # deployment inventory. Snapshot and SHA256 are for MANUAL rollback planning.
