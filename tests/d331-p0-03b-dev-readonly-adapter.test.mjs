@@ -73,7 +73,7 @@ function setup(options={}){
   AreaMaster:Array.from(ctx.D331_P003B_AREA_HEADERS_),
   D331AccessGrants:Array.from(ctx.d331P002aHeaders_('D331AccessGrants'))
  };
- for(const name of Array.from(ctx.d331P005_V2_TABS_)){
+ for(const name of Array.from(ctx.D331_P005_V2_TABS_)){
   h[name]=Array.from(ctx.d331P002aHeaders_(name));
  }
  const rows={
