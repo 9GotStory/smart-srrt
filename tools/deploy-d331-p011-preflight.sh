@@ -101,9 +101,38 @@ tar -czf "$WORK/rollback-source-and-metadata.tgz" -C "$WORK" \
   >rollback-source-and-metadata.tgz.sha256) ||
   stop 'Cannot checksum private rollback evidence'
 
+# Offline restore drill: extract only into the private backup workspace, then
+# verify every restored file byte-for-byte against the original pulled copy.
+mkdir -m 0700 "$WORK/restore-check"
+tar -xzf "$WORK/rollback-source-and-metadata.tgz" -C "$WORK/restore-check" ||
+  stop 'Local rollback archive extraction failed'
+node --input-type=module - "$WORK" <<'NODE'
+import fs from 'node:fs';
+import path from 'node:path';
+import {verifyNativeBackup} from './tools/d331-p0-11-native33-package.mjs';
+const work=process.argv[2];
+verifyNativeBackup(path.join(work,'restore-check','remote'));
+function compareTree(a,b){
+ const filesA=fs.readdirSync(a).sort(),filesB=fs.readdirSync(b).sort();
+ if(JSON.stringify(filesA)!==JSON.stringify(filesB))throw Error('ROLLBACK_FILE_SET');
+ for(const file of filesA){
+  const x=path.join(a,file),y=path.join(b,file);
+  if(!fs.readFileSync(x).equals(fs.readFileSync(y)))throw Error('ROLLBACK_BYTES');
+ }
+}
+compareTree(path.join(work,'remote'),path.join(work,'restore-check','remote'));
+for(const name of ['deployments.before.txt','versions.before.txt']){
+ if(!fs.readFileSync(path.join(work,name)).equals(
+   fs.readFileSync(path.join(work,'restore-check',name))))throw Error('ROLLBACK_METADATA');
+}
+NODE
+(cd "$WORK" && sha256sum --check --status rollback-source-and-metadata.tgz.sha256) ||
+  stop 'Rollback SHA256 check failed'
+rm -rf -- "$WORK/restore-check"
+
 echo "P011=READONLY_PREPARED; SOURCE_SHA=$APPROVED_SHA"
 echo 'NATIVE33_STAGE=PRIVATE_ONLY; ORIGINAL_REMOTE_BACKUP=PASS'
-echo 'ROLLBACK_ARCHIVE_SHA256=CREATED; RESTORE_NOT_EXECUTED=YES'
+echo 'ROLLBACK_ARCHIVE_SHA256=PASS; LOCAL_RESTORE_DRILL=PASS; REMOTE_RESTORE_NOT_EXECUTED=YES'
 echo 'CLASP_PUSH=NO; DEPLOYMENT_CHANGE=NO; SHEET_WRITES=NO; D331_ENABLED=NO'
 echo "PRIVATE_BACKUP_DIR=$WORK"
 echo 'P011_DEPLOY=HOLD; review scope, rollback, policy and explicit DEV approval separately'
