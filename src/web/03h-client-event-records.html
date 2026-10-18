@@ -90,7 +90,6 @@
   function resetReporterFilters(){
     for(const id of ['reportSearch','reportRegistryFilter'])el(id).value='';
     renderReporterWorklist()
-    d331P020PreviewBridge_.mount()
   }
 
   // P5-03: read-only G-32 worklist status. A registered document is not a human-approved report.
@@ -122,7 +121,8 @@
   }
 
   function renderTables(){
-    if(!currentUser){d331P020PreviewBridge_.reset();el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
+    if(!currentUser)d331P020PreviewBridge_.reset();
+    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
     const visibleRecords=filteredRecordEntries();
@@ -139,6 +139,7 @@
       return`<tr class="srrt-record-row"><td data-label="วันรับแจ้ง">${escapeHtml(r.col2)}</td><td data-label="โรค/เหตุการณ์">${escapeHtml(r.col6||'-')}</td><td data-label="หมู่บ้าน/พื้นที่">${escapeHtml(locationLabel(r))}</td><td data-label="สถานะเหตุการณ์">${lifecycleBadge(r)}${consistencyWarningBadge(r)}</td><td data-label="การตรวจสอบ">${escapeHtml(r.col15||'-')}</td><td data-label="เข้าเกณฑ์สอบสวน">${escapeHtml(r.col17||'-')}</td><td data-label="การสอบสวน">${escapeHtml(r.col24||'-')} ${escapeHtml(r.col26||'')}</td><td data-label="ความเสี่ยง">${riskBadge(r.col19)}</td><td data-label="ผู้รับผิดชอบ">${ownerLabel(r)}${ownerControl}</td><td data-label="ผู้บันทึก">${escapeHtml(r.col27||'-')}</td><td data-label="ไฟล์แนบ">${attachmentButton(r,i)}</td><td data-label="จัดการ">${eventLifecycleActions(r,i)}</td></tr>`
     }).join('')||'<tr class="srrt-record-empty"><td colspan="12">'+(allData.length?'ไม่พบรายการที่ตรงกับเงื่อนไขค้นหา':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>';
     renderReporterWorklist()
+    d331P020PreviewBridge_.mount()
   }
 
 
@@ -410,6 +411,10 @@
           .catch(function(){
             if(started!==epoch||!root.open||!validSession(origin))return;
             loaded=false;
+            keys.forEach(function(key){
+              var node=options.lookup('d331-p020-'+key);
+              if(node)node.textContent='—';
+            });
             options.setState('error',
               'ไม่สามารถอ่านข้อมูลจำลองได้ · ไม่มีการติดต่อ Backend หรือ Google Sheets');
           })
@@ -426,7 +431,9 @@
       function refresh(){
         var auth=options.session();
         if(!validSession()||(sessionToken&&
-          (sessionToken!==auth.token||sessionUser!==auth.user)))clear();
+          (sessionToken!==auth.token||sessionUser!==auth.user))){
+          reset();return; // Require an explicit reopen after account change.
+        }
         if(root.open)load();
       }
       function reset(){clear();root.open=false;}
@@ -435,7 +442,7 @@
     var active=null,activeRoot=null;
     function mount(){
       var root=el('d331-p018-preview');
-      if(!root)return;
+      if(!root||typeof root.addEventListener!=='function')return;
       if(root!==activeRoot){
         if(active)active.reset();
         activeRoot=root;
