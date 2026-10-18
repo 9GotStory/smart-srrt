@@ -64,7 +64,8 @@ test('P020 renders in existing Records, not new route or P018 inert preview',()=
  assert.match(layout,/ไม่ใช่สถิติหรือผลการควบคุมโรคจริง/);
  assert.match(layout,/ไม่สามารถบันทึกหรือเปิดข้อมูลผู้ป่วย/);
  assert.doesNotMatch(layout,/id="page-dengue"|data-page="dengue"/);
- const preview=layout.slice(layout.indexOf('<details id="d331-p018-preview"'),layout.indexOf('</details>')+10);
+ const start=layout.indexOf('<details id="d331-p018-preview"');
+ const preview=layout.slice(start,layout.indexOf('</details>',start)+10);
  assert.equal((preview.match(/<button\b/g)||[]).length,2);
  assert.equal((preview.match(/<li>/g)||[]).length,5);
 });
