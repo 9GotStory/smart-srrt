@@ -405,8 +405,10 @@
               if(node)node.textContent=String(counts[key]);
             });
             loaded=true;
-            options.setState('ready',
-              'ผลตัวอย่างเท่านั้น · ไม่ใช่ข้อมูลสอบสวนจริง · ยังไม่ประเมิน 3-3-1');
+            var empty=keys.every(function(key){return counts[key]===0;});
+            options.setState(empty?'empty':'ready',
+              empty?'ตัวอย่างจำลองว่าง · ไม่มีรายการตัวอย่าง · ยังไม่ประเมิน 3-3-1':
+                'ผลตัวอย่างเท่านั้น · ไม่ใช่ข้อมูลสอบสวนจริง · ยังไม่ประเมิน 3-3-1');
           })
           .catch(function(){
             if(started!==epoch||!root.open||!validSession(origin))return;

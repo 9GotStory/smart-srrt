@@ -54,6 +54,8 @@ test('P0-20 embeds a *hidden* count-only result beneath existing Records only',(
  const segment=layout.slice(region,layout.indexOf('</section>',region));
  assert.match(segment,/aria-busy="false" hidden/);
  assert.match(segment,/role="status" aria-live="polite"/);
+ assert.match(segment,/<strong>Mock-only · D331 OFF<\/strong>/);
+ assert.match(segment,/role="note"/);
  assert.equal((segment.match(/<dd id="d331-p020-/g)||[]).length,5);
  assert.doesNotMatch(segment,/<button\b|<input\b|<form\b|<script\b|onclick=|onchange=|<a\s/i);
  assert.doesNotMatch(layout,/id="page-dengue"|data-page="dengue"/);
@@ -73,6 +75,28 @@ test('P0-20 controller starts closed and renders five synthetic counts after loa
  assert.match(h.states.at(-1).message,/ตัวอย่าง/);
  h.ctrl.refresh();h.ctrl.refresh();await tick();
  assert.equal(h.calls(),1,'same session must not refetch/repaint indefinitely');
+});
+test('P0-20 empty synthetic counts show empty state, not misleading ready status',async()=>{
+ const zero={status:'READ_ONLY',
+  eventId:'e0000000-0000-4000-8000-000000000020',
+  areaId:'SYNTHETIC-AREA',revision:1,
+  counts:{cases:0,plans:0,actions:0,surveys:0,followups:0},
+  slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+  canWrite:false,canEnable:false};
+ const h=harness({request:()=>Promise.resolve(zero)});
+ h.ctrl.connect();h.toggle(true);
+ assert.equal(h.states.at(-1).name,'loading');
+ await tick();
+ assert.equal(h.states.at(-1).name,'empty');
+ assert.match(h.states.at(-1).message,/ตัวอย่างจำลองว่าง/);
+ assert.deepEqual(['cases','plans','actions','surveys','followups'].map(h.count),
+  ['0','0','0','0','0']);
+ assert.equal(h.calls(),1);
+ h.ctrl.refresh();await tick();
+ assert.equal(h.calls(),1);
+ h.toggle(false);
+ assert.equal(h.count('cases'),'—');
+ assert.equal(h.states.at(-1).name,'idle');
 });
 test('P0-20 guest cannot start mock request even by forging toggle',async()=>{
  const h=harness({user:false});h.ctrl.connect();
