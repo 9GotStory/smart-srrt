@@ -6,6 +6,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {GAS_SERVER_SOURCES,GAS_HTML_SOURCES} from '../tools/native-sources.mjs';
+import {CANDIDATE_D331_DEPENDENCIES} from '../tools/d331-p0-10-runtime-readiness.mjs';
 import {inspectNative33Candidate,verifyNativeBackup,preparePrivateStage}
  from '../tools/d331-p0-11-native33-package.mjs';
 
@@ -17,8 +18,10 @@ function fixture(layout='NATIVE26'){
  const work=fs.mkdtempSync(path.join(os.tmpdir(),'d331-p011-'));
  const remote=path.join(work,'remote');
  fs.mkdirSync(remote,{mode:0o700});
- const gs=layout==='NATIVE24'?GAS_SERVER_SOURCES.slice(0,7):GAS_SERVER_SOURCES;
- const html=layout==='NATIVE26'?GAS_HTML_SOURCES:
+ const gs=layout==='NATIVE24'?GAS_SERVER_SOURCES.slice(0,7):
+   layout==='NATIVE33'?[...GAS_SERVER_SOURCES,...CANDIDATE_D331_DEPENDENCIES]:
+   GAS_SERVER_SOURCES;
+ const html=['NATIVE26','NATIVE33'].includes(layout)?GAS_HTML_SOURCES:
    GAS_HTML_SOURCES.filter(s=>!s.includes('03l-client-d331-status'));
  for(const source of [...gs,...html]){
    fs.copyFileSync(path.join(ROOT,source),path.join(remote,path.basename(source)));
@@ -79,6 +82,45 @@ test('every known Native24/25/26 remote backup layout is allowed',()=>{
    assert.equal(result.remoteManifest,'V8_PRESERVED');
   }finally{f.cleanup();}
  }
+});
+test('Native33 already-deployed backup is accepted but still cannot deploy or enable',()=>{
+ const f=fixture('NATIVE33');
+ try{
+  const v=verifyNativeBackup(f.remote);
+  assert.equal(v.layout,'NATIVE33');
+  assert.equal(v.files,33);
+  assert.equal(v.canDeploy,false);
+  const stage=preparePrivateStage(f.work,
+    {manifestFrom:path.join(f.remote,'appsscript.json')});
+  assert.equal(stage.stageFiles,34);
+  assert.equal(stage.remoteLayout,'NATIVE33');
+  assert.equal(stage.canDeploy,false);
+ }finally{f.cleanup();}
+});
+test('Native33 remote snapshot rejects feature/policy activation and unauthorized extra files',()=>{
+ const edits=[
+  ['00-g1a-foundation.gs','D331_G1A_ENABLED = false','D331_G1A_ENABLED = true'],
+  ['09-p0-03b-dev-readonly-adapter.gs','D331_P003B_ENABLED_ = false','D331_P003B_ENABLED_ = true'],
+  ['12-p0-07-guarded-dev-crud.gs','D331_P007_ENABLED_ = false','D331_P007_ENABLED_ = true'],
+  ['07-p0-02a-mvp-schema-contract.gs',"'DRAFT_ONLY'","'APPROVED'"],
+  ['09-p0-03b-dev-readonly-adapter.gs',
+   "D331_P003B_APPROVED_DEV_SPREADSHEET_ID_ = ''",
+   "D331_P003B_APPROVED_DEV_SPREADSHEET_ID_ = 'UNAPPROVED_ID'"]
+ ];
+ for(const [name,from,to] of edits){
+  const f=fixture('NATIVE33');
+  try{
+   const pathname=path.join(f.remote,name),old=fs.readFileSync(pathname,'utf8');
+   assert.ok(old.includes(from));
+   fs.writeFileSync(pathname,old.replace(from,to));
+   deny(()=>verifyNativeBackup(f.remote));
+  }finally{f.cleanup();}
+ }
+ const f=fixture('NATIVE33');
+ try{
+  fs.writeFileSync(path.join(f.remote,'unknown.gs'),'function unapproved(){}');
+  deny(()=>verifyNativeBackup(f.remote));
+ }finally{f.cleanup();}
 });
 test('a remote backup with unknown files must fail closed',()=>{
  const f=fixture();

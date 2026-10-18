@@ -24,11 +24,13 @@ const check=(work)=>verifyP013PrivateSnapshot({
  work,scriptId:SCRIPT,deploymentId:DEPLOY,sourceSha:SHA
 });
 const hold=(fn)=>assert.throws(fn,/D331_P013_RELEASE_HOLD/);
-function fixture(){
+function fixture(layout='NATIVE26'){
  const work=fs.mkdtempSync(path.join(os.tmpdir(),'srrt-p013-'));
  const remote=path.join(work,'remote');
  fs.mkdirSync(remote,{mode:0o700});
- for(const src of [...CURRENT_NATIVE_SERVER,...GAS_HTML_SOURCES]){
+ for(const src of [...CURRENT_NATIVE_SERVER,
+   ...(layout==='NATIVE33'?CANDIDATE_D331_DEPENDENCIES:[]),
+   ...GAS_HTML_SOURCES]){
   fs.copyFileSync(path.join(ROOT,src),path.join(remote,path.basename(src)));
  }
  fs.writeFileSync(path.join(remote,'Index.html'),
@@ -82,6 +84,17 @@ test('sealed Native33 local snapshot and checksum PASS as read-only proof',()=>{
   assert.equal(result.originalDeploymentListed,'PASS');
   assert.equal(result.canDeployWithoutSeparateApproval,false);
   assert.deepEqual(fs.readFileSync(path.join(f.work,'stage','Index.html')),original);
+ }finally{f.cleanup();}
+});
+test('P0-21 sealed Native33 previous-DEV backup validates without remote write',()=>{
+ const f=fixture('NATIVE33');
+ try{
+  const result=check(f.work);
+  assert.equal(result.package,'NATIVE33_EXACT_PRIVATE_STAGE_PASS');
+  assert.equal(result.remoteBackup,'NATIVE33');
+  assert.equal(result.canDeployWithoutSeparateApproval,false);
+  const source=fs.readFileSync(path.join(f.work,'stage','Index.html'));
+  assert.ok(source.length>0);
  }finally{f.cleanup();}
 });
 test('snapshot from another reviewed source commit is rejected',()=>{
