@@ -75,6 +75,19 @@ test('unexpected browser-callable global function blocks',()=>{
  hold({read:replace(CANDIDATE_D331_DEPENDENCIES[2],
   src=>src+'\nfunction releaseDengueRecords() {return [];}\n')});
 });
+test('P0-19 only the single named read-only RPC is allowed in private candidate',()=>{
+ const src=load(CANDIDATE_D331_DEPENDENCIES[2]);
+ assert.match(src,/function getDengueWorkspace\(sessionToken,eventId\)/);
+ // A second RPC in the same file or a public RPC elsewhere remains denied.
+ hold({read:replace(CANDIDATE_D331_DEPENDENCIES[2],
+  code=>code+'\nfunction getDengueWorkspaceUnsafe() {}\n')});
+ hold({read:replace(CANDIDATE_D331_DEPENDENCIES[3],
+  code=>code+'\nfunction createDengueData() {}\n')});
+ // Renaming the only approved public entrypoint must also fail.
+ hold({read:replace(CANDIDATE_D331_DEPENDENCIES[2],
+  code=>code.replace('function getDengueWorkspace(sessionToken,eventId)',
+                    'function getDenguePublicBypass(sessionToken,eventId)'))});
+});
 test('top-level network, Drive or Sheets invocation is denied in VM',()=>{
  hold({read:replace(CANDIDATE_D331_DEPENDENCIES[3],
   src=>src+'\nSpreadsheetApp.openById("EXTERNAL");\n')});
