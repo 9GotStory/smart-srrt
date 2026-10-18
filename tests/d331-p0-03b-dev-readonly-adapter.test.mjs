@@ -82,6 +82,12 @@ function setup(options={}){
   AreaMaster:options.areaRows??[areaRow()],
   D331AccessGrants:options.grantRows??[grant(ctx)]
  };
+ // A selected Event is the ONLY permitted join key; no real rows are read
+ // by these mocks. The five domain Sheet EventID columns are index 2.
+ for(const name of ['DengueCases','DenguePlans','DengueControlActions',
+                    'DengueEntomology','DengueFollowups']){
+  rows[name]=options.domainRows?.[name]??[];
+ }
  if(options.headers)Object.assign(h,options.headers);
  const sheets={};
  for(const [name,headers] of Object.entries(h)){
@@ -114,7 +120,8 @@ function setup(options={}){
  ctx.D331_P003B_APPROVED_DEV_SPREADSHEET_ID_=options.approvedId??SPREADSHEET;
  ctx.D331_P003B_APPROVED_DISEASE_LABELS_=options.diseaseLabels??['SYNTHETIC_DENGUE_ONLY'];
  ctx.D331_P003B_APPROVED_POLICY_REVISION_=options.policyRevision??POLICY;
- return {ctx,trace,read:(event=ID,token=TOKEN)=>ctx.d331P003bReadOnly_(token,event)};
+ return {ctx,trace,read:(event=ID,token=TOKEN)=>ctx.d331P003bReadOnly_(token,event),
+  workspace:(event=ID,token=TOKEN)=>ctx.getDengueWorkspace(token,event)};
 }
 function deny(options={},message='D331_UNAVAILABLE'){
  const state=setup(options);
@@ -259,4 +266,89 @@ test('v2 schema version mismatch denies before session lookup',()=>{
  state.ctx.D331_P002A_SCHEMA_VERSION_=1;
  assert.throws(()=>state.read(),/D331_UNAVAILABLE/);
  assert.equal(state.trace.cache,0);
+});
+
+
+test('P0-19 public workspace RPC remains flag-CLOSED before any service',()=>{
+ for(const setting of [{baseFlag:false},{devFlag:false}]){
+  const x=setup(setting);
+  assert.throws(()=>x.workspace(),/D331_UNAVAILABLE/);
+  assert.equal(x.trace.props,0);
+  assert.equal(x.trace.opens,0);
+  assert.equal(x.trace.cache,0);
+  assert.equal(x.trace.ranges.length,0);
+ }
+});
+test('P0-19 trusted per-event read DTO has counts only and no clinical SLA',()=>{
+ const rows={
+  DengueCases:[['case-1',ID,'PRIVATE_PATIENT_NAME'],['case-2',MUT,'OTHER_EVENT']],
+  DenguePlans:[['plan-1',ID],['plan-2',MUT]],
+  DengueControlActions:[['action-1',ID]],
+  DengueEntomology:[['survey-1',ID],['survey-2',ID]],
+  DengueFollowups:[['followup-1',MUT]]
+ };
+ const x=setup({domainRows:rows});
+ const out=JSON.parse(JSON.stringify(x.workspace()));
+ assert.deepEqual(out,{
+  status:'READ_ONLY',eventId:ID,revision:3,areaId:'area-A',
+  counts:{cases:1,plans:1,actions:1,surveys:2,followups:0},
+  slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+  canWrite:false,canEnable:false
+ });
+ assert.equal(x.trace.props,1);assert.equal(x.trace.opens,1);
+ assert.equal(x.trace.cache,1);
+ // Domain data reads never fetch patient narratives, area/user columns,
+ // ledger or grant record projections for the response.
+ assert.equal(x.trace.ranges.filter(r=>r[1]===2&&r[3]===1).length,5);
+ assert.ok(x.trace.ranges.every(r=>r[0]===1 ||r[1]===1||r[3]===1||r[2]===1));
+ assert.ok(!JSON.stringify(out).includes('PRIVATE_PATIENT_NAME'));
+ assert.ok(!JSON.stringify(out).includes('OTHER_EVENT'));
+ assert.ok(!JSON.stringify(out).includes('TEST-GRANT-1'));
+});
+test('P0-19 no-data event returns five zero counts without a write',()=>{
+ const x=setup();
+ assert.deepEqual(JSON.parse(JSON.stringify(x.workspace().counts)),
+  {cases:0,plans:0,actions:0,surveys:0,followups:0});
+ assert.ok(x.trace.ranges.every(r=>r[0]===1||r[3]===1||r[2]===1));
+});
+test('P0-19 authorization denial precedes any five-domain data read',()=>{
+ for(const options of [
+  {grantRows:[]},{session:null},{policyRevision:''},
+  {diseaseLabels:[]},{mainRows:[]},
+  {approvedId:''},{baseFlag:false},{devFlag:false}
+ ]){
+  const x=setup(options);
+  assert.throws(()=>x.workspace(),/D331_UNAVAILABLE/);
+  const broad=x.trace.ranges.filter(r=>r[0]===2&&r[1]===2);
+  assert.equal(broad.length,0,'must not read domain event columns before grant');
+ }
+});
+test('P0-19 invalid event token/area/disease never becomes an access shortcut',()=>{
+ const other=eventRow();other[5]='OTHER_DISEASE';
+ for(const [o,event,token] of [
+  [{},'bogus',TOKEN],[{},ID,'bad-token'],
+  [{mainRows:[other]},ID,TOKEN],
+  [{areaRows:[]},ID,TOKEN]
+ ]){
+  const x=setup(o);
+  assert.throws(()=>x.workspace(event,token),/D331_UNAVAILABLE/);
+  assert.equal(x.trace.ranges.filter(r=>r[0]===2&&r[1]===2).length,0);
+ }
+});
+test('P0-19 rejects unbounded domain scans and event overcount without fallback',()=>{
+ const huge=Array.from({length:10001},()=>['case',MUT]);
+ const many=Array.from({length:501},()=>['case',ID]);
+ for(const rows of [huge,many]){
+  const x=setup({domainRows:{DengueCases:rows}});
+  assert.throws(()=>x.workspace(),/D331_UNAVAILABLE/);
+ }
+});
+test('P0-19 does not project domain cell details or permit mutation APIs',()=>{
+ const source=sources[paths.indexOf('../src/dengue/09-p0-03b-dev-readonly-adapter.gs')]
+   .replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
+ assert.match(source,/function getDengueWorkspace\(sessionToken,eventId\)/);
+ assert.match(source,/d331P003bAuthorizedContext_\(sessionToken,eventId\)/);
+ assert.doesNotMatch(source,/\.appendRow\s*\(|\.setValues?\s*\(|\.insertRows?\s*\(|\.deleteRows?\s*\(/);
+ assert.doesNotMatch(source,/\.getDataRange\s*\(|getActiveSpreadsheet\s*\(/);
+ assert.doesNotMatch(source,/Logger\.log\(|console\.log\(|JSON\.stringify\(rows\)/);
 });
