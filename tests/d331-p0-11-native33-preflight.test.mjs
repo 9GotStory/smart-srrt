@@ -50,9 +50,8 @@ test('current runtime is Native26; P011 returns an isolated 33-file candidate',(
 test('candidate includes only seven approved D331 dependencies, exact byte parity',()=>{
  const result=inspectNative33Candidate();
  for(const filename of result.serverPushOrder){
-  const source=filename==='00-g1a-foundation.gs'?
-    'src/dengue/00-g1a-foundation.gs': filename.startsWith('0') &&
-    /^(?:0[0-6])-/.test(filename)?'src/server/'+filename:
+  const source=GAS_SERVER_SOURCES.some(s=>path.basename(s)===filename)?
+    GAS_SERVER_SOURCES.find(s=>path.basename(s)===filename):
     'src/dengue/'+filename;
   assert.deepEqual(result.entries.get(filename),read(source));
  }
