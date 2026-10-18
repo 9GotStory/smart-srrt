@@ -133,8 +133,11 @@ function d331P003bReadOnly_(sessionToken,eventId) {
       MAIN_HEADERS.concat(EVENT_META_HEADERS,[EVENT_OWNER_HEADER]));
     var users=d331P003bGetRequiredSheet_(ss,'UserAccounts',D331_P003B_USER_HEADERS_);
     var areas=d331P003bGetRequiredSheet_(ss,'AreaMaster',D331_P003B_AREA_HEADERS_);
-    var grants=d331P003bGetRequiredSheet_(ss,'D331AccessGrants',
-      d331P002aHeaders_('D331AccessGrants'));
+    // Validate all seven real D331 v2 sheet headers before using any data.
+    // Six domain tables remain unread: grant table is the sole D331 data
+    // source of this disabled read-only authorization path.
+    var d331Sheets=d331P005RequireSevenSheets_(ss);
+    var grants=d331Sheets.D331AccessGrants;
 
     var user=d331P003bSessionUser_(sessionToken,users);
     var mainRow=d331P003bOneRowById_(main,31,39,eventId,100000);
