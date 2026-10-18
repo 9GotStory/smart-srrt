@@ -158,6 +158,10 @@ function d331P007MutateRow_(spec,command,previous,userId,eventId,areaId,now){
     }
   }
   Object.keys(command.payload).forEach(function(k){row[k]=command.payload[k];});
+  // Do not consume a request/ledger entry or advance revision for a no-op.
+  if(mode==='update' && !Object.keys(command.payload).some(function(k){
+    return row[k]!==previous[k];
+  }))d331P007Deny_();
   if(mode==='update'){
     var next=row[spec.status],before=previous[spec.status];
     if(next!==before &&
