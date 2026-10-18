@@ -81,7 +81,11 @@ export function inspectP010Candidate({
     if(added.includes(filename)){
       const publicFns=[...source.matchAll(/^function\s+(\w+)\s*\(/gm)]
         .map(m=>m[1]).filter(name=>!name.endsWith('_'));
-      if(publicFns.length>0)fail();
+      // P0-19 explicitly reviewed, permanently OFF by default, read-only
+      // public entrypoint; *all* other new browser-callable RPCs remain banned.
+      const approvedReadOnly=filename==='src/dengue/09-p0-03b-dev-readonly-adapter.gs' &&
+        publicFns.length===1 && publicFns[0]==='getDengueWorkspace';
+      if(publicFns.length>0&&!approvedReadOnly)fail();
     }
     try{
       // Evaluate only global declarations and literal initializers. Any
@@ -113,6 +117,7 @@ export function inspectP010Candidate({
     // syntactically valid-looking IDs. No Google service is available here.
     for(const expr of [
       "d331P003bReadOnly_('', '')",
+      "getDengueWorkspace('', '')",
       "d331P007Operate_('', '', {})",
       'd331P008CheckHeaders_()'
     ]){
