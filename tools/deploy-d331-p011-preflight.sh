@@ -92,10 +92,15 @@ fs.writeFileSync(work+'/.clasp.json',JSON.stringify({
 }),{flag:'wx',mode:0o600});
 NODE
 
+# Bind this private snapshot to the exact reviewed canonical source commit.
+# P0-13 rejects any backup without this marker (earlier P0-12 snapshots remain valid
+# historical evidence but are not silently promoted as new deployment candidates).
+printf '%s\\n' "$APPROVED_SHA" > "$WORK/source-sha.txt"
+
 # Immutable-in-practice local evidence: raw pulled files + original versions and
 # deployment inventory. Snapshot and SHA256 are for MANUAL rollback planning.
 tar -czf "$WORK/rollback-source-and-metadata.tgz" -C "$WORK" \
-  remote deployments.before.txt versions.before.txt ||
+  remote deployments.before.txt versions.before.txt source-sha.txt ||
   stop 'Cannot package private rollback evidence'
 (cd "$WORK" && sha256sum rollback-source-and-metadata.tgz \
   >rollback-source-and-metadata.tgz.sha256) ||
@@ -121,7 +126,7 @@ function compareTree(a,b){
  }
 }
 compareTree(path.join(work,'remote'),path.join(work,'restore-check','remote'));
-for(const name of ['deployments.before.txt','versions.before.txt']){
+for(const name of ['deployments.before.txt','versions.before.txt','source-sha.txt']){
  if(!fs.readFileSync(path.join(work,name)).equals(
    fs.readFileSync(path.join(work,'restore-check',name))))throw Error('ROLLBACK_METADATA');
 }
