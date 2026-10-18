@@ -172,8 +172,11 @@ function d331P007MutateRow_(spec,command,previous,userId,eventId,areaId,now){
        before!=='COMPLETE')row.CompletedAtUTC=now;
   }
   row[spec.rev]++;
-  if(Object.prototype.hasOwnProperty.call(row,'UpdatedAtUTC'))row.UpdatedAtUTC=now;
-  if(Object.prototype.hasOwnProperty.call(row,'UpdatedByUserID'))row.UpdatedByUserID=userId;
+  // On CREATE these required fields do not exist in the empty row object yet.
+  // Derive them from the authoritative v2 schema, never from client payload.
+  var columns=d331P002aHeaders_(spec.sheet);
+  if(columns.indexOf('UpdatedAtUTC')>=0)row.UpdatedAtUTC=now;
+  if(columns.indexOf('UpdatedByUserID')>=0)row.UpdatedByUserID=userId;
   row.LastMutationID=command.requestId;
   var result=d331P007Row_(spec.sheet,row);
   try{d331P002aValidateSyntheticRow_(spec.sheet,result);}
