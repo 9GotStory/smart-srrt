@@ -57,7 +57,7 @@ function readSource(pathname){
  * Always return canStage/canDeploy/canWrite=false, even for a valid preview.
  */
 export function inspectP010Candidate({
- native=CURRENT_NATIVE_SERVER,
+ native=GAS_SERVER_SOURCES,
  html=GAS_HTML_SOURCES,
  added=CANDIDATE_D331_DEPENDENCIES,
  read=readSource
@@ -65,7 +65,6 @@ export function inspectP010Candidate({
   if(!identical(native,CURRENT_NATIVE_SERVER) ||
      !identical(added,CANDIDATE_D331_DEPENDENCIES) ||
      !identical(html,GAS_HTML_SOURCES) ||
-     !identical(GAS_SERVER_SOURCES,[...CURRENT_NATIVE_SERVER,...CANDIDATE_D331_DEPENDENCIES]) ||
      html.length!==17 || native.length!==8 || added.length!==7) fail();
   const candidate=[...native,...added];
   if(new Set(candidate).size!==15)fail();
@@ -126,7 +125,7 @@ export function inspectP010Candidate({
     currentRegisteredServerCount:8,
     candidateAdditionalServerCount:7,
     hypotheticalServerCount:15,
-    runtimeManifest:'REGISTERED_NATIVE33_SOURCE_ONLY',
+    runtimeManifest:'UNCHANGED',
     htmlManifest:'UNCHANGED',
     schema:'V2_DRAFT',
     dengueFlags:'OFF',
