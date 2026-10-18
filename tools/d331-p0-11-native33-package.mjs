@@ -24,6 +24,7 @@ const oldHtml=GAS_HTML_SOURCES.filter(x=>!x.includes('03l-client-d331-status')).
 const native24=[...oldGs,...oldHtml,'Index.html'].sort();
 const native25=[...native24,'00-g1a-foundation.gs'].sort();
 const native26=[...native25,'03l-client-d331-status.html'].sort();
+const native33=[...native26,...CANDIDATE_D331_DEPENDENCIES.map(basename)].sort();
 
 /** In-memory only. Syntactic source compatibility, NOT runtime authorization. */
 export function inspectNative33Candidate({
@@ -75,7 +76,8 @@ export function verifyNativeBackup(root,{read=fs.readFileSync,
  const actual=files.filter(x=>!REMOTE_ALLOWED.has(x)).sort();
  const matched=eq(actual,native24)?'NATIVE24':
    eq(actual,native25)?'NATIVE25':
-   eq(actual,native26)?'NATIVE26':null;
+   eq(actual,native26)?'NATIVE26':
+   eq(actual,native33)?'NATIVE33':null;
  if(!matched)deny();
  const manifest=path.join(root,'appsscript.json');
  let data;
@@ -89,7 +91,7 @@ export function verifyNativeBackup(root,{read=fs.readFileSync,
  const code=read(path.join(root,'00-bootstrap.gs'),'utf8');
  if(!/function\s+doGet\s*\(/.test(code)||
     !/function\s+include\s*\(/.test(code))deny();
- const expectedHtml=matched==='NATIVE26'?GAS_HTML_SOURCES:
+ const expectedHtml=['NATIVE26','NATIVE33'].includes(matched)?GAS_HTML_SOURCES:
    GAS_HTML_SOURCES.filter(x=>!x.includes('03l-client-d331-status'));
  const expectedIndex=expectedHtml.map(x=>
    "<?!= include('"+path.parse(x).name+"') ?>").join('');
@@ -101,7 +103,30 @@ export function verifyNativeBackup(root,{read=fs.readFileSync,
    if(!actualBytes.equals(approved))deny();
  };
  if(matched!=='NATIVE24')pin('00-g1a-foundation.gs');
- if(matched==='NATIVE26')pin('03l-client-d331-status.html');
+ if(['NATIVE26','NATIVE33'].includes(matched))pin('03l-client-d331-status.html');
+ // The already-deployed Native33 snapshot is a backup SOURCE, not an approval
+ // to enable D331. Require all previously inert switches/policy bindings.
+ if(matched==='NATIVE33'){
+   const checks=[
+     ['00-g1a-foundation.gs',/\bvar\s+D331_G1A_ENABLED\s*=\s*false\s*;/],
+     ['07-p0-02a-mvp-schema-contract.gs',/\bvar\s+D331_P002A_APPROVAL_\s*=\s*'DRAFT_ONLY'\s*;/],
+     ['09-p0-03b-dev-readonly-adapter.gs',/\bvar\s+D331_P003B_ENABLED_\s*=\s*false\s*;/],
+     ['09-p0-03b-dev-readonly-adapter.gs',/\bvar\s+D331_P003B_APPROVED_DEV_SPREADSHEET_ID_\s*=\s*''\s*;/],
+     ['09-p0-03b-dev-readonly-adapter.gs',/\bvar\s+D331_P003B_APPROVED_DISEASE_LABELS_\s*=\s*\[\s*\]\s*;/],
+     ['09-p0-03b-dev-readonly-adapter.gs',/\bvar\s+D331_P003B_APPROVED_POLICY_REVISION_\s*=\s*''\s*;/],
+     ['12-p0-07-guarded-dev-crud.gs',/\bvar\s+D331_P007_ENABLED_\s*=\s*false\s*;/]
+   ];
+   for(const [name,pattern] of checks){
+     if(!pattern.test(read(path.join(root,name),'utf8')))deny();
+   }
+   // A later enable assignment must never silently bypass the OFF evidence.
+   for(const name of ['00-g1a-foundation.gs',
+      '09-p0-03b-dev-readonly-adapter.gs','12-p0-07-guarded-dev-crud.gs']){
+     const body=read(path.join(root,name),'utf8')
+       .replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+     if(/\b(?:D331_G1A_ENABLED|D331_P003B_ENABLED_|D331_P007_ENABLED_)\s*=\s*true\b/.test(body))deny();
+   }
+ }
  return Object.freeze({backup:'EXACT_REMOTE_LAYOUT_PASS',layout:matched,
    remoteManifest:'V8_PRESERVED',files:actual.length,
    rollback:'SOURCE_SNAPSHOT_ONLY',canDeploy:false});

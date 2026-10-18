@@ -58,7 +58,7 @@ function verifyP013PrivateSnapshotImpl({work,sourceSha,scriptId,deploymentId}={}
  let backup;
  try{backup=verifyNativeBackup(path.join(dir,'remote'));}
  catch{no();}
- if(!['NATIVE24','NATIVE25','NATIVE26'].includes(backup.layout))no();
+ if(!['NATIVE24','NATIVE25','NATIVE26','NATIVE33'].includes(backup.layout))no();
  if(text(path.join(dir,'source-sha.txt')).trim()!==sourceSha)no();
 
  const stage=path.join(dir,'stage'),files=fs.readdirSync(stage).sort();
