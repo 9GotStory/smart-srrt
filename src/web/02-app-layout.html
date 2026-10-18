@@ -102,6 +102,68 @@
       </div>
       <p id="recordResultSummary" class="srrt-record-result" role="status" aria-live="polite"></p>
       <div class="table-wrap srrt-record-table-wrap" role="region" tabindex="0" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์" style="margin-top:14px"><table class="srrt-record-table" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์สอบสวน</th><th>การสอบสวน</th><th>ความเสี่ยง</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
+
+      <!-- P0-18 Slice B: entirely static design preview, NOT an event workspace.
+           No event binding, input fields, real RPC, mutation, or D331 enablement. -->
+      <details id="d331-p018-preview" class="srrt-d331-preview">
+        <summary class="srrt-d331-preview__toggle">
+          <span class="srrt-d331-preview__toggle-text">
+            <strong>ตัวอย่างพื้นที่ทำงาน Dengue 3-3-1</strong>
+            <span class="srrt-d331-preview__caption">ดูรูปแบบการสอบสวนและควบคุมโรค (ข้อมูลสมมติ ไม่เชื่อมข้อมูลเหตุการณ์)</span>
+          </span>
+          <span class="srrt-d331-preview__mark">ตัวอย่างเท่านั้น</span>
+        </summary>
+        <div class="srrt-d331-preview__body">
+          <p class="srrt-d331-preview__notice" role="note" id="d331-p018-notice">
+            นี่เป็นภาพตัวอย่างสำหรับออกแบบหน้าจอ ไม่ใช่ข้อมูลผู้ป่วยหรือผลการสอบสวนจริง
+            ไม่สามารถดูรายละเอียดเหตุการณ์ บันทึกข้อมูล หรือประเมินการผ่านเกณฑ์ 3-3-1 ได้
+          </p>
+          <div class="srrt-d331-preview__intro">
+            <h4>เส้นทางทำงาน 5 ขั้นตอน</h4>
+            <p>ตัวอย่างเหตุการณ์: DEMO-001 (ข้อมูลสมมติ) · ไม่มีการเชื่อมกับ EventID จริง</p>
+          </div>
+          <ol class="srrt-d331-preview__steps" aria-label="ขั้นตอนงาน Dengue 3-3-1">
+            <li>
+              <h5><span aria-hidden="true">1</span> สอบสวนผู้ป่วย</h5>
+              <p>สถานะตัวอย่าง: รอข้อมูลการสอบสวน</p>
+              <small>ข้อมูลที่จะใช้: DengueCases · เชื่อม EventID ในอนาคต</small>
+            </li>
+            <li>
+              <h5><span aria-hidden="true">2</span> วางแผนควบคุมโรค</h5>
+              <p>สถานะตัวอย่าง: รอแผนพื้นที่และผู้รับผิดชอบ</p>
+              <small>ข้อมูลที่จะใช้: DenguePlans · เชื่อม TriggerCaseID</small>
+            </li>
+            <li>
+              <h5><span aria-hidden="true">3</span> ดำเนินมาตรการ</h5>
+              <p>สถานะตัวอย่าง: รอบการควบคุมอยู่ระหว่างกำหนดนโยบาย</p>
+              <small>ข้อมูลที่จะใช้: DengueControlActions · เชื่อม PlanID</small>
+            </li>
+            <li>
+              <h5><span aria-hidden="true">4</span> สำรวจลูกน้ำยุงลาย</h5>
+              <p>สถานะตัวอย่าง: รอข้อมูลบ้านและภาชนะที่สำรวจ</p>
+              <small>ข้อมูลที่จะใช้: DengueEntomology · HI/CI ยังไม่คำนวณ</small>
+            </li>
+            <li>
+              <h5><span aria-hidden="true">5</span> ติดตามผล</h5>
+              <p>สถานะตัวอย่าง: รอกำหนดรอบติดตามตามนโยบาย</p>
+              <small>ข้อมูลที่จะใช้: DengueFollowups · เชื่อม PlanID</small>
+            </li>
+          </ol>
+          <div class="srrt-d331-preview__policy" aria-label="ตัวอย่างสถานะเกณฑ์ 3-3-1">
+            <h4>เกณฑ์เวลา 3-3-1</h4>
+            <div class="srrt-d331-preview__policy-items">
+              <span>ช่วง 3 ชั่วโมงแรก: รอยืนยันจุดเริ่มนับ</span>
+              <span>ช่วง 3 ชั่วโมงถัดไป: รอยืนยันจุดเริ่มนับ</span>
+              <span>ช่วง 1 วัน: รอยืนยันจุดเริ่มนับ</span>
+            </div>
+            <p>ยังไม่มีการคำนวณเส้นตาย ผลตรงเวลา หรือเกินกำหนด</p>
+          </div>
+          <div class="srrt-d331-preview__disabled-actions" aria-label="ตัวอย่างการดำเนินการที่ยังปิดใช้งาน">
+            <button type="button" disabled aria-disabled="true">เปิดข้อมูลสอบสวน</button>
+            <button type="button" disabled aria-disabled="true">บันทึกข้อมูล</button>
+          </div>
+        </div>
+      </details>
     </section>
 
     <section id="page-reporter" class="section">
