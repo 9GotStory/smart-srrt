@@ -13,12 +13,12 @@ const replace=(file,callback)=>pathname=>
 const hold=opts=>assert.throws(()=>inspectP010Candidate(opts),
   /D331_P010_READINESS_HOLD/);
 test('P0-10 existing native source order is unchanged',()=>{
- assert.deepEqual([...GAS_SERVER_SOURCES],[...CURRENT_NATIVE_SERVER]);
- assert.equal(GAS_SERVER_SOURCES.length,8);
+ assert.deepEqual([...GAS_SERVER_SOURCES],[...CURRENT_NATIVE_SERVER,...CANDIDATE_D331_DEPENDENCIES]);
+ assert.equal(GAS_SERVER_SOURCES.length,15);
  assert.equal(GAS_HTML_SOURCES.length,17);
  assert.ok(GAS_HTML_SOURCES.at(-1).endsWith('04-browser-app.html'));
- assert.equal(GAS_SERVER_SOURCES.includes('src/dengue/12-p0-07-guarded-dev-crud.gs'),false);
- assert.equal(GAS_SERVER_SOURCES.includes('src/dengue/13-p0-08-dev-readonly-preflight.gs'),false);
+ assert.equal(GAS_SERVER_SOURCES.includes('src/dengue/12-p0-07-guarded-dev-crud.gs'),true);
+ assert.equal(GAS_SERVER_SOURCES.includes('src/dengue/13-p0-08-dev-readonly-preflight.gs'),true);
 });
 test('candidate source set is only seven ordered dependencies, no historical v1 modules',()=>{
  assert.deepEqual([...CANDIDATE_D331_DEPENDENCIES],[
@@ -37,7 +37,7 @@ test('full Apps Script global load preview passes without Google services',()=>{
  assert.deepEqual({...result},{
   result:'OFFLINE_SOURCE_ORDER_PASS',
   currentRegisteredServerCount:8,candidateAdditionalServerCount:7,
-  hypotheticalServerCount:15,runtimeManifest:'UNCHANGED',
+  hypotheticalServerCount:15,runtimeManifest:'REGISTERED_NATIVE33_SOURCE_ONLY',
   htmlManifest:'UNCHANGED',schema:'V2_DRAFT',dengueFlags:'OFF',
   clinicalPolicy:'NOT_APPROVED',
   operatorBinding:'OWNER_VISUAL_PASS_API_NOT_ATTESTED',
@@ -56,7 +56,7 @@ test('missing required candidate file blocks in-memory preview',()=>{
  const file=CANDIDATE_D331_DEPENDENCIES[3];
  hold({read:p=>p===file?undefined:load(p)});
 });
-test('a registered source change or extra registered source is rejected',()=>{
+test('a proposed historical preview source change is rejected',()=>{
  hold({native:[...GAS_SERVER_SOURCES,'src/dengue/09-p0-03b-dev-readonly-adapter.gs']});
  hold({native:[...GAS_SERVER_SOURCES].reverse()});
 });
