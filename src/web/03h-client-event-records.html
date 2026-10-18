@@ -327,4 +327,135 @@
   function deleteEvent(eventId,revision){
     openEventActionDialog('void',eventId,revision)
   }
+  // P0-20: mock-only bridge to the P0-19 count DTO. No real event/RPC access.
+  var d331P020PreviewBridge_=(function(){
+    var keys=['cases','plans','actions','surveys','followups'];
+    var mockEvent='e0000000-0000-4000-8000-000000000020';
+    var expected=['areaId','canEnable','canWrite','clinicalPolicyApproved',
+      'counts','eventId','revision','slaAssessment','status'].sort().join('|');
+    function deny(){throw Error('D331_P020_MOCK_INVALID');}
+    function validateMock(value){
+      if(!value||typeof value!=='object'||Array.isArray(value)||
+         Object.keys(value).sort().join('|')!==expected||
+         value.status!=='READ_ONLY'||value.eventId!==mockEvent||
+         value.areaId!=='SYNTHETIC-AREA'||
+         !Number.isSafeInteger(value.revision)||value.revision<1||
+         value.slaAssessment!=='NOT_EVALUATED'||
+         value.clinicalPolicyApproved!==false||
+         value.canWrite!==false||value.canEnable!==false||
+         !value.counts||typeof value.counts!=='object'||
+         Array.isArray(value.counts)||
+         Object.keys(value.counts).sort().join('|')!==keys.slice().sort().join('|'))
+        deny();
+      var counts=Object.create(null);
+      keys.forEach(function(key){
+        if(!Number.isSafeInteger(value.counts[key])||
+           value.counts[key]<0||value.counts[key]>500)deny();
+        counts[key]=value.counts[key];
+      });
+      return counts;
+    }
+    function offlineFixture(){
+      // Static synthetic DTO, never Google Apps Script or a clinical event.
+      return Promise.resolve({
+        status:'READ_ONLY',eventId:mockEvent,revision:1,
+        areaId:'SYNTHETIC-AREA',counts:{cases:1,plans:1,actions:2,surveys:0,followups:0},
+        slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+        canWrite:false,canEnable:false
+      });
+    }
+    function createOfflineController(options){
+      var root=options&&options.root;
+      if(!root||typeof root.addEventListener!=='function'||
+         !options.lookup||!options.session||!options.request||!options.setState)deny();
+      var connected=false,epoch=0,pending=false,loaded=false;
+      var sessionToken='',sessionUser=null;
+      function clear(){
+        ++epoch;pending=false;loaded=false;sessionToken='';sessionUser=null;
+        var region=options.lookup('d331-p020-region');
+        if(region)region.hidden=true;
+        keys.forEach(function(key){
+          var node=options.lookup('d331-p020-'+key);
+          if(node)node.textContent='—';
+        });
+        options.setState('idle','');
+      }
+      function validSession(previous){
+        var auth=options.session();
+        return !!auth&&auth.allowed===true&&typeof auth.token==='string'&&
+          auth.token.length>0&&!!auth.user&&
+          (!previous||(auth.token===previous.token&&auth.user===previous.user));
+      }
+      function load(){
+        if(!root.open||!validSession()){clear();return;}
+        if(pending||loaded)return;
+        var auth=options.session(),region=options.lookup('d331-p020-region');
+        if(!region)return;
+        sessionToken=auth.token;sessionUser=auth.user;
+        var started=++epoch,origin={token:sessionToken,user:sessionUser};
+        pending=true;region.hidden=false;
+        options.setState('loading','กำลังโหลดข้อมูลจำลองแบบอ่านอย่างเดียว...');
+        Promise.resolve().then(function(){return options.request();})
+          .then(function(reply){
+            if(started!==epoch||!root.open||!validSession(origin))return;
+            var counts=validateMock(reply);
+            keys.forEach(function(key){
+              var node=options.lookup('d331-p020-'+key);
+              if(node)node.textContent=String(counts[key]);
+            });
+            loaded=true;
+            options.setState('ready',
+              'ผลตัวอย่างเท่านั้น · ไม่ใช่ข้อมูลสอบสวนจริง · ยังไม่ประเมิน 3-3-1');
+          })
+          .catch(function(){
+            if(started!==epoch||!root.open||!validSession(origin))return;
+            loaded=false;
+            options.setState('error',
+              'ไม่สามารถอ่านข้อมูลจำลองได้ · ไม่มีการติดต่อ Backend หรือ Google Sheets');
+          })
+          .finally(function(){if(started===epoch)pending=false;});
+      }
+      function connect(){
+        if(connected)return;
+        root.addEventListener('toggle',function(){
+          if(root.open)load();else clear();
+        });
+        connected=true;
+        if(root.open)load();
+      }
+      function refresh(){
+        var auth=options.session();
+        if(!validSession()||(sessionToken&&
+          (sessionToken!==auth.token||sessionUser!==auth.user)))clear();
+        if(root.open)load();
+      }
+      function reset(){clear();root.open=false;}
+      return Object.freeze({connect:connect,refresh:refresh,reset:reset});
+    }
+    var active=null,activeRoot=null;
+    function mount(){
+      var root=el('d331-p018-preview');
+      if(!root)return;
+      if(root!==activeRoot){
+        if(active)active.reset();
+        activeRoot=root;
+        active=createOfflineController({
+          root:root,lookup:el,
+          session:function(){
+            return {token:token,user:currentUser,
+              allowed:!!token&&!!currentUser&&!!roleCanRecord()};
+          },
+          request:offlineFixture,
+          setState:function(state,message){
+            uiSetSectionState('d331-p020-region','d331-p020-status',state,message);
+          }
+        });
+        active.connect();
+      }
+      active.refresh();
+    }
+    function reset(){if(active)active.reset();}
+    return Object.freeze({mount:mount,reset:reset,
+      createOfflineController:createOfflineController,validateMock:validateMock});
+  })();
 </script>
