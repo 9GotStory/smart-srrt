@@ -153,7 +153,7 @@ test('P0-20 new bridge never calls GS/RPC, fetch, local storage or live event da
  const code=records.slice(start,end).replace(/\/\*[\s\S]*?\*\//g,'')
    .replace(/\/\/[^\n]*/g,'');
  assert.doesNotMatch(code,/\b(?:google\.script|\bgs\s*\(|fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|allData|SpreadsheetApp|PropertiesService|setProperty|appendRow|setValues?|PatientID|PasswordHash)/i);
- assert.match(records,/if\(!currentUser\)\{d331P020PreviewBridge_\.reset\(\)/);
+ assert.match(records,/if\(!currentUser\)d331P020PreviewBridge_\.reset\(\);/);
  assert.match(records,/d331P020PreviewBridge_\.mount\(\)/);
  assert.match(backend,/function getDengueWorkspace\(sessionToken,eventId\)/);
  assert.match(backend,/slaAssessment:'NOT_EVALUATED'/);
