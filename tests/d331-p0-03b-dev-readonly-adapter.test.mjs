@@ -8,7 +8,8 @@ const paths=[
  '../src/dengue/00-g1a-foundation.gs',
  '../src/dengue/03-n1b1-trusted-event-contract.gs',
  '../src/dengue/07-p0-02a-mvp-schema-contract.gs',
- '../src/dengue/09-p0-03b-dev-readonly-adapter.gs'
+ '../src/dengue/09-p0-03b-dev-readonly-adapter.gs',
+ '../src/dengue/10-p0-05-v2-schema-compat.gs'
 ];
 const sources=paths.map(p=>fs.readFileSync(new URL(p,import.meta.url),'utf8'));
 const ID='a1111111-1111-4111-8111-111111111111';
@@ -72,6 +73,9 @@ function setup(options={}){
   AreaMaster:Array.from(ctx.D331_P003B_AREA_HEADERS_),
   D331AccessGrants:Array.from(ctx.d331P002aHeaders_('D331AccessGrants'))
  };
+ for(const name of Array.from(ctx.D331_P005_V2_TABS_)){
+  h[name]=Array.from(ctx.d331P002aHeaders_(name));
+ }
  const rows={
   MainData:options.mainRows??[eventRow()],
   UserAccounts:options.userRows??[userRow()],
@@ -82,7 +86,7 @@ function setup(options={}){
  const sheets={};
  for(const [name,headers] of Object.entries(h)){
    if(options.missingSheet===name)continue;
-   sheets[name]=sheet([headers,...rows[name]],trace);
+   sheets[name]=sheet([headers,...(rows[name]??[])],trace);
  }
  const props={getProperty(k){
    trace.props++;
@@ -119,7 +123,7 @@ function deny(options={},message='D331_UNAVAILABLE'){
 }
 test('P0-03B remains unregistered, private-only, feature OFF in source',()=>{
  const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
- const src=sources.at(-1);
+ const src=sources[paths.indexOf('../src/dengue/09-p0-03b-dev-readonly-adapter.gs')];
  assert.doesNotMatch(manifest,/09-p0-03b-dev-readonly-adapter/);
  assert.match(src,/D331_P003B_ENABLED_ = false/);
  assert.match(src,/D331_P003B_APPROVED_DEV_SPREADSHEET_ID_ = ''/);
@@ -219,4 +223,40 @@ test('invalid input, patient narrative and errors never leak private data',()=>{
  assert.ok(!result.includes('TEST-GRANT-1'));
  const c=setup({mainRows:[]});
  try{c.read();assert.fail('must deny');}catch(e){assert.equal(e.message,'D331_UNAVAILABLE');}
+});
+
+test('P0-05 exact seven-tab v2 contract is exercised before any Event/Session rows',()=>{
+ const state=setup();
+ const names=Array.from(state.ctx.D331_P005_V2_TABS_);
+ assert.deepEqual(names,[
+  'DengueCases','DenguePlans','DengueControlActions',
+  'DengueEntomology','DengueFollowups',
+  'DengueRequestLedger','D331AccessGrants'
+ ]);
+ const expected=names.map(name=>Array.from(state.ctx.d331P002aHeaders_(name)).length);
+ assert.deepEqual(expected,[16,15,18,16,16,10,22]);
+ assert.equal(expected.reduce((a,b)=>a+b,0),113);
+ assert.equal(state.read().mode,'read');
+ // All seven D331 tabs are read by row 1 only; only the authority/grant
+ // tab can subsequently be used for data-row reads.
+ assert.equal(state.trace.ranges.filter(range=>range[0]===1).length,10);
+});
+test('missing, extra or reordered headers in any of seven D331 tabs fail closed',()=>{
+ const ctx=setup().ctx;
+ for(const name of Array.from(ctx.D331_P005_V2_TABS_)){
+  deny({missingSheet:name});
+  const headers=Array.from(ctx.d331P002aHeaders_(name));
+  const modified=[...headers]; modified[0]='RenamedHeader';
+  deny({headers:{[name]:modified}});
+  const reversed=[...headers].reverse();
+  deny({headers:{[name]:reversed}});
+  const extra=[...headers,'Unexpected'];
+  deny({headers:{[name]:extra}});
+ }
+});
+test('v2 schema version mismatch denies before session lookup',()=>{
+ const state=setup();
+ state.ctx.D331_P002A_SCHEMA_VERSION_=1;
+ assert.throws(()=>state.read(),/D331_UNAVAILABLE/);
+ assert.equal(state.trace.cache,0);
 });
