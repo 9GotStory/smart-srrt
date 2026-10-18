@@ -90,6 +90,7 @@
   function resetReporterFilters(){
     for(const id of ['reportSearch','reportRegistryFilter'])el(id).value='';
     renderReporterWorklist()
+    d331P020PreviewBridge_.mount()
   }
 
   // P5-03: read-only G-32 worklist status. A registered document is not a human-approved report.
@@ -121,7 +122,7 @@
   }
 
   function renderTables(){
-    if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
+    if(!currentUser){d331P020PreviewBridge_.reset();el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
     const visibleRecords=filteredRecordEntries();
