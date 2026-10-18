@@ -112,8 +112,10 @@ export function verifyNativeBackup(root,{read=fs.readFileSync,
  * never write inside the Git repo. The staged manifest is an unmodified COPY.
  */
 export function preparePrivateStage(work,{manifestFrom,read=fs.readFileSync}={}){
- if(typeof work!=='string'||!path.isAbsolute(work)||!manifestFrom)deny();
+ if(typeof work!=='string'||!path.isAbsolute(work)||
+    typeof manifestFrom!=='string')deny();
  const parent=fs.realpathSync(work),repo=fs.realpathSync(ROOT);
+ if(path.resolve(manifestFrom)!==path.join(parent,'remote','appsscript.json'))deny();
  if(parent===repo||parent.startsWith(repo+path.sep)||
     (fs.statSync(parent).mode&0o077)!==0)deny();
  const remote=path.join(parent,'remote');
