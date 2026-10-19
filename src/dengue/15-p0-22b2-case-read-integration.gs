@@ -55,30 +55,39 @@ function d331P022b2ListCasesForEvent_(sessionToken,eventId) {
 
     var selected=[];
     if (count) {
-      // Read ONLY EventID for all rows, not other Events' clinical columns.
-      var ids=sheet.getRange(2,2,count,1).getValues();
+      // Read only two identifier columns across the bounded sheet AFTER
+      // server authorization. This checks CaseID uniqueness GLOBALLY,
+      // including rows belonging to other Events; never fetch their PHI.
+      var ids=sheet.getRange(2,1,count,2).getValues();
       if (!Array.isArray(ids)||ids.length!==count)d331P022b2Deny_();
-      ids.forEach(function(item,i){
-        if (!Array.isArray(item)||item.length!==1)d331P022b2Deny_();
-        if(item[0]===ctx.eventId)selected.push(i+2);
+      var globalCaseIds=Object.create(null);
+      ids.forEach(function(pair,i){
+        if (!Array.isArray(pair)||pair.length!==2)d331P022b2Deny_();
+        var caseId=pair[0],parentId=pair[1];
+        if (typeof caseId!=='string'||!d331IsUuid_(caseId)||
+            caseId!==caseId.toLowerCase()||
+            typeof parentId!=='string'||!d331IsUuid_(parentId)||
+            parentId!==parentId.toLowerCase()||
+            Object.prototype.hasOwnProperty.call(globalCaseIds,caseId))
+          d331P022b2Deny_();
+        globalCaseIds[caseId]=true;
+        if(parentId===ctx.eventId)selected.push({row:i+2,caseId:caseId});
       });
       if (selected.length>D331_P022B2_MAX_EVENT_CASES_)d331P022b2Deny_();
     }
 
-    var seen=Object.create(null);
-    var cases=selected.map(function(rowNumber){
-      // Only after full server authorization, fetch full rows for the
-      // selected Event, validate all 16 cells and project just 3 fields.
-      var found=sheet.getRange(rowNumber,1,1,16).getValues();
+    var cases=selected.map(function(hit){
+      // Re-read full rows ONLY for the authorized Event and ensure both
+      // identifiers still match the earlier index scan. This catches an
+      // edit between index and detail reads; Sheets is not transactional.
+      var found=sheet.getRange(hit.row,1,1,16).getValues();
       if (!Array.isArray(found)||found.length!==1||
           !Array.isArray(found[0])||found[0].length!==16)d331P022b2Deny_();
       var row=found[0];
       d331P002aValidateSyntheticRow_('DengueCases',row);
       // VOID disclosure semantics remain unapproved: DENY the request.
-      if (row[1]!==ctx.eventId || row[3]!=='ACTIVE' ||
-          Object.prototype.hasOwnProperty.call(seen,row[0]))
-        d331P022b2Deny_();
-      seen[row[0]]=true;
+      if (row[0]!==hit.caseId || row[1]!==ctx.eventId ||
+          row[3]!=='ACTIVE') d331P022b2Deny_();
       return {caseId:row[0],caseRevision:row[2],caseStatus:row[3]};
     });
 
