@@ -109,6 +109,7 @@ test('P0-22B1 stays unregistered and does not alter deployed P0-19/P0-20 boundar
   assert.match(adapter,/function getDengueWorkspace\(sessionToken,eventId\)/);
   assert.match(layout,/Mock-only · D331 OFF/);
   assert.match(browser,/d331P020PreviewBridge_\.mount\(\)/);
-  assert.doesNotMatch(p022b,/SpreadsheetApp|PropertiesService|CacheService|google\.script\.run|function listDengueCasesForEvent\(/);
-  assert.doesNotMatch(p022b,/setValues|appendRow|insertSheet|deleteRow|setProperty/);
+  const runtimeCode=p022b.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
+  assert.doesNotMatch(runtimeCode,/SpreadsheetApp|PropertiesService|CacheService|google\.script\.run|function listDengueCasesForEvent\(/);
+  assert.doesNotMatch(runtimeCode,/setValues|appendRow|insertSheet|deleteRow|setProperty/);
 });
