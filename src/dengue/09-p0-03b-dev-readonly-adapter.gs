@@ -159,7 +159,7 @@ function d331P003bAuthorizedContext_(sessionToken,eventId) {
     // Internal-only context: NEVER return a Spreadsheet/Sheet handle through
     // a google.script.run exposed function or allow the caller to supply one.
     return {eventId:allowed.eventId,revision:allowed.revision,
-      areaId:allowed.areaId,mode:'read',tables:d331Sheets};
+      areaId:allowed.areaId,recordStatus:mainRow[32],mode:'read',tables:d331Sheets};
   } catch(e) {d331P003bDeny_();}
 }
 
