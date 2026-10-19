@@ -99,8 +99,18 @@ function setup(opts={}){
    getLastColumn(){return rows.reduce((n,r)=>Math.max(n,r.length),0);},
    getRange(row,col,height,width){
     trace.reads.push({name,row,col,height,width});
-    return {getValues:()=>rows.slice(row-1,row-1+height)
-      .map(r=>r.slice(col-1,col-1+width))};
+    return {getValues:()=>{
+      // An authorized test-only concurrent edit occurs after the identity
+      // scan, just before the selected Case is read in full.
+      if(name==='DengueCases'&&row>1&&col===1&&width===16&&
+         opts.caseRowMutation){
+        const change=opts.caseRowMutation;
+        if(Object.hasOwn(change,'caseId'))rows[row-1][0]=change.caseId;
+        if(Object.hasOwn(change,'eventId'))rows[row-1][1]=change.eventId;
+      }
+      return rows.slice(row-1,row-1+height)
+        .map(r=>r.slice(col-1,col-1+width));
+    }};
    }
   };
  }
@@ -184,7 +194,7 @@ test('P0-22B2 server-authorized synthetic Event -> Case projection is bounded',(
  const scans=x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1);
  assert.equal(scans.length,2);
  assert.deepEqual(scans.map(x=>({row:x.row,col:x.col,width:x.width})),[
-  {row:2,col:2,width:1},{row:2,col:1,width:16}
+  {row:2,col:1,width:2},{row:2,col:1,width:16}
  ]);
  for(const forbidden of ['TEST_UNIT_A','TEST_UNIT_B','SYNTHETIC_AUTHOR',
   'TEST_ONLY_HASH','SYNTHETIC-GRANT','PatientName'])
@@ -231,6 +241,54 @@ test('P0-22B2 excludes other Events without reading their clinical fields',()=>{
  assert.deepEqual(plain(x.read().cases),[]);
  assert.equal(x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,0);
 });
+test('D2: reject duplicate CaseID across different Events before any case detail',()=>{
+ const x=assertDeny({cases:[caseRow(CASE,EVENT),caseRow(CASE,OTHER)]});
+ assert.equal(x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,0);
+ const y=assertDeny({cases:[caseRow(CASE,OTHER),caseRow(CASE,OTHER)]});
+ assert.equal(y.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,0);
+});
+
+test('D2: reject malformed identifiers in other Events and never fetch PHI',()=>{
+ const cases=[
+  caseRow(CASE,EVENT),
+  caseRow(CASE2,OTHER)
+ ];
+ for(const bad of [
+  {index:0,value:'MALFORMED'},
+  {index:1,value:'MALFORMED'},
+  {index:0,value:CASE2.toUpperCase()},
+  {index:1,value:OTHER.toUpperCase()},
+  {index:0,value:''},
+  {index:1,value:''}
+ ]){
+  const corrupted=cases.map(x=>x.slice());
+  corrupted[1][bad.index]=bad.value;
+  const x=assertDeny({cases:corrupted});
+  assert.equal(x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,0);
+ }
+});
+
+test('D2: detect CaseID or EventID drift between index and detail reads',()=>{
+ for(const mutation of [
+  {caseId:CASE2},
+  {eventId:OTHER}
+ ]){
+  const x=assertDeny({cases:[caseRow(CASE,EVENT)],caseRowMutation:mutation});
+  assert.equal(x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,1);
+ }
+});
+
+test('D2: index is only CaseID+EventID; no cross-event detailed reads',()=>{
+ const x=setup({cases:[caseRow(CASE,EVENT),caseRow(CASE2,OTHER)]});
+ const result=plain(x.read());
+ assert.equal(result.cases.length,1);
+ const reads=x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1);
+ assert.deepEqual(reads.map(r=>({row:r.row,col:r.col,width:r.width})),[
+  {row:2,col:1,width:2},{row:2,col:1,width:16}
+ ]);
+ assert.equal(reads.filter(r=>r.row===3&&r.width===16).length,0);
+});
+
 test('P0-22B2 rejects unbounded scans and excessive cases',()=>{
  const huge=Array.from({length:10001},()=>caseRow(CASE2,OTHER));
  const many=Array.from({length:101},()=>caseRow(CASE,EVENT));
