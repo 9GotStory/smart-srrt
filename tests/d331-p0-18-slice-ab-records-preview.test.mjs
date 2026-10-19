@@ -125,7 +125,7 @@ test('P018 responsive design stays scoped to Records preview and supports focus'
 });
 test('P018 preserves current Native26 topology and all three D331 source feature gates OFF',()=>{
  assert.equal(GAS_SERVER_SOURCES.length,8);
- assert.equal(GAS_HTML_SOURCES.length,18);
+ assert.equal(GAS_HTML_SOURCES.length,17);
  assert.equal(GAS_HTML_SOURCES.includes('src/web/03l-client-d331-status.html'),true);
  assert.match(read('src/dengue/00-g1a-foundation.gs'),/var D331_G1A_ENABLED = false;/);
  assert.match(read('src/dengue/09-p0-03b-dev-readonly-adapter.gs'),
