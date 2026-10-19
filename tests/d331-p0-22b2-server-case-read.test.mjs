@@ -96,7 +96,7 @@ function setup(opts={}){
   const rows=[h,...(data[name]??[])];
   tables[name]={
    getLastRow(){return rows.length;},
-   getLastColumn(){return h.length;},
+   getLastColumn(){return rows.reduce((n,r)=>Math.max(n,r.length),0);},
    getRange(row,col,height,width){
     trace.reads.push({name,row,col,height,width});
     return {getValues:()=>rows.slice(row-1,row-1+height)
@@ -217,15 +217,19 @@ test('P0-22B2 rejects invalid identity, event/area/grant before any case data',(
  ]) assertDeny(opts,true);
 });
 test('P0-22B2 prohibits VOID cases, duplicate CaseIDs and malformed data',()=>{
- const wrong=caseRow();wrong[1]=OTHER;
  const badRev=caseRow();badRev[2]=0;
  const wrongWidth=caseRow();wrongWidth.push('PRIVATE');
  const badStatus=caseRow(CASE,EVENT,'VOID');
  const badDate=caseRow();badDate[5]='2026-19-42';
  for(const cases of [
   [caseRow(),caseRow()],
-  [wrong],[badRev],[wrongWidth],[badStatus],[badDate]
+  [badRev],[wrongWidth],[badStatus],[badDate]
  ])assertDeny({cases},false);
+});
+test('P0-22B2 excludes other Events without reading their clinical fields',()=>{
+ const x=setup({cases:[caseRow(CASE2,OTHER)]});
+ assert.deepEqual(plain(x.read().cases),[]);
+ assert.equal(x.trace.reads.filter(r=>r.name==='DengueCases'&&r.row>1&&r.width===16).length,0);
 });
 test('P0-22B2 rejects unbounded scans and excessive cases',()=>{
  const huge=Array.from({length:10001},()=>caseRow(CASE2,OTHER));
