@@ -37,8 +37,9 @@ function ui(){
 const controls=(u)=>u.find(n=>n.tagName==='button').map(x=>({label:x.textContent,disabled:x.disabled}));
 const button=(u,label)=>u.find(x=>x.tagName==='button'&&x.textContent===label)[0];
 
-test('P0-23 source is unregistered; existing Records/Login/P0-20 remain unchanged',()=>{
+test('P0-24 integration candidate remains unregistered; existing Records/Login/P0-20 stay operational',()=>{
  assert.doesNotMatch(native,/03m-client-d331-mvp01-offline/);
+ assert.match(layout,/id="d331-p024-region"/);
  assert.match(layout,/id="page-records"/);
  assert.match(layout,/id="d331-p018-preview"/);
  assert.match(layout,/id="d331-p020-region"/);
@@ -46,9 +47,9 @@ test('P0-23 source is unregistered; existing Records/Login/P0-20 remain unchange
  assert.match(reader,/D331_P022B2_REVOCATION_APPROVED_ = false/);
  assert.match(reader,/D331_P022B2_APPROVED_FIELDS_ = \[\]/);
  assert.doesNotMatch(layout,/id="page-dengue"/);
- const code=source.slice(source.indexOf('<script>')+8,source.indexOf('</script>'));
+ const code=source.slice(source.indexOf('<script>')+8,source.indexOf('  function createRecordsBridge'));
  assert.doesNotMatch(code,/google\.script|SpreadsheetApp|PropertiesService|fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|allData|currentUser|saveRecord\s*\(|appendRow|setValues?\s*\(|setProperty\s*\(/i);
- assert.match(source,/OFFLINE UI ONLY/);
+ assert.match(source,/UNREGISTERED Records integration candidate/);
 });
 
 test('P0-23 starts with only a fixed fake Event and synthetic case; no clinical verdict',()=>{

@@ -122,6 +122,8 @@
 
   function renderTables(){
     if(!currentUser)d331P020PreviewBridge_.reset();
+    if(!currentUser&&typeof d331P024RecordsMockBridge_!=='undefined')
+      d331P024RecordsMockBridge_.reset();
     if(!currentUser){el('eventBody').innerHTML='';el('recordBody').innerHTML='';el('reportBody').innerHTML='';clearRecordFilters();clearReporterFilters();return}
     const manage=roleCanRecord();
     updateRecordFilterOptions();
@@ -140,6 +142,8 @@
     }).join('')||'<tr class="srrt-record-empty"><td colspan="12">'+(allData.length?'ไม่พบรายการที่ตรงกับเงื่อนไขค้นหา':'ยังไม่มีข้อมูลเหตุการณ์')+'</td></tr>';
     renderReporterWorklist()
     d331P020PreviewBridge_.mount()
+    if(typeof d331P024RecordsMockBridge_!=='undefined')
+      d331P024RecordsMockBridge_.mount()
   }
 
 

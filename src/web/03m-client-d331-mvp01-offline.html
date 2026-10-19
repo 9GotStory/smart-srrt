@@ -1,4 +1,4 @@
-<!-- P0-23 MVP-01: UNREGISTERED OFFLINE UI ONLY. Not part of native-sources.mjs. -->
+<!-- P0-24: UNREGISTERED Records integration candidate, isolated synthetic-only harness. No real Event or Google IO. -->
 <style>
   .srrt-d331-p023{border:1px solid var(--border,#cbd5e1);border-radius:14px;padding:1rem;display:grid;gap:.8rem;background:var(--card,#fff);color:inherit}
   .srrt-d331-p023 h3,.srrt-d331-p023 p{margin:0}
@@ -18,7 +18,9 @@
 <script>
 /**
  * P0-23 MVP-01 — interactive, completely synthetic Event -> Case workspace.
- * Intentionally NOT registered, mounted, or authorized for real Events.
+ * P0-24 prepares a session-fenced offline Records bridge for mock tests.
+ * This partial stays UNREGISTERED and cannot appear in the Native Web App.
+ * Not authorized for real Events, Case reads/writes or clinical policy.
  * No external DTO, authentication, clinical rule or transport.
  */
 var d331P023OfflineCaseWorkspace_=(function(){
@@ -197,6 +199,83 @@ var d331P023OfflineCaseWorkspace_=(function(){
     return Object.freeze({snapshot:model.snapshot,reset:function(){model.reset();render();},
       dispose:function(){disposed=true;model.reset();root.replaceChildren();}});
   }
-  return Object.freeze({createModel:createModel,mount:mount});
+  /**
+   * UI-only bridge: gate the synthetic preview on the existing Records
+   * disclosure + current session. The identity snapshot is NEVER passed to
+   * the synthetic Case model or serialized into the mock DOM.
+   */
+  function createRecordsBridge(options){
+    if(!options||!options.root||!options.region||
+       typeof options.root.addEventListener!=='function'||
+       typeof options.region.replaceChildren!=='function'||
+       typeof options.session!=='function'||
+       typeof options.mountView!=='function')deny();
+    var root=options.root,region=options.region;
+    var connected=false,active=null,owner=null;
+    function current(){
+      try{
+        var s=options.session();
+        if(!s||s.allowed!==true||typeof s.token!=='string'||!s.token||
+           !s.user||typeof s.user!=='object')return null;
+        return {token:s.token,user:s.user};
+      }catch(_){return null;}
+    }
+    function clear(){
+      if(active){active.dispose();active=null;}
+      region.replaceChildren();
+      region.hidden=true;owner=null;
+    }
+    function reset(){clear();root.open=false;}
+    function refresh(){
+      var s=current();
+      if(!s){reset();return;}
+      // Never retain a draft across a changed login/user identity.
+      if(owner&&(owner.token!==s.token||owner.user!==s.user)){
+        reset();return;
+      }
+      if(!root.open){clear();return;}
+      if(active)return; // re-filtering Records must not discard the mock draft
+      // A failed mount must not expose an active DOM or stale state.
+      try{
+        region.hidden=false;
+        active=options.mountView(region);
+        owner=s;
+      }catch(_){clear();}
+    }
+    function connect(){
+      if(!connected){root.addEventListener('toggle',refresh);connected=true;}
+      refresh();
+    }
+    return Object.freeze({connect:connect,refresh:refresh,reset:reset});
+  }
+  return Object.freeze({createModel:createModel,mount:mount,
+    createRecordsBridge:createRecordsBridge});
+})();
+
+// P0-24: only the existing Records disclosure may mount the synthetic view.
+// This client-side check is a UX visibility fence, NOT D331 authorization.
+var d331P024RecordsMockBridge_=(function(){
+  'use strict';
+  var active=null,activeRoot=null;
+  function mount(){
+    var root=el('d331-p018-preview'),region=el('d331-p024-region');
+    if(!root||!region)return;
+    if(root!==activeRoot){
+      if(active)active.reset();
+      activeRoot=root;
+      active=d331P023OfflineCaseWorkspace_.createRecordsBridge({
+        root:root,region:region,
+        session:function(){
+          return {token:token,user:currentUser,
+            allowed:!!token&&!!currentUser&&!!roleCanRecord()};
+        },
+        mountView:d331P023OfflineCaseWorkspace_.mount
+      });
+      active.connect();
+    }
+    active.refresh();
+  }
+  function reset(){if(active)active.reset();}
+  return Object.freeze({mount:mount,reset:reset});
 })();
 </script>
