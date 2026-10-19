@@ -30,5 +30,8 @@ export const GAS_HTML_SOURCES = Object.freeze([
   'src/web/03k-client-report-generation.html',
   // C2C-A: source registration only; no page, route, grant, RPC or feature enable.
   'src/web/03l-client-d331-status.html',
+  // P0-24: browser-only synthetic Event-case workspace within original Records.
+  // No GS reader, RPC, patient data, or D331 runtime feature enablement.
+  'src/web/03m-client-d331-mvp01-offline.html',
   'src/web/04-browser-app.html',
 ]);
