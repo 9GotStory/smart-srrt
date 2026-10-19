@@ -51,14 +51,13 @@ function setup(){
    toggle(open){ui.detail.open=open;ui.detail.fire('toggle');}};
 }
 
-test('P0-24 registers only a synthetic HTML partial after Records and before app close',()=>{
+test('P0-24 leaves the locked Native26 release manifest unchanged and mock bridge unregistered',()=>{
  assert.equal(GAS_SERVER_SOURCES.length,8);
- assert.equal(GAS_HTML_SOURCES.length,18);
- assert.equal(GAS_HTML_SOURCES.filter(s=>s.endsWith('03m-client-d331-mvp01-offline.html')).length,1);
- assert.ok(GAS_HTML_SOURCES.indexOf('src/web/03m-client-d331-mvp01-offline.html')>
-   GAS_HTML_SOURCES.indexOf('src/web/03h-client-event-records.html'));
- assert.ok(GAS_HTML_SOURCES.indexOf('src/web/03m-client-d331-mvp01-offline.html')<
-   GAS_HTML_SOURCES.indexOf('src/web/04-browser-app.html'));
+ assert.equal(GAS_HTML_SOURCES.length,17);
+ assert.equal(GAS_HTML_SOURCES.filter(s=>s.endsWith('03m-client-d331-mvp01-offline.html')).length,0);
+ assert.ok(GAS_HTML_SOURCES.includes('src/web/03h-client-event-records.html'));
+ assert.ok(GAS_HTML_SOURCES.includes('src/web/04-browser-app.html'));
+ assert.match(src,/UNREGISTERED Records integration candidate/);
  assert.ok(!GAS_SERVER_SOURCES.some(s=>s.includes('p0-22b2')));
  assert.match(reader,/D331_P022B2_ENABLED_ = false/);
  assert.match(reader,/D331_P022B2_REVOCATION_APPROVED_ = false/);
