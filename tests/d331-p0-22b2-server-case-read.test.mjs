@@ -140,7 +140,7 @@ function setup(opts={}){
  ctx.D331_P003B_APPROVED_POLICY_REVISION_=opts.policy??POLICY;
  ctx.D331_P022B2_ENABLED_=opts.readerFlag??true;
  ctx.D331_P022B2_REVOCATION_APPROVED_=opts.revocationFlag??true;
- ctx.D331_P022B2_APPROVED_FIELDS_=opts.fields??[
+ ctx.D331_P022B2_APPROVED_FIELDS_=Object.hasOwn(opts,'fields')?opts.fields:[
   'CaseID','CaseRevision','CaseStatus'
  ];
  return {ctx,trace,originalFlags,
@@ -303,4 +303,126 @@ test('P0-22B2 retains count-only public P0-19 and source-only Records UI',()=>{
  assert.match(layout,/Mock-only · D331 OFF/);
  const records=fs.readFileSync(new URL('../src/web/03h-client-event-records.html',import.meta.url),'utf8');
  assert.match(records,/d331P020PreviewBridge_\.mount\(\)/);
+});
+
+
+// P0-30C: exact source-only backend authorization/DTO boundary audit.
+// Uses the EXISTING P0-22B2 VM harness and temporary in-memory flags only.
+// This does NOT authorize actual grants, patient reads, public RPC or release.
+test('P0-30C: all OFF/unsigned read gates deny before any Google service even with valid synthetic request',()=>{
+ const candidates=[
+  {baseFlag:false},{backendFlag:false},{readerFlag:false},
+  {revocationFlag:false},{fields:[]},{fields:['CaseID','CaseStatus','CaseRevision']},
+  {fields:['CaseID','CaseRevision','CaseStatus','PatientName']},
+  {fields:null}
+ ];
+ for(const opts of candidates){
+  const x=assertDeny(opts,true);
+  assert.equal(x.trace.service,0);
+  assert.equal(x.trace.properties,0);
+  assert.equal(x.trace.cache,0);
+  assert.equal(x.trace.opens,0);
+  assert.equal(x.trace.reads.length,0);
+  assert.equal(x.trace.writes,0);
+ }
+});
+
+test('P0-30C: per-Event grant authorization requires active unique approved scope, not account role alone',()=>{
+ const g=setup().ctx;
+ const admin=userRow();admin[4]='Administrator';
+ for(const opts of [
+  {userRows:[admin],grants:[]},
+  {grants:[grant(g,{ApprovedByUserID:'user-1'})]},
+  {grants:[grant(g,{PolicyRevision:'DIFFERENT_POLICY'})]},
+  {grants:[grant(g,{AreaID:'other-area'})]},
+  {grants:[grant(g,{EventID:OTHER})]},
+  {grants:[grant(g,{Capability:'dengue.case.write'})]},
+  {grants:[grant(g,{State:'REVOKED',RevokedAtUTC:'2026-10-01T00:00:00.000Z',RevokedByUserID:'reviewer-1',RevocationReasonCode:'ACCESS_REMOVED'})]},
+  {grants:[grant(g),grant(g,{GrantID:'SYNTHETIC-GRANT-2'})]},
+  {grants:[grant(g,{ValidFromUTC:'2099-01-01T00:00:00.000Z'})]},
+  {grants:[grant(g,{ExpiresAtUTC:'2026-01-01T00:00:00.000Z'})]}
+ ]){
+  const x=assertDeny(opts,true);
+  assert.equal(x.trace.writes,0);
+  assert.equal(x.trace.reads.some(t=>t.name==='DengueCases'&&t.row>1),false);
+ }
+});
+
+test('P0-30C: expired/changed credentials and absent/duplicate Event deny before clinical Case row access',()=>{
+ const changedUser=userRow();changedUser[3]='CHANGED_HASH';
+ const disabledUser=userRow();disabledUser[5]='inactive';
+ for(const opts of [
+  {session:null},{session:JSON.stringify({v:1,id:'user-1',tag:TAG})},
+  {session:JSON.stringify({v:2,id:'other-user',tag:TAG})},
+  {session:JSON.stringify({v:2,id:'user-1',tag:'b'.repeat(64)})},
+  {userRows:[changedUser]},{userRows:[disabledUser]},
+  {userRows:[userRow(),userRow()]},
+  {mainRows:[]},{mainRows:[eventRow(),eventRow()]},
+  {mainRows:[eventRow('closed')]},{mainRows:[eventRow('void')]},
+  {eventId:OTHER},{eventId:EVENT.toUpperCase()},{eventId:'invalid'}
+ ]){
+  const x=assertDeny(opts,true);
+  assert.equal(x.trace.reads.some(t=>t.name==='DengueCases'&&t.row>1),false);
+ }
+});
+
+test('P0-30C: pin and header mismatch deny before Case data, with generic error',()=>{
+ for(const opts of [
+  {dbProperty:null},{approvedDb:''},
+  {actualDb:'DIFFERENT_DEV_DATABASE_0123456789'},
+  {badHeader:'MainData'},{badHeader:'UserAccounts'},
+  {badHeader:'AreaMaster'},{badHeader:'DengueCases'},
+  {badHeader:'D331AccessGrants'},
+  {missingSheet:'DengueCases'},{missingSheet:'D331AccessGrants'}
+ ]){
+  const x=assertDeny(opts,true);
+  assert.equal(x.trace.reads.some(t=>t.name==='DengueCases'&&t.row>1),false);
+ }
+});
+
+test('P0-30C: test-only READ_ONLY candidate DTO is structurally incompatible with P0-30A/B browser mock',()=>{
+ const x=setup();
+ const dto=plain(x.read());
+ assert.deepEqual(Object.keys(dto).sort(),[
+  'areaId','canEnable','canWrite','cases','clinicalPolicyApproved',
+  'eventId','revision','slaAssessment','status'
+ ].sort());
+ assert.deepEqual(Object.keys(dto.cases[0]).sort(),
+  ['caseId','caseRevision','caseStatus'].sort());
+ assert.equal(dto.status,'READ_ONLY');
+ assert.equal(dto.slaAssessment,'NOT_EVALUATED');
+ assert.equal(dto.clinicalPolicyApproved,false);
+ assert.equal(dto.canWrite,false);
+ assert.equal(dto.canEnable,false);
+ const records=fs.readFileSync(new URL('../src/web/03h-client-event-records.html',import.meta.url),'utf8');
+ const a=records.slice(records.indexOf('// P0-30A: inert Records Case-read state seam.'),
+  records.indexOf('// P0-30A END'));
+ const b=records.slice(records.indexOf('// P0-30B: source-only Event-selection contract'),
+  records.indexOf('// P0-30B END'));
+ assert.ok(a.startsWith('// P0-30A:')&&b.startsWith('// P0-30B:'));
+ const client=vm.createContext({});
+ vm.runInContext(a,client);
+ vm.runInContext(b,client);
+ assert.throws(()=>client.d331P030aCaseReadSeam_.validateSynthetic(dto),
+  /D331_P030A_MOCK_ONLY/);
+ assert.throws(()=>client.d331P030bSelectedEventCaseContract_.validateSelection({
+  kind:'SYNTHETIC_SELECTED_EVENT_V1',simulationOnly:true,
+  eventId:dto.eventId,areaId:dto.areaId,revision:dto.revision,
+  recordStatus:'active'
+ }),/D331_P030B_SYNTHETIC_ONLY/);
+ assert.doesNotMatch(a+b,/\bgoogle\.script\.run\b|\bfetch\s*\(|\bgetDengueWorkspace\s*\(/);
+});
+
+test('P0-30C: original private server Case reader stays unregistered and cannot be a public Case RPC',()=>{
+ const original=sources.at(-1);
+ assert.match(original,/function d331P022b2ListCasesForEvent_\(sessionToken,eventId\)/);
+ assert.doesNotMatch(manifest,/15-p0-22b2-case-read-integration\.gs/);
+ assert.doesNotMatch(original,/function\s+listDengueCasesForEvent\s*\(/);
+ assert.match(original,/D331_P022B2_REVOCATION_APPROVED_ = false/);
+ assert.match(original,/D331_P022B2_APPROVED_FIELDS_ = \[\]/);
+ const adapter=sources.find((_,i)=>paths[i].includes('09-p0-03b'));
+ const pub=adapter.slice(adapter.indexOf('function getDengueWorkspace('));
+ assert.match(pub,/counts:counts/);
+ assert.doesNotMatch(pub,/cases:cases|return\s+\{[^]*?PatientName/);
+ assert.doesNotMatch(original,/getDb_\(|getUserByToken_\(|\.setValues?\s*\(|\.appendRow\s*\(|\.setProperty\s*\(/);
 });
