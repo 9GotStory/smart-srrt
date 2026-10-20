@@ -56,7 +56,8 @@ test('P0-25 keeps Native26 canonical: exactly eight GS and seventeen HTML with n
  assert.equal(GAS_HTML_SOURCES.length,17);
  assert.ok(GAS_HTML_SOURCES.includes('src/web/03h-client-event-records.html'));
  assert.equal(GAS_HTML_SOURCES.some(x=>x.includes('03m-client-d331-mvp01-offline')),false);
- assert.equal((native.match(/<style>/g)||[]).length,1);
+ assert.equal((native.match(/<style>/g)||[]).length,0);
+ assert.equal((nativeStyles.match(/<style>/g)||[]).length,1);
  assert.equal((native.match(/<script>/g)||[]).length,1);
  assert.match(reader,/D331_P022B2_ENABLED_ = false/);
  assert.match(reader,/D331_P022B2_REVOCATION_APPROVED_ = false/);
