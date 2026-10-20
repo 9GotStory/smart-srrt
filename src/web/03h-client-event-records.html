@@ -472,6 +472,157 @@
       createOfflineController:createOfflineController,validateMock:validateMock});
   })();
 
+// P0-30A: inert Records Case-read state seam. No RPC, no real Event binding.
+// Only an offline harness may inject fixed synthetic results. Not auto-mounted.
+// This client contract is NEVER a D331 authorization or a clinical release.
+var d331P030aCaseReadSeam_=(function(){
+  'use strict';
+  var MOCK_EVENT='00000000-0000-4000-8000-000000002300';
+  var MOCK_AREA='SYNTHETIC-AREA';
+  var KEY='areaId|canWrite|cases|clinicalPolicyApproved|eventId|simulationOnly|slaAssessment|status';
+  var CASE_KEY='caseId|caseRevision|caseStatus';
+  function d331P030aDeny_(){throw new Error('D331_P030A_MOCK_ONLY');}
+  function validate(dto){
+    if(!dto||typeof dto!=='object'||Array.isArray(dto)||
+       Object.keys(dto).sort().join('|')!==KEY||
+       dto.status!=='MOCK_ONLY'||dto.simulationOnly!==true||
+       dto.eventId!==MOCK_EVENT||dto.areaId!==MOCK_AREA||
+       dto.slaAssessment!=='NOT_EVALUATED'||
+       dto.clinicalPolicyApproved!==false||dto.canWrite!==false||
+       !Array.isArray(dto.cases)||dto.cases.length>100)d331P030aDeny_();
+    var seen=Object.create(null);
+    return dto.cases.map(function(item){
+      if(!item||typeof item!=='object'||Array.isArray(item)||
+         Object.keys(item).sort().join('|')!==CASE_KEY||
+         typeof item.caseId!=='string'||
+         !/^00000000-0000-4000-8000-0000000023(?:0[1-9]|[1-9][0-9])$/.test(item.caseId)||
+         Object.prototype.hasOwnProperty.call(seen,item.caseId)||
+         !Number.isSafeInteger(item.caseRevision)||item.caseRevision<1||
+         item.caseStatus!=='ACTIVE')d331P030aDeny_();
+      seen[item.caseId]=true;
+      return {caseId:item.caseId,caseRevision:item.caseRevision,
+        caseStatus:item.caseStatus};
+    });
+  }
+  function createController(options){
+    if(!options||!options.root||!options.region||
+       typeof options.root.addEventListener!=='function'||
+       typeof options.region.replaceChildren!=='function'||
+       typeof options.region.setAttribute!=='function'||
+       !options.region.ownerDocument||
+       typeof options.region.ownerDocument.createElement!=='function'||
+       typeof options.session!=='function')d331P030aDeny_();
+    var root=options.root,region=options.region,session=options.session;
+    var owner=null,status='UNAVAILABLE',cases=[],epoch=0,pending=0,connected=false;
+    function current(){
+      try{
+        var s=session();
+        if(!s||s.allowed!==true||typeof s.token!=='string'||!s.token||
+           !s.user||typeof s.user!=='object')return null;
+        return {token:s.token,user:s.user};
+      }catch(_){return null;}
+    }
+    function textNode(tag,value){
+      var node=region.ownerDocument.createElement(tag);
+      node.textContent=value;
+      return node;
+    }
+    function render(){
+      region.replaceChildren();
+      region.setAttribute('aria-busy',status==='LOADING'?'true':'false');
+      region.hidden=!(owner&&root.open);
+      if(region.hidden)return;
+      var container=textNode('section','');
+      container.setAttribute('aria-label','ตัวอย่างสถานะ Case Read แบบออฟไลน์');
+      container.appendChild(textNode('h4','Case Read · Mock-only · D331 OFF'));
+      var label={UNAVAILABLE:'ยังไม่เปิดการอ่าน Case',
+        LOADING:'กำลังโหลดข้อมูล Case จำลอง',
+        EMPTY:'ไม่มี Case จำลองในเหตุการณ์นี้',
+        READY:'แสดงเฉพาะ Case จำลอง',
+        ERROR:'ไม่สามารถอ่านข้อมูลจำลองได้'}[status]||'ยังไม่เปิดการอ่าน Case';
+      var message=textNode('p',label);
+      message.setAttribute('role','status');
+      message.setAttribute('aria-live','polite');
+      container.appendChild(message);
+      if(status==='READY'){
+        var list=textNode('ul','');
+        cases.forEach(function(item){
+          list.appendChild(textNode('li','Case ตัวอย่าง '+item.caseId+
+            ' · Revision '+item.caseRevision+' · '+item.caseStatus));
+        });
+        container.appendChild(list);
+      }
+      container.appendChild(textNode('p',
+        'SLA: NOT_EVALUATED · ไม่มี Backend RPC · ไม่บันทึก Google Sheets'));
+      region.appendChild(container);
+    }
+    function clear(){
+      epoch++;pending=0;owner=null;cases=[];status='UNAVAILABLE';
+      render();
+    }
+    function reset(){clear();root.open=false;}
+    function refresh(){
+      var s=current();
+      if(!s){reset();return;}
+      if(owner&&(owner.token!==s.token||owner.user!==s.user)){
+        reset();return;
+      }
+      if(!root.open){clear();return;}
+      if(!owner)owner=s;
+      render();
+    }
+    function secure(){
+      var s=current();
+      if(!root.open||!owner||!s||
+         s.token!==owner.token||s.user!==owner.user){
+        reset();return false;
+      }
+      return true;
+    }
+    function begin(){
+      refresh();
+      if(!secure())return null;
+      pending=++epoch;cases=[];status='LOADING';render();
+      return pending;
+    }
+    function accept(ticket,dto){
+      if(!Number.isSafeInteger(ticket)||ticket!==pending||
+         status!=='LOADING'||!secure())return false;
+      try{
+        cases=validate(dto);
+        status=cases.length?'READY':'EMPTY';
+      }catch(_){
+        cases=[];status='ERROR';
+      }
+      pending=0;render();
+      return status!=='ERROR';
+    }
+    function fail(ticket){
+      if(!Number.isSafeInteger(ticket)||ticket!==pending||
+         status!=='LOADING'||!secure())return false;
+      pending=0;cases=[];status='ERROR';render();
+      return true;
+    }
+    function snapshot(){
+      return {kind:'MOCK_ONLY',status:status,
+        cases:cases.map(function(c){
+          return {caseId:c.caseId,caseRevision:c.caseRevision,
+            caseStatus:c.caseStatus};
+        }),remoteEnabled:false,canWrite:false,
+        slaAssessment:'NOT_EVALUATED'};
+    }
+    function connect(){
+      if(!connected){root.addEventListener('toggle',refresh);connected=true;}
+      refresh();
+    }
+    return Object.freeze({connect:connect,refresh:refresh,
+      begin:begin,accept:accept,fail:fail,reset:reset,snapshot:snapshot});
+  }
+  return Object.freeze({createController:createController,
+    validateSynthetic:validate,remoteEnabled:false});
+})();
+// P0-30A END
+
 // P0-25: exact synthetic JS mirror of unregistered P0-23/P0-24 source.
 // Standalone 03m source and native 03h mirror are parity-tested; no D331 RPC.
 /**
