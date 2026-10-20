@@ -95,8 +95,8 @@ test('P0-30F0 no D2 and P1 decisions means HOLD; no code may assume signed polic
     assert.equal(out.canEnable,false);
     assert.equal(out.globalCrossEventIdentifiersRead,0);
   }
-  assert.match(decisions,/P030D_DATA_D2=HOLD/);
-  assert.match(decisions,/P030D_PRIVACY_P1=HOLD/);
+  assert.match(decisions,/P030D_CASEID_GLOBAL_POLICY=HOLD/);
+  assert.match(decisions,/P030D_CROSS_EVENT_SCAN_PRIVACY=HOLD/);
 });
 
 test('P0-30F0 existing GLOBAL + approved-scan alternative touches other Event IDs',()=>{
