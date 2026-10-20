@@ -643,7 +643,7 @@ var d331P030bSelectedEventCaseContract_=(function(){
     return Object.freeze({kind:KIND,eventId:MOCK_EVENT,revision:1,
       areaId:MOCK_AREA,recordStatus:'active',simulationOnly:true});
   }
-  function offlineFixture(){
+  function d331P030bFixture_(){
     return {status:'MOCK_ONLY',simulationOnly:true,eventId:MOCK_EVENT,
       areaId:MOCK_AREA,cases:[{
         caseId:'00000000-0000-4000-8000-000000002301',
@@ -691,7 +691,7 @@ var d331P030bSelectedEventCaseContract_=(function(){
           cancel();return 'STALE';
         }
         busy=false;
-        return options.seam.accept(ticket,offlineFixture())
+        return options.seam.accept(ticket,d331P030bFixture_())
           ?'MOCK_ONLY':'STALE';
       }).catch(function(){
         if(currentRun===generation)cancel();
