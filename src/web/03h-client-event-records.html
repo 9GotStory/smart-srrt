@@ -623,6 +623,90 @@ var d331P030aCaseReadSeam_=(function(){
 })();
 // P0-30A END
 
+// P0-30B: source-only Event-selection contract for the existing P0-30A seam.
+// OFFLINE, FIXED SYNTHETIC Event only. NO selected real Records row, RPC or mount.
+// Browser selection is NEVER a server-verified Event/Area/grant authorization.
+var d331P030bSelectedEventCaseContract_=(function(){
+  'use strict';
+  var MOCK_EVENT='00000000-0000-4000-8000-000000002300';
+  var MOCK_AREA='SYNTHETIC-AREA';
+  var SELECTION_KEY='areaId|eventId|kind|recordStatus|revision|simulationOnly';
+  var KIND='SYNTHETIC_SELECTED_EVENT_V1';
+  function d331P030bReject_(){throw new Error('D331_P030B_SYNTHETIC_ONLY');}
+  function validateSelection(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||
+       Object.keys(value).sort().join('|')!==SELECTION_KEY||
+       value.kind!==KIND||value.simulationOnly!==true||
+       value.eventId!==MOCK_EVENT||value.areaId!==MOCK_AREA||
+       value.recordStatus!=='active'||value.revision!==1)
+      d331P030bReject_();
+    return Object.freeze({kind:KIND,eventId:MOCK_EVENT,revision:1,
+      areaId:MOCK_AREA,recordStatus:'active',simulationOnly:true});
+  }
+  function offlineFixture(){
+    return {status:'MOCK_ONLY',simulationOnly:true,eventId:MOCK_EVENT,
+      areaId:MOCK_AREA,cases:[{
+        caseId:'00000000-0000-4000-8000-000000002301',
+        caseRevision:1,caseStatus:'ACTIVE'
+      }],slaAssessment:'NOT_EVALUATED',
+      clinicalPolicyApproved:false,canWrite:false};
+  }
+  function createOfflineLink(options){
+    if(!options||typeof options.selection!=='function'||
+       !options.seam||typeof options.seam.snapshot!=='function'||
+       typeof options.seam.begin!=='function'||
+       typeof options.seam.accept!=='function'||
+       typeof options.seam.reset!=='function')d331P030bReject_();
+    var initial=options.seam.snapshot();
+    if(!initial||initial.kind!=='MOCK_ONLY'||
+       initial.remoteEnabled!==false||initial.canWrite!==false)
+      d331P030bReject_();
+    var generation=0, busy=false;
+    function cancel(){
+      generation++;busy=false;
+      options.seam.reset();
+    }
+    function preview(){
+      if(busy)return Promise.resolve('BUSY');
+      var before;
+      try{before=validateSelection(options.selection());}
+      catch(_){cancel();return Promise.resolve('DENIED');}
+      // P0-30A is responsible for the session/disclosure visibility fence.
+      // Its begin() returns null if the current user may not view this mock.
+      var ticket=options.seam.begin();
+      if(!Number.isSafeInteger(ticket)||ticket<1)
+        return Promise.resolve('DENIED');
+      var currentRun=++generation;
+      busy=true;
+      // This promise creates a predictable offline pending state for tests.
+      // There is NO injectable transport or real Case reader invocation.
+      return Promise.resolve().then(function(){
+        if(currentRun!==generation)return 'STALE';
+        var after;
+        try{after=validateSelection(options.selection());}
+        catch(_){cancel();return 'DENIED';}
+        if(after.eventId!==before.eventId||
+           after.revision!==before.revision||
+           after.areaId!==before.areaId){
+          cancel();return 'STALE';
+        }
+        busy=false;
+        return options.seam.accept(ticket,offlineFixture())
+          ?'MOCK_ONLY':'STALE';
+      }).catch(function(){
+        if(currentRun===generation)cancel();
+        return 'DENIED';
+      });
+    }
+    return Object.freeze({preview:preview,cancel:cancel,
+      remoteEnabled:false,realEventSelectionEnabled:false});
+  }
+  return Object.freeze({validateSelection:validateSelection,
+    createOfflineLink:createOfflineLink,remoteEnabled:false,
+    realEventSelectionEnabled:false});
+})();
+// P0-30B END
+
 // P0-25: exact synthetic JS mirror of unregistered P0-23/P0-24 source.
 // Standalone 03m source and native 03h mirror are parity-tested; no D331 RPC.
 /**
