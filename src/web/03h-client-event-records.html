@@ -471,4 +471,275 @@
     return Object.freeze({mount:mount,reset:reset,
       createOfflineController:createOfflineController,validateMock:validateMock});
   })();
+
+// P0-25: exact synthetic JS mirror of unregistered P0-23/P0-24 source.
+// Standalone 03m source and native 03h mirror are parity-tested; no D331 RPC.
+/**
+ * P0-23 MVP-01 — interactive, completely synthetic Event -> Case workspace.
+ * P0-24 prepares a session-fenced offline Records bridge for mock tests.
+ * This standalone partial stays UNREGISTERED. Its exact CSS/JS is mirrored
+ * inside the already registered 03l Native26 partial for synthetic display.
+ * No standalone partial registration, real RPC or real patient data is allowed.
+ * Not authorized for real Events, Case reads/writes or clinical policy.
+ * No external DTO, authentication, clinical rule or transport.
+ */
+var d331P023OfflineCaseWorkspace_=(function(){
+  'use strict';
+  var EVENT='00000000-0000-4000-8000-000000002300';
+  var LABEL='TEST-ONLY / เหตุการณ์จำลอง';
+  var CLASSIFICATIONS=['SUSPECTED','PROBABLE','CONFIRMED','UNKNOWN'];
+  function deny(){throw new Error('D331_P023_SYNTHETIC_ONLY');}
+  function validDate(input){
+    if(typeof input!=='string'||!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(input))return false;
+    var parts=input.split('-').map(Number);
+    var at=new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+    return at.getUTCFullYear()===parts[0]&&at.getUTCMonth()===parts[1]-1&&
+      at.getUTCDate()===parts[2];
+  }
+  function copyCase(row){
+    return {caseId:row.caseId,caseRevision:row.caseRevision,
+      caseStatus:row.caseStatus,classification:row.classification,
+      onsetLocalDate:row.onsetLocalDate};
+  }
+  function seeded(){
+    return [{caseId:'00000000-0000-4000-8000-000000002301',
+      caseRevision:1,caseStatus:'ACTIVE',classification:'SUSPECTED',
+      onsetLocalDate:'2026-10-01'}];
+  }
+  function createModel(){
+    var rows=seeded(),draft=null,pending=false,generation=0,nextId=2,
+      notice='ข้อมูลจำลองเท่านั้น · ไม่เชื่อม EventID หรือผู้ป่วยจริง';
+    function snapshot(){
+      return {kind:'SYNTHETIC_ONLY',eventId:EVENT,eventLabel:LABEL,
+        cases:rows.map(copyCase),draft:draft?{
+          mode:draft.mode,caseId:draft.caseId,
+          classification:draft.classification,onsetLocalDate:draft.onsetLocalDate
+        }:null,busy:pending,notice:notice,
+        slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+        canWrite:false,canEnable:false};
+    }
+    function beginAdd(){
+      if(pending||draft)deny();
+      draft={mode:'add',caseId:null,classification:'SUSPECTED',onsetLocalDate:''};
+      notice='เพิ่มรายการจำลองในหน่วยความจำเท่านั้น';return snapshot();
+    }
+    function beginEdit(caseId){
+      if(pending||draft||typeof caseId!=='string')deny();
+      var match=rows.filter(function(r){return r.caseId===caseId;});
+      if(match.length!==1||match[0].caseStatus!=='ACTIVE')deny();
+      draft={mode:'edit',caseId:caseId,classification:match[0].classification,
+        onsetLocalDate:match[0].onsetLocalDate};
+      notice='แก้ไขรายการจำลองในหน่วยความจำเท่านั้น';return snapshot();
+    }
+    function setField(field,value){
+      if(pending||!draft||typeof value!=='string')deny();
+      if(field==='classification'&&CLASSIFICATIONS.indexOf(value)>=0)
+        draft.classification=value;
+      else if(field==='onsetLocalDate'&&(value===''||validDate(value)))
+        draft.onsetLocalDate=value;
+      else deny();
+      return snapshot();
+    }
+    function cancel(){
+      if(pending)deny();
+      draft=null;notice='ยกเลิกข้อมูลจำลองแล้ว';return snapshot();
+    }
+    function save(){
+      if(pending)return Promise.resolve({status:'BUSY'});
+      if(!draft||!validDate(draft.onsetLocalDate)||
+         CLASSIFICATIONS.indexOf(draft.classification)<0)deny();
+      var change={mode:draft.mode,caseId:draft.caseId,
+        classification:draft.classification,onsetLocalDate:draft.onsetLocalDate};
+      pending=true;notice='กำลังบันทึกแบบจำลอง (ไม่มีการส่งข้อมูล)';
+      var run=++generation;
+      return Promise.resolve().then(function(){
+        if(run!==generation)return {status:'STALE'};
+        if(change.mode==='add'){
+          if(nextId>99)deny();
+          var id='00000000-0000-4000-8000-0000000023'+String(nextId++).padStart(2,'0');
+          rows.push({caseId:id,caseRevision:1,caseStatus:'ACTIVE',
+            classification:change.classification,onsetLocalDate:change.onsetLocalDate});
+        }else{
+          var matches=rows.filter(function(r){return r.caseId===change.caseId;});
+          if(matches.length!==1||matches[0].caseStatus!=='ACTIVE')deny();
+          matches[0].caseRevision++;
+          matches[0].classification=change.classification;
+          matches[0].onsetLocalDate=change.onsetLocalDate;
+        }
+        draft=null;pending=false;notice='บันทึกแบบจำลองสำเร็จ · ไม่มีข้อมูลส่งไปยังระบบ';
+        return {status:'SYNTHETIC_SAVED'};
+      }).catch(function(){
+        if(run===generation){pending=false;notice='ไม่สามารถบันทึกตัวอย่างได้';}
+        return {status:'ERROR'};
+      });
+    }
+    function reset(){
+      generation++;rows=seeded();draft=null;pending=false;nextId=2;
+      notice='ล้างข้อมูลจำลองแล้ว · ไม่แตะข้อมูลใน Smart SRRT';
+      return snapshot();
+    }
+    return Object.freeze({snapshot:snapshot,beginAdd:beginAdd,beginEdit:beginEdit,
+      setField:setField,cancel:cancel,save:save,reset:reset});
+  }
+  function node(doc,tag,text){
+    var n=doc.createElement(tag);
+    if(typeof text==='string')n.textContent=text;
+    return n;
+  }
+  function mountSyntheticCase_(root){
+    if(!root||!root.ownerDocument||!root.ownerDocument.createElement||
+       typeof root.replaceChildren!=='function')deny();
+    var doc=root.ownerDocument,model=createModel(),disposed=false;
+    function button(label,fn,disabled){
+      var b=node(doc,'button',label);b.type='button';b.disabled=!!disabled;
+      if(!disabled)b.addEventListener('click',fn);
+      return b;
+    }
+    function render(){
+      if(disposed)return;
+      var s=model.snapshot(),wrap=node(doc,'section');
+      wrap.className='srrt-d331-p023';
+      wrap.setAttribute('aria-label','Dengue 3-3-1 MVP-01 ตัวอย่างจำลอง');
+      wrap.setAttribute('aria-busy',s.busy?'true':'false');
+      wrap.appendChild(node(doc,'h3','Dengue 3-3-1 · ตัวอย่างรายการผู้ป่วย'));
+      var caution=node(doc,'p','ตัวอย่างเท่านั้น · D331 OFF · ไม่เชื่อมข้อมูลผู้ป่วยจริง');
+      caution.className='srrt-d331-p023__notice';wrap.appendChild(caution);
+      wrap.appendChild(node(doc,'p',s.eventLabel));
+      var status=node(doc,'p',s.notice);status.setAttribute('role','status');
+      status.setAttribute('aria-live','polite');wrap.appendChild(status);
+      var tableWrap=node(doc,'div');tableWrap.className='srrt-d331-p023__table';
+      var table=node(doc,'table'),thead=node(doc,'thead'),tr=node(doc,'tr');
+      ['รหัสจำลอง','Revision','Classification','วันที่เริ่มป่วย (สมมติ)','การดำเนินการ'].forEach(function(h){tr.appendChild(node(doc,'th',h));});
+      thead.appendChild(tr);table.appendChild(thead);
+      var tbody=node(doc,'tbody');
+      s.cases.forEach(function(c){
+        var row=node(doc,'tr');
+        [c.caseId.slice(-4),String(c.caseRevision),c.classification,c.onsetLocalDate].forEach(function(v){
+          row.appendChild(node(doc,'td',v));
+        });
+        var action=node(doc,'td');
+        action.appendChild(button('แก้ไขตัวอย่าง',function(){
+          model.beginEdit(c.caseId);render();
+        },!!s.draft||s.busy));
+        row.appendChild(action);tbody.appendChild(row);
+      });
+      table.appendChild(tbody);tableWrap.appendChild(table);wrap.appendChild(tableWrap);
+      if(!s.draft){
+        var actions=node(doc,'div');actions.className='srrt-d331-p023__toolbar';
+        actions.appendChild(button('เพิ่ม Case ตัวอย่าง',function(){model.beginAdd();render();},s.busy));
+        actions.appendChild(button('ล้างตัวอย่าง',function(){model.reset();render();},s.busy));
+        wrap.appendChild(actions);
+      }else{
+        var form=node(doc,'div');form.className='srrt-d331-p023__grid';
+        var category=node(doc,'label','ประเภทกรณีจำลอง');
+        var select=node(doc,'select');select.setAttribute('aria-label','Classification จำลอง');
+        CLASSIFICATIONS.forEach(function(key){
+          var opt=node(doc,'option',key);opt.value=key;select.appendChild(opt);
+        });
+        select.value=s.draft.classification;select.disabled=s.busy;
+        select.addEventListener('change',function(){model.setField('classification',select.value);render();});
+        category.appendChild(select);form.appendChild(category);
+        var when=node(doc,'label','วันที่เริ่มป่วย (ข้อมูลสมมติ)');
+        var date=node(doc,'input');date.type='date';date.value=s.draft.onsetLocalDate;date.disabled=s.busy;
+        date.setAttribute('aria-label','วันที่เริ่มป่วยจำลอง');
+        date.addEventListener('change',function(){model.setField('onsetLocalDate',date.value);render();});
+        when.appendChild(date);form.appendChild(when);
+        wrap.appendChild(form);
+        var controls=node(doc,'div');controls.className='srrt-d331-p023__toolbar';
+        controls.appendChild(button(s.busy?'กำลังบันทึกตัวอย่าง...':'บันทึกแบบจำลอง',function(){
+          var work=model.save();render();work.then(function(){render();});
+        },s.busy||!validDate(s.draft.onsetLocalDate)));
+        controls.appendChild(button('ยกเลิก',function(){model.cancel();render();},s.busy));
+        wrap.appendChild(controls);
+      }
+      wrap.appendChild(node(doc,'p','3-3-1 SLA: NOT_EVALUATED · ไม่มีการบันทึก Google Sheets'));
+      root.replaceChildren(wrap);
+    }
+    render();
+    return Object.freeze({snapshot:model.snapshot,reset:function(){model.reset();render();},
+      dispose:function(){disposed=true;model.reset();root.replaceChildren();}});
+  }
+  /**
+   * UI-only bridge: gate the synthetic preview on the existing Records
+   * disclosure + current session. The identity snapshot is NEVER passed to
+   * the synthetic Case model or serialized into the mock DOM.
+   */
+  function createRecordsBridge(options){
+    if(!options||!options.root||!options.region||
+       typeof options.root.addEventListener!=='function'||
+       typeof options.region.replaceChildren!=='function'||
+       typeof options.session!=='function'||
+       typeof options.mountView!=='function')deny();
+    var root=options.root,region=options.region;
+    var connected=false,active=null,owner=null;
+    function current(){
+      try{
+        var s=options.session();
+        if(!s||s.allowed!==true||typeof s.token!=='string'||!s.token||
+           !s.user||typeof s.user!=='object')return null;
+        return {token:s.token,user:s.user};
+      }catch(_){return null;}
+    }
+    function clear(){
+      if(active){active.dispose();active=null;}
+      region.replaceChildren();
+      region.hidden=true;owner=null;
+    }
+    function reset(){clear();root.open=false;}
+    function refresh(){
+      var s=current();
+      if(!s){reset();return;}
+      // Never retain a draft across a changed login/user identity.
+      if(owner&&(owner.token!==s.token||owner.user!==s.user)){
+        reset();return;
+      }
+      if(!root.open){clear();return;}
+      if(active)return; // re-filtering Records must not discard the mock draft
+      // A failed mount must not expose an active DOM or stale state.
+      try{
+        region.hidden=false;
+        active=options.mountView(region);
+        owner=s;
+      }catch(_){clear();}
+    }
+    function connect(){
+      if(!connected){root.addEventListener('toggle',refresh);connected=true;}
+      refresh();
+    }
+    return Object.freeze({connect:connect,refresh:refresh,reset:reset});
+  }
+  return Object.freeze({createModel:createModel,mount:mountSyntheticCase_,
+    createRecordsBridge:createRecordsBridge});
+})();
+
+// P0-24: only the existing Records disclosure may mount the synthetic view.
+// This client-side check is a UX visibility fence, NOT D331 authorization.
+var d331P024RecordsMockBridge_=(function(){
+  'use strict';
+  var active=null,activeRoot=null;
+  function mountRecordsMock_(){
+    var root=el('d331-p018-preview'),region=el('d331-p024-region');
+    // Lightweight legacy Records harnesses and denied/incomplete views must
+    // never throw or create a synthetic controller without a real DOM root.
+    if(!root||!region||typeof root.addEventListener!=='function'||
+       typeof region.replaceChildren!=='function'||
+       !region.ownerDocument||typeof region.ownerDocument.createElement!=='function')return;
+    if(root!==activeRoot){
+      if(active)active.reset();
+      activeRoot=root;
+      active=d331P023OfflineCaseWorkspace_.createRecordsBridge({
+        root:root,region:region,
+        session:function(){
+          return {token:token,user:currentUser,
+            allowed:!!token&&!!currentUser&&!!roleCanRecord()};
+        },
+        mountView:d331P023OfflineCaseWorkspace_.mount
+      });
+      active.connect();
+    }
+    active.refresh();
+  }
+  function resetRecordsMock_(){if(active)active.reset();}
+  return Object.freeze({mount:mountRecordsMock_,reset:resetRecordsMock_});
+})();
 </script>
