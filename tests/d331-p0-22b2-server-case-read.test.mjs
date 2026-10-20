@@ -140,7 +140,7 @@ function setup(opts={}){
  ctx.D331_P003B_APPROVED_POLICY_REVISION_=opts.policy??POLICY;
  ctx.D331_P022B2_ENABLED_=opts.readerFlag??true;
  ctx.D331_P022B2_REVOCATION_APPROVED_=opts.revocationFlag??true;
- ctx.D331_P022B2_APPROVED_FIELDS_=opts.fields??[
+ ctx.D331_P022B2_APPROVED_FIELDS_=Object.hasOwn(opts,'fields')?opts.fields:[
   'CaseID','CaseRevision','CaseStatus'
  ];
  return {ctx,trace,originalFlags,
