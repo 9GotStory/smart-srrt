@@ -5,15 +5,16 @@ import vm from 'node:vm';
 import {GAS_HTML_SOURCES,GAS_SERVER_SOURCES} from '../tools/native-sources.mjs';
 
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
-const native=read('src/web/03l-client-d331-status.html');
+const native=read('src/web/03h-client-event-records.html');
+const nativeStyles=read('src/web/01-styles.html');
 const canonical=read('src/web/03m-client-d331-mvp01-offline.html');
 const layout=read('src/web/02-app-layout.html');
 const records=read('src/web/03h-client-event-records.html');
 const reader=read('src/dengue/15-p0-22b2-case-read-integration.gs');
 const canonicalCss=canonical.match(/<style>\n([\s\S]*?)\n<\/style>/)?.[1];
 const canonicalJs=canonical.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
-const cssMark='  /* P0-25: exact synthetic CSS mirror of unregistered P0-23/P0-24 source. */\n';
-const jsMark='// verified offline before any future release. No D331 RPC or patient data.\n';
+const cssMark='/* P0-25: exact synthetic CSS mirror of unregistered P0-23/P0-24 source. */\n';
+const jsMark='// Standalone 03m source and native 03h mirror are parity-tested; no D331 RPC.\n';
 const extract=(s,a,end)=>{
  const start=s.indexOf(a);
  assert.ok(start>=0,'missing native mirror start');
@@ -39,7 +40,7 @@ function harness(){
   currentUser:auth.user,roleCanRecord:()=>auth.allow});
  const code=native.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
  assert.ok(code);
- new vm.Script(code,{filename:'03l-client-d331-status.html'}).runInContext(ctx,{timeout:1500});
+ new vm.Script(code,{filename:'03h-client-event-records.html'}).runInContext(ctx,{timeout:1500});
  function nodes(pred){
   const found=[];
   function walk(node){if(pred(node))found.push(node);node.children.forEach(walk);}
@@ -53,7 +54,7 @@ function harness(){
 test('P0-25 keeps Native26 canonical: exactly eight GS and seventeen HTML with no new module',()=>{
  assert.equal(GAS_SERVER_SOURCES.length,8);
  assert.equal(GAS_HTML_SOURCES.length,17);
- assert.ok(GAS_HTML_SOURCES.includes('src/web/03l-client-d331-status.html'));
+ assert.ok(GAS_HTML_SOURCES.includes('src/web/03h-client-event-records.html'));
  assert.equal(GAS_HTML_SOURCES.some(x=>x.includes('03m-client-d331-mvp01-offline')),false);
  assert.equal((native.match(/<style>/g)||[]).length,1);
  assert.equal((native.match(/<script>/g)||[]).length,1);
@@ -69,7 +70,7 @@ test('P0-25 keeps Native26 canonical: exactly eight GS and seventeen HTML with n
 test('P0-25 registered style/script are exact mirrors of separate canonical offline mock source',()=>{
  assert.equal(typeof canonicalCss,'string');
  assert.equal(typeof canonicalJs,'string');
- assert.equal(extract(native,cssMark,'\n</style>'),canonicalCss);
+ assert.equal(extract(nativeStyles,cssMark,'\n</style>'),canonicalCss);
  assert.equal(extract(native,jsMark,'\n</script>'),canonicalJs);
  assert.doesNotMatch(canonicalJs,/google\.script|SpreadsheetApp|PropertiesService|fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|allData|setValues?\s*\(|appendRow\s*\(/i);
  assert.match(canonicalJs,/SYNTHETIC_ONLY/);
@@ -156,7 +157,7 @@ test('P0-25 real native Case UI can add/edit a fake Case and resets across close
 });
 
 test('P0-25 native runtime source has no unauthorized case API, PHI export or extra routes',()=>{
- const script=native.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1]||'';
+ const script=extract(native,jsMark,'\n</script>');
  assert.doesNotMatch(script,/\bgoogle\.script\.run\b|\bgetDb_\s*\(|\bgs\s*\(|\bfetch\s*\(|\bSpreadsheetApp\b|\bPropertiesService\b/);
  assert.doesNotMatch(script,/\b(?:getDengueWorkspace|d331P022b2ListCasesForEvent_)\s*\(/);
  assert.doesNotMatch(script,/\b(?:PatientName|CitizenID|PasswordHash|NationalID)\b/);
