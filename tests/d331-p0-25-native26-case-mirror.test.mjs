@@ -70,7 +70,7 @@ test('P0-25 keeps Native26 canonical: exactly eight GS and seventeen HTML with n
 test('P0-25 registered style/script are exact mirrors of separate canonical offline mock source',()=>{
  assert.equal(typeof canonicalCss,'string');
  assert.equal(typeof canonicalJs,'string');
- assert.equal(extract(nativeStyles,cssMark,'\n</style>'),canonicalCss);
+ assert.equal(extract(nativeStyles,cssMark,'\n\n/* UX-R1 Dashboard UI */'),canonicalCss);
  assert.equal(extract(native,jsMark,'\n</script>'),canonicalJs);
  assert.doesNotMatch(canonicalJs,/google\.script|SpreadsheetApp|PropertiesService|fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|allData|setValues?\s*\(|appendRow\s*\(/i);
  assert.match(canonicalJs,/SYNTHETIC_ONLY/);
