@@ -481,7 +481,7 @@ var d331P030aCaseReadSeam_=(function(){
   var MOCK_AREA='SYNTHETIC-AREA';
   var KEY='areaId|canWrite|cases|clinicalPolicyApproved|eventId|simulationOnly|slaAssessment|status';
   var CASE_KEY='caseId|caseRevision|caseStatus';
-  function deny(){throw new Error('D331_P030A_MOCK_ONLY');}
+  function d331P030aDeny_(){throw new Error('D331_P030A_MOCK_ONLY');}
   function validate(dto){
     if(!dto||typeof dto!=='object'||Array.isArray(dto)||
        Object.keys(dto).sort().join('|')!==KEY||
@@ -489,7 +489,7 @@ var d331P030aCaseReadSeam_=(function(){
        dto.eventId!==MOCK_EVENT||dto.areaId!==MOCK_AREA||
        dto.slaAssessment!=='NOT_EVALUATED'||
        dto.clinicalPolicyApproved!==false||dto.canWrite!==false||
-       !Array.isArray(dto.cases)||dto.cases.length>100)deny();
+       !Array.isArray(dto.cases)||dto.cases.length>100)d331P030aDeny_();
     var seen=Object.create(null);
     return dto.cases.map(function(item){
       if(!item||typeof item!=='object'||Array.isArray(item)||
@@ -498,7 +498,7 @@ var d331P030aCaseReadSeam_=(function(){
          !/^00000000-0000-4000-8000-0000000023(?:0[1-9]|[1-9][0-9])$/.test(item.caseId)||
          Object.prototype.hasOwnProperty.call(seen,item.caseId)||
          !Number.isSafeInteger(item.caseRevision)||item.caseRevision<1||
-         item.caseStatus!=='ACTIVE')deny();
+         item.caseStatus!=='ACTIVE')d331P030aDeny_();
       seen[item.caseId]=true;
       return {caseId:item.caseId,caseRevision:item.caseRevision,
         caseStatus:item.caseStatus};
@@ -511,7 +511,7 @@ var d331P030aCaseReadSeam_=(function(){
        typeof options.region.setAttribute!=='function'||
        !options.region.ownerDocument||
        typeof options.region.ownerDocument.createElement!=='function'||
-       typeof options.session!=='function')deny();
+       typeof options.session!=='function')d331P030aDeny_();
     var root=options.root,region=options.region,session=options.session;
     var owner=null,status='UNAVAILABLE',cases=[],epoch=0,pending=0,connected=false;
     function current(){
