@@ -128,7 +128,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
     if(typeof text==='string')n.textContent=text;
     return n;
   }
-  function mount(root){
+  function mountSyntheticCase_(root){
     if(!root||!root.ownerDocument||!root.ownerDocument.createElement||
        typeof root.replaceChildren!=='function')deny();
     var doc=root.ownerDocument,model=createModel(),disposed=false;
@@ -250,7 +250,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
     }
     return Object.freeze({connect:connect,refresh:refresh,reset:reset});
   }
-  return Object.freeze({createModel:createModel,mount:mount,
+  return Object.freeze({createModel:createModel,mount:mountSyntheticCase_,
     createRecordsBridge:createRecordsBridge});
 })();
 
@@ -259,7 +259,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
 var d331P024RecordsMockBridge_=(function(){
   'use strict';
   var active=null,activeRoot=null;
-  function mount(){
+  function mountRecordsMock_(){
     var root=el('d331-p018-preview'),region=el('d331-p024-region');
     if(!root||!region)return;
     if(root!==activeRoot){
@@ -277,7 +277,7 @@ var d331P024RecordsMockBridge_=(function(){
     }
     active.refresh();
   }
-  function reset(){if(active)active.reset();}
-  return Object.freeze({mount:mount,reset:reset});
+  function resetRecordsMock_(){if(active)active.reset();}
+  return Object.freeze({mount:mountRecordsMock_,reset:resetRecordsMock_});
 })();
 </script>
