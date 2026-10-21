@@ -1,0 +1,100 @@
+<!-- P0-31A: UNREGISTERED synthetic Case -> Plan model. No Native packaging, real UI, RPC or Google IO. -->
+<script>
+/**
+ * P0-31A: Browser-memory-only Plan draft built on existing P0-23 synthetic Case model.
+ * Not a clinical policy, live permission, approved database FK, or actual SLA.
+ */
+var d331P031aOfflineCasePlan_=(function(){
+  'use strict';
+  var EVENT='00000000-0000-4000-8000-000000002300';
+  var CASE_RE=/^00000000-0000-4000-8000-0000000023(?:0[1-9]|[1-9][0-9])$/;
+  var EPISODE_RE=/^TEST-EP-[0-9]{1,3}$/;
+  function deny(){throw new Error('D331_P031A_SYNTHETIC_ONLY');}
+  function validCases(source){
+    if(!source||typeof source.snapshot!=='function'||
+       typeof source.reset!=='function')deny();
+    var snapshot=source.snapshot();
+    if(!snapshot||snapshot.kind!=='SYNTHETIC_ONLY'||
+       snapshot.eventId!==EVENT||snapshot.canEnable!==false||
+       snapshot.canWrite!==false||snapshot.clinicalPolicyApproved!==false||
+       snapshot.slaAssessment!=='NOT_EVALUATED'||
+       !Array.isArray(snapshot.cases)||snapshot.cases.length>99)deny();
+    var ids=Object.create(null);
+    snapshot.cases.forEach(function(row){
+      if(!row||!CASE_RE.test(row.caseId)||
+         !['ACTIVE','VOID'].includes(row.caseStatus)||
+         !Number.isSafeInteger(row.caseRevision)||row.caseRevision<1||
+         Object.prototype.hasOwnProperty.call(ids,row.caseId))deny();
+      ids[row.caseId]=true;
+    });
+    return snapshot.cases;
+  }
+  function createModel(source){
+    validCases(source);
+    var plans=[],draft=null,busy=false,epoch=0,nextPlan=1,disposed=false;
+    function guard(){if(disposed)deny();}
+    function current(){guard();return validCases(source);}
+    function activeCase(caseId){
+      return current().filter(function(row){
+        return row.caseId===caseId&&row.caseStatus==='ACTIVE';
+      }).length===1;
+    }
+    function snapshot(){
+      guard();current();
+      return {kind:'SYNTHETIC_PLAN_ONLY',eventId:EVENT,
+        plans:plans.map(function(p){return {
+          planId:p.planId,eventId:p.eventId,triggerCaseId:p.triggerCaseId,
+          episodeKey:p.episodeKey,planRevision:p.planRevision,planStatus:p.planStatus
+        };}),
+        draft:draft?{triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey}:null,
+        busy:busy,canWrite:false,canEnable:false,canReadPatientData:false,
+        clinicalPolicyApproved:false,slaAssessment:'NOT_EVALUATED'};
+    }
+    function beginPlan(eventId,caseId){
+      guard();if(busy||draft||eventId!==EVENT||typeof caseId!=='string'||
+         !CASE_RE.test(caseId)||!activeCase(caseId))deny();
+      draft={triggerCaseId:caseId,episodeKey:''};return snapshot();
+    }
+    function setEpisodeKey(value){
+      guard();if(busy||!draft||typeof value!=='string'||
+        (value!==''&&!EPISODE_RE.test(value)))deny();
+      draft.episodeKey=value;return snapshot();
+    }
+    function cancel(){guard();if(busy)deny();draft=null;return snapshot();}
+    function save(){
+      guard();if(busy)return Promise.resolve({status:'BUSY'});
+      if(!draft||!EPISODE_RE.test(draft.episodeKey)||
+         !activeCase(draft.triggerCaseId)||nextPlan>99||
+         plans.some(function(p){return p.triggerCaseId===draft.triggerCaseId&&
+           p.episodeKey===draft.episodeKey;}))deny();
+      var candidate={triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey};
+      busy=true;var ticket=++epoch;
+      return Promise.resolve().then(function(){
+        if(ticket!==epoch||disposed)return {status:'STALE'};
+        // Recheck the source Case after the microtask boundary.
+        if(!activeCase(candidate.triggerCaseId)){
+          busy=false;return {status:'DENIED'};
+        }
+        plans.push({planId:'00000000-0000-4000-8000-0000000031'+
+          String(nextPlan++).padStart(2,'0'),eventId:EVENT,
+          triggerCaseId:candidate.triggerCaseId,episodeKey:candidate.episodeKey,
+          planRevision:1,planStatus:'OPEN'});
+        draft=null;busy=false;return {status:'SYNTHETIC_PLAN_SAVED'};
+      }).catch(function(){
+        if(ticket===epoch&&!disposed)busy=false;
+        return {status:'DENIED'};
+      });
+    }
+    function reset(){
+      guard();epoch++;busy=false;draft=null;plans=[];nextPlan=1;
+      return snapshot();
+    }
+    function dispose(){
+      epoch++;busy=false;draft=null;plans=[];disposed=true;
+    }
+    return Object.freeze({snapshot:snapshot,beginPlan:beginPlan,
+      setEpisodeKey:setEpisodeKey,cancel:cancel,save:save,reset:reset,dispose:dispose});
+  }
+  return Object.freeze({createModel:createModel});
+})();
+</script>
