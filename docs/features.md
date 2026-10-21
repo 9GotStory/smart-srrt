@@ -1,29 +1,7 @@
-> **Security Source State (12 Oct 2026):** GS-S1→GS-S5 are merged to `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` and all source-level CI checks pass; Apps Script @10 deployment and migration remain **HOLD**. Release blockers are recorded in [Security Release Readiness Review](release/security-release-readiness-review-2026-10-12.md). Older feature-status banners below were written as PR candidates and may still say “not merged”; GitHub PRs #95–#99 are the authority for their merge status.
-
-> **GS-S5 Audit Observability (Source Candidate — ยังไม่ได้ Merge/Deploy):** แสดงสถานะการบันทึก AuditLogs ในหน้า Admin สำหรับผู้มีสิทธิ์ `audit` โดยไม่บันทึกข้อมูลผู้ป่วย/รหัสผ่าน/ข้อความ Error ลง Health Telemetry เพิ่ม Tests ความล้มเหลวและการกลับมาบันทึกได้ ทั้งนี้ `writeAudit_` ยังไม่เปลี่ยนผลธุรกิจที่ Commit สำเร็จ และสถานะ `unobserved` ไม่ได้หมายความว่ามี Audit ครบทุกงาน. [GS-S5](implementation/gs-s5-audit-observability.md).
-
-> **GS-S4 (Source Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่มการยืนยันสร้างรายงาน AI ซ้ำจากฝั่ง Server ผ่าน Consent Token ใช้ครั้งเดียว อายุ 5 นาที ผูกกับผู้ใช้ EventID ประวัติ Report Registry และ Revision ตรวจใน G-32 Lock ก่อนสร้าง Job ใหม่ พร้อม Tests กรณีไม่มีรายงาน, มีรายงานซ้ำ, Token ปลอม/หมดอายุ/ใช้งานแล้ว, Registry เปลี่ยน และงานสถานะ Unknown. [อ่าน GS-S4](implementation/gs-s4-server-report-consent.md).
-
-> **GS-S3 (Candidate Source — ยังไม่ได้ Merge หรือ Deploy):** รองรับรหัสผ่านบัญชีเดิม SHA-256 ด้วยการ Migration เป็น PBKDF2-HMAC-SHA256 + Salt หลัง Login สำเร็จเท่านั้น, เพิ่ม Password Policy, Login Failure Throttling และ Session Revocation เมื่อรหัสผ่านเปลี่ยน พร้อม Security Tests. ต้องวัดเวลาการคำนวณจริงบน Apps Script ทดสอบก่อน Deploy. [เอกสาร GS-S3](implementation/gs-s3-authentication-modernization.md).
-
-> **GS-S2 (Source Candidate — ยังไม่ได้ Merge/Deploy):** แก้ AuditLogs สำหรับการแก้ไขผู้ใช้ไม่ให้บันทึก PasswordHash และ `newPassword` พร้อมเพิ่ม Redaction ที่จุดเขียน Audit และ Security Contract Tests. ไม่แก้ข้อมูล AuditLogs เดิมหรือ Schema v7; ต้องได้รับอนุมัติแยกหากจะตรวจ/จัดการ Logs ย้อนหลัง. [รายละเอียด GS-S2](implementation/gs-s2-credential-audit-redaction.md).
-
-> **GS-S1 (Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่ม Server Guard สำหรับ 15 ฟังก์ชันระดับผู้ดูแลระบบ/การย้ายข้อมูล/การจัดการ Gemini โดยต้องกำหนด Google Script Property `GS_TRUSTED_OPERATOR_EMAIL` และต้องตรงทั้ง Active + Effective Google Identity มิฉะนั้นปฏิเสธก่อนทำงานทุกครั้ง รวมทั้งจำกัด `include()` เฉพาะ 16 HTML Partials ใน Manifest และเพิ่ม Security Contract Tests. ระบบทั่วไปไม่เปลี่ยน; ต้องมีแผนกำหนด Property ก่อน Deploy ในอนาคต. [รายละเอียด GS-S1](implementation/gs-s1-operator-rpc-boundary.md).
-
-> **UX-R2-M01-05 (Candidate Test Stabilization — ยังไม่ได้ Merge/Deploy):** เพิ่มชุดทดสอบตรวจโครงสร้าง Native 24 ไฟล์ ลำดับ Script และ Global Functions, Bootstrap เพียงครั้งเดียว, HTML Handlers, การป้องกัน RPC ก่อน Boot, Guest/AI Reporter Unknown-state และ Negative Fixtures พร้อมเชื่อมเข้า `npm run check:contracts` โดย **ไม่มีการแก้ Runtime**. ดู [M01-05](implementation/ux-r2-m01-05-final-stabilization.md).
-
-> **UX-R2-M01-04 (Source Candidate — ยังไม่ Merge หรือ Deploy):** ระบบ AI Reporter แยกเป็น Native HTML Partials `03i-client-report-actions.html` (ความพร้อมข้อมูลและปุ่มรายงาน), `03j-client-report-job.html` (สถานะงาน, Polling, Recovery, ยกเลิก), และ `03k-client-report-generation.html` (สร้างรายงานและยืนยันคำเตือน). Native Stage 24 ไฟล์: 7 GS + 16 HTML + Index; ยังคง G-26/G-32/G-33, ความปลอดภัย Session, ป้องกันรายงานซ้ำ, สถานะ Unknown และ One-Click เดิม. ดู [M01-04](implementation/ux-r2-m01-04-ai-reporter.md).
-
-> **UX-R2-M01-03 (Source Candidate — ยังไม่ได้ Merge หรือ Deploy):** ย้าย Event badges/Owner/Attachment, ประวัติรายงาน Event, และตาราง/ฟอร์ม Event เป็น `03f-client-event-controls.html`, `03g-client-event-history.html`, `03h-client-event-records.html`; Native Stage 21 ไฟล์ (7 GS + 13 HTML + Index) โดยไม่เปลี่ยน 26 fields, RBAC, EventID/Revision, G-27/G-32/G-33, Schema v7 และ Frozen One-Click. ดู [M01-03](implementation/ux-r2-m01-03-event-management.md).
-
-> **UX-R2-M01-02 (candidate code only, not deployed):** Dashboard Filters, KPI/Insights, Google Charts และ Export/Capture ย้ายเป็น Native HTML Partials `03d-client-dashboard.html` และ `03e-client-dashboard-export.html`; Stage เป็น 18 ไฟล์ รวม Index (7 GS + 10 HTML). ไม่มีการเปลี่ยน Feature/RPC, Google Charts ยังคงเดิม, One-Click Frozen, Apps Script @10 ไม่ได้ Deploy. ดู [M01-02](implementation/ux-r2-m01-02-dashboard.md).
-
-> **UX-R2-M01-01 Native Client Split (source candidate, not deployed):** Client JS ใน `src/web/04-browser-app.html` ถูกแยกเฉพาะ Shared Core และ Auth/Session ลงใน `03b-client-core.html` และ `03c-client-auth.html` ตาม `tools/native-sources.mjs` (7 GS + 8 HTML + generated Index = 16). ฟีเจอร์และ RPC เดิมยังไม่เปลี่ยน. โปรดดู [M01-01](implementation/ux-r2-m01-01-shared-core.md); ห้ามสรุปว่ามีการ Deploy @10 แล้ว.
-
 # Smart SRRT — Feature Reference ฉบับสมบูรณ์ (Current Source)
 
-> **เอกสารอ้างอิง Current Implementation** ณ 11 ตุลาคม 2026  
-> Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt) · Baseline: `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778`  
+> **เอกสารอ้างอิง Current Implementation** ณ 21 ตุลาคม 2026
+> Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt) · Implementation baseline: `main@29ca13ba33f87d46f1f50fba90fe904773b6594a`
 > `CONFIG.VERSION = 2026.09.08.1` · `CONFIG.SCHEMA_VERSION = 7` · `CONFIG.REPORT_PROMPT_VERSION = 2026.10.06.1`
 >
 > รายละเอียดด้านล่างอธิบายสิ่งที่ **มีใน Source ปัจจุบัน** ไม่รับรองว่า Deploy ทุก Installation ตรงกับ GitHub และไม่รับรองการทดสอบ End-to-End ที่ไม่ได้เกิดขึ้น
@@ -40,7 +18,7 @@ Smart SRRT สนับสนุนการเฝ้าระวังแบบ
 | `การจัดการระบบ` | สถานะระบบ การตั้งค่า MasterData พื้นที่ ผู้ใช้ เนื้อหา Audit | Super Admin / Manager |
 | `ประกาศ/แนวทาง/คู่มือ` | `ประกาศ แนวทาง และคู่มือ` | ทุกคนดูเนื้อหาที่ published ได้ |
 
-หลักฐานชื่อเมนูและหน้า: [`src/web/02-app-layout.html`](../src/web/02-app-layout.html); Dialog/Modal: [`src/web/03-modals.html`](../src/web/03-modals.html) และพฤติกรรม: [`src/web/04-browser-app.html`](../src/web/04-browser-app.html)
+หลักฐานชื่อเมนูและหน้า: [`src/web/02-app-layout.html`](../src/web/02-app-layout.html); Dialog/Modal: [`src/web/03-modals.html`](../src/web/03-modals.html) และพฤติกรรม: [ordered client partials](../tools/native-sources.mjs) (Admin/Library/final boot ยังอยู่ใน `04-browser-app.html`)
 
 **สิ่งที่ไม่ได้ทำ:** HIS/LIS, เวชระเบียนผู้ป่วย, ระบบจัดการเคสและผู้สัมผัสเต็มรูปแบบ, Workflow Engine แบบ Task/SLA/Escalation, ระบบอนุมัติหรือเซ็นรับรองรายงาน, การวินิจฉัยอัตโนมัติ
 
@@ -52,7 +30,7 @@ Smart SRRT สนับสนุนการเฝ้าระวังแบบ
 
 ตัวกรองประกอบด้วยวันที่เริ่มต้น/สิ้นสุด จังหวัด อำเภอ ตำบล และหมู่บ้าน; สามารถค้นหา ล้างตัวกรอง และ `บันทึกรูปภาพ` Dashboard ได้ สถิติมีกราฟ **จำนวนเหตุการณ์รายหมู่บ้าน**, **แนวโน้มรายเดือน**, **สัดส่วนตามกลุ่มโรค**, **สัดส่วนตามระดับความเสี่ยง** พร้อม `Smart Insights` สรุปโรค/เหตุการณ์และหมู่บ้านที่พบมากที่สุด รวมทั้งรายการเข้าเกณฑ์ที่ยังไม่มีวันที่ลงสอบสวน
 
-**Smart Insights ใน Dashboard เป็นข้อความที่คำนวณจากข้อมูลสรุป ไม่ใช่การเรียก Gemini ทุกครั้งที่เปิด Dashboard.**
+**Smart Insights ใน Dashboard เป็นข้อความที่คำนวณจากข้อมูลสรุป ไม่ใช่การเรียก Gemini ทุกครั้งที่เปิด Dashboard.** Renderer ปัจจุบันใช้ pinned Chart.js 4.5.1 พร้อม accessible data tables; loading/empty/error และ session/filter fencing อยู่ใน [`03d-client-dashboard.html`](../src/web/03d-client-dashboard.html). Search/filter/mobile worklists, Record tabs, Admin workspaces และ contextual loading อยู่ใน source/UX tests ปัจจุบัน ไม่ใช่หลักฐาน Browser UAT ใหม่
 
 ### 2.2 นิยาม KPI ที่ Server ใช้
 
@@ -79,8 +57,8 @@ Source: [`src/server/03-events-and-dashboard.gs`](../src/server/03-events-and-da
 ### 3.1 Login / Logout / Session
 
 - `login(payload)` ใช้อีเมลและรหัสผ่าน ตรวจ `PasswordHash` และสถานะบัญชี `active` แล้วคืน Session Token พร้อม Public User Profile
-- Server Hash Password ด้วย SHA-256 ตามโค้ดปัจจุบัน; **ไม่ใช่** Password Hash แบบ Adaptive ที่มี Salt เฉพาะบัญชี จึงไม่ควรอธิบายว่ามี BCrypt/Argon2 หรือ MFA
-- `makeSessionToken_` เก็บ Token → Email ใน `CacheService.getScriptCache()` ด้วย TTL **21600 วินาที (6 ชั่วโมง)**; Browser เก็บ Token ใน Local Storage
+- รหัสผ่านใหม่/ที่เปลี่ยนใช้ versioned salted **PBKDF2-HMAC-SHA256 (12000 rounds)**; legacy SHA-256 รองรับ compare-and-swap upgrade หลัง login สำเร็จ ไม่ใช่ BCrypt/Argon2/MFA. นโยบายรหัสผ่านใหม่ 12–128 ตัวอักษร และ account-scoped best-effort throttling ไม่ใช่ global/per-client rate limiting; real Apps Script performance ยังต้องมีหลักฐานเฉพาะ
+- `makeSessionToken_` เก็บ opaque Token → session-v2 `{v,id,tag}` ใน ScriptCache TTL **21600 วินาที (6 ชั่วโมง)** ผูก user ID กับ current credential verifier; การเปลี่ยนรหัสผ่านเพิกถอน session เดิมผ่านการตรวจ tag. Legacy email-only sessions ต้อง login ใหม่; Browser เก็บ Token ใน Local Storage
 - `logout(sessionToken)` เอา Token ออกจาก Server Cache และ Browser ล้าง Token, รายการเหตุการณ์, สรุปรายงาน และสถานะ UI เดิมทันที
 - ทุก RPC ที่มีข้อมูล/การดำเนินการเฉพาะสิทธิ์ต้องตรวจ `requireAuth_(sessionToken, permission)` บน Server; การซ่อนเมนูอย่างเดียวไม่ถือเป็น Authentication Boundary
 - `SYSTEM_STATUS=closed` ปฏิเสธการกระทำ `create/edit/delete/report/assign/close_event` แต่ยังเปิดอ่าน Dashboard ได้
@@ -167,6 +145,8 @@ Modal ชื่อ `รายงานของเหตุการณ์` เ�
 
 **หมายเหตุ:** เอกสาร Google Docs ที่สร้างก่อนมี G-17 อาจไม่มีแถวใน `ReportRegistry` ระบบไม่เดา EventID/Backfill ให้เองและไม่แสดงว่าเป็นประวัติที่ยืนยันได้
 
+**GS-S4 server-side regeneration consent:** `prepareReportRegeneration(sessionToken,eventId)` ออก capability อายุ 5 นาที ใช้ครั้งเดียว ผูก owner/EventID/Revision/จำนวนและรายงานล่าสุด; `createReportJob` ตรวจ registry state ภายใต้ G-32 ScriptLock อีกครั้ง Browser Boolean หรือ stale summary ใช้แทนไม่ได้ นี่เป็น business-consent protocol ไม่ใช่ cryptographic proof ว่ามนุษย์คลิก ดู [consent tests](../tests/gs-s4-report-regeneration-consent.test.mjs)
+
 ### 5.4 การตรวจความพร้อม (G-26)
 
 ก่อนสร้างใช้ `getAIReportReadiness(sessionToken,eventId)` ตรวจ Event ล่าสุดและแสดงระดับ `ready`, `review` หรือ `limited` พร้อมคำเตือน
@@ -183,7 +163,7 @@ Modal ชื่อ `รายงานของเหตุการณ์` เ�
 
 เส้นทางสร้างรายงานใช้ `models/gemini-3.8-flash` เท่านั้น ไม่สลับโมเดลอื่นหากไม่พร้อม; G-32 V8 อาจ Retry **HTTP 503 ได้สูงสุดหนึ่งครั้งต่อส่วน** ภายใต้ Time Budget โดยไม่ Retry HTTP 429 หรือ Error อื่นอัตโนมัติ ผลสำเร็จบันทึก ReportID, EventID, SourceRevision, DocumentID/URL, ผู้สร้าง, เวลาสร้าง, โมเดล/เวอร์ชัน API ที่สำเร็จจริง, PromptVersion และ TemplateDocID
 
-ถ้าสร้าง Google Doc แล้วแต่ Append Registry ไม่สำเร็จ มี Compensation เพื่อย้ายเอกสารใหม่ไป Trash; เมื่อ Registry Commit แล้ว การสร้างรายงานถือเป็นผลสำเร็จและไม่ย้อนกลับเพียงเพราะ Audit มีปัญหา **ข้อจำกัดที่ต้องรู้:** `writeAudit_` จับ Exception ภายในโดยไม่ส่งต่อ จึงไม่อาจอ้างจากผลสร้างรายงานสำเร็จว่า Audit Entry ถูกเขียนครบแน่นอน ต้องตรวจหลักฐาน Audit แยกเมื่อจำเป็น
+ถ้าสร้าง Google Doc แล้วแต่ Append Registry ไม่สำเร็จ มี Compensation เพื่อย้ายเอกสารใหม่ไป Trash; เมื่อ Registry Commit แล้ว การสร้างรายงานถือเป็นผลสำเร็จและไม่ย้อนกลับเพียงเพราะ Audit มีปัญหา **ข้อจำกัดที่ต้องรู้:** `writeAudit_` จับ Exception ภายในโดยไม่ส่งต่อ จึงไม่อาจอ้างจากผลสร้างรายงานสำเร็จว่า Audit Entry ถูกเขียนครบแน่นอน ต้องตรวจหลักฐาน Audit แยกเมื่อจำเป็น; GS-S5 แสดง advisory health ตามรายละเอียด Audit ด้านล่าง
 
 ### 5.6 Job Tracking, การยกเลิกและความไม่แน่นอน (G-32)
 
@@ -215,6 +195,8 @@ Source: [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`
 `AuditLogs` มี 10 คอลัมน์รวม UUID `AuditID`; Server เขียน Action/Target/Before/After ตามการดำเนินการสำคัญ ผู้มี `audit` ดูรายการและสั่ง `Archive รายการเก่า` ได้ โดยค่า Retention เริ่มต้น **365 วัน** (สามารถมีค่าที่เก็บไว้เดิม)
 
 ระบบ G-21 จัดเก็บลง **Google Spreadsheet แยกที่เป็น Private** ภายใต้โฟลเดอร์ระบบ โดยแยก Tab เป็น `Y2025`, `Y2026` ฯลฯ ทำลำดับ Copy → Verify → Delete Source สำหรับรายการที่ย้ายสำเร็จ และออก Audit Summary ในชีตหลัก ไม่มี Automatic Purge / Scheduled Archive
+
+GS-S2 เปลี่ยน user-update audit เป็น allowlisted change metadata และ central sink redact credential fields; ไม่รับรองว่า free-text/history ปลอดข้อมูลลับทั้งหมด GS-S5 เก็บ bounded non-secret health telemetry และแสดงผ่าน `getAuditRetentionStatus` ที่มี `audit` permission; `unobserved`/`unavailable` ไม่ใช่ความครบถ้วน และ telemetry failure ไม่เปลี่ยนธุรกิจที่ commit แล้ว ดู [redaction tests](../tests/gs-s2-credential-audit-redaction.test.mjs), [observability tests](../tests/gs-s5-audit-observability.test.mjs)
 
 ### 6.3 VisitLogs
 
@@ -273,7 +255,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 
 ## 8. Feature Evidence & Traceability — รายละเอียดตรวจสอบรายฟีเจอร์
 
-ตาราง/หัวข้อด้านบนอธิบายพฤติกรรมใช้งาน ส่วนรายการด้านล่างทำหน้าที่เป็น **Implementation Inventory** เพื่อให้แต่ละฟีเจอร์มีการเชื่อม UI, สิทธิ์, ขั้นตอน, พฤติกรรมสำเร็จ/ผิดพลาด, Read/Write, RPC, Source, Tests และข้อจำกัดอย่างตรวจสอบย้อนกลับได้. **หลักฐาน Automated Tests:** คำว่า *Tests/Contract* หมายถึงไฟล์ที่เกี่ยวข้อง มิใช่การรับรองว่ามี Assertions ครอบคลุม RPC/UI ของฟีเจอร์ครบทั้งหมด (ระบุ Related/Indirect ไว้สำหรับ F11, F12, F16). CI PASS ยืนยันเฉพาะชุด Checks ที่รัน. ทุกข้อ F01–F23 คือ **Implemented in GitHub source `main@1486211d0cbb` / merged**; การมี Tests เป็นหลักฐาน Offline/Mock Contract ไม่ใช่ Production E2E. สำหรับสถานะ Runtime: **ยังไม่ได้ตรวจ Deployed SHA อย่างอิสระ**; มีเพียง Product Owner รายงาน UI Smoke ของ G-33, และ G-34 ยังไม่ผ่าน Cutover.
+ตาราง/หัวข้อด้านบนอธิบายพฤติกรรมใช้งาน ส่วนรายการด้านล่างทำหน้าที่เป็น **Implementation Inventory** เพื่อให้แต่ละฟีเจอร์มีการเชื่อม UI, สิทธิ์, ขั้นตอน, พฤติกรรมสำเร็จ/ผิดพลาด, Read/Write, RPC, Source, Tests และข้อจำกัดอย่างตรวจสอบย้อนกลับได้. **หลักฐาน Automated Tests:** คำว่า *Tests/Contract* หมายถึงไฟล์ที่เกี่ยวข้อง มิใช่การรับรองว่ามี Assertions ครอบคลุม RPC/UI ของฟีเจอร์ครบทั้งหมด (ระบุ Related/Indirect ไว้สำหรับ F11, F12, F16). CI PASS ยืนยันเฉพาะชุด Checks ที่รัน. Core IDs F01–F23 ด้านล่างเป็น implemented source ที่ implementation baseline ข้างต้น; source registration และ runtime evidence ต้องแยกกัน โดยเฉพาะ D331 ที่มี [ทะเบียนแยก](#d331-development-status). อ้าง [INDEX](INDEX.md) สำหรับ current source/CI/environment evidence และ dated historical records; ไม่มีการตรวจ deployed SHA หรือ Full E2E ใหม่จากงานเอกสารนี้
 
 ### F01 — Dashboard สาธารณะและ Privacy Boundary (P2)
 
@@ -282,7 +264,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** เลือกวัน/จังหวัด/อำเภอ/ตำบล/หมู่บ้าน → `ค้นหา` หรือ `ล้างค่า`; สำเร็จได้เฉพาะข้อมูลสรุป, KPI, กราฟและ Smart Insights; อ่านไม่สำเร็จแสดงข้อความข้อผิดพลาด ไม่เปิดเผย Raw Rows
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData` แบบ non-void ผ่าน aggregate และข้อมูลพื้นที่; ไม่เขียน Event
 - **Backend RPC / Function:** `getPublicDashboardData` → `getFilteredEventRows_`, `buildDashboardAggregate_`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-app-layout.html`](../src/web/02-app-layout.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-app-layout.html`](../src/web/02-app-layout.html), [`03d-client-dashboard.html`](../src/web/03d-client-dashboard.html)
 - **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs), [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F02/F09; ไม่ส่ง EventID/Revision/Narrative/DocumentURL; ไม่มี small-cell suppression; ห้ามอ้างว่า anonymous โดยสมบูรณ์
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -294,7 +276,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** Login → กรองข้อมูลและโหลด Dashboard → แสดง Event Rows และฟังก์ชันตาม Role; Session หมดอายุ/ไม่มีสิทธิ์ไม่คืน Raw Rows; Logout เคลียร์ข้อมูลและป้องกัน stale callback
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`, `EventAttachments`, Owner metadata, `AreaMaster`; ไม่เขียน Event เมื่อเปิดดู
 - **Backend RPC / Function:** `getDashboardData`, `getFilteredEventRows_`, `enrichEventOwners_`, `enrichEventAttachments_`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03d-client-dashboard.html`](../src/web/03d-client-dashboard.html), [`03f-client-event-controls.html`](../src/web/03f-client-event-controls.html)
 - **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F03/F04/F06/F08/F21; รายการละเอียดไม่ใช่ Public API
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -308,7 +290,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **Backend RPC / Function:** `login`, `logout`, `registerUser`, `getAppBoot`, `requireAuth_`, `hasPermission_`
 - **Source:** [`01-schema-and-db.gs`](../src/server/01-schema-and-db.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html)
 - **Tests/Contract:** [`integration-p2-auth-dashboard-parity.test.mjs`](../tests/integration-p2-auth-dashboard-parity.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
-- **สัมพันธ์กับ/ข้อจำกัด:** ทุกส่วนที่ต้องมีสิทธิ์; SHA-256 password hash ใน Source ไม่ใช่ adaptive salted hash/MFA
+- **สัมพันธ์กับ/ข้อจำกัด:** ทุกส่วนที่ต้องมีสิทธิ์; versioned salted PBKDF2/legacy upgrade/session-v2 อยู่ใน Source; ยังไม่มี MFA หรือ live KDF benchmark evidence จากรอบนี้
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 
 ### F04 — บันทึก/แก้ไขข้อมูลเหตุการณ์, EventID/Revision (P1/G-03)
@@ -318,7 +300,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** สร้าง EventID UUID/Revision=1; แก้โดย EventID + expectedRevision แล้วเพิ่ม Revision; ชน Revision หรือข้อมูล MasterData ไม่ถูกต้องต้องแก้/รีเฟรช ไม่ overwrite เงียบ
 - **ข้อมูลอ่าน/เขียน:** เขียน `MainData` 1–39; อ่าน `MasterData`, `AreaMaster`; Audit mutation
 - **Backend RPC / Function:** `addRecord`, `updateRecord`, `saveRowData_`, `findEventRowById_`, `validateEventMasterData_`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03h-client-event-records.html`](../src/web/03h-client-event-records.html)
 - **Tests/Contract:** [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs), [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F05/F06/F07/F08/F17; Closed/void guards; Row number ไม่ใช่ stable identity
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -330,7 +312,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** Server derive Lifecycle ตามข้อมูลจริง และขึ้นคำเตือนกรณีเกณฑ์/ผลตรวจ/วันสอบสวนขัดกัน; หากไม่มี Warning แสดงสถานะปกติ; ไม่บังคับแก้ก่อนบันทึก
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`; เป็น derived metadata ไม่สร้าง WorkflowStatus column ใหม่
 - **Backend RPC / Function:** `deriveEventLifecycle_`, `deriveEventConsistencyWarnings_`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`03f-client-event-controls.html`](../src/web/03f-client-event-controls.html), [`03h-client-event-records.html`](../src/web/03h-client-event-records.html)
 - **Tests/Contract:** [`g03-event-lifecycle.test.mjs`](../tests/g03-event-lifecycle.test.mjs), [`g04-consistency-warnings.test.mjs`](../tests/g04-consistency-warnings.test.mjs), [`p3-workflow.test.mjs`](../tests/p3-workflow.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07/F17; ไม่ใช่ task/SLA escalation engine; historical P3 column map ต่างจาก v7
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -354,7 +336,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ต้องให้เหตุผลและ Revision ตรง; closed กลับมา active ได้ผ่าน Reopen; void เก็บประวัติ ไม่ลบแถว; invalid transition/ไม่มีสิทธิ์ต้อง error
 - **ข้อมูลอ่าน/เขียน:** เขียน `MainData.RecordStatus`, `Revision`, `Voided*` เฉพาะ void; เขียน Audit
 - **Backend RPC / Function:** `closeEvent`, `reopenEvent`, `deleteRecord`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`03h-client-event-records.html`](../src/web/03h-client-event-records.html)
 - **Tests/Contract:** [`g19-close-reopen.test.mjs`](../tests/g19-close-reopen.test.mjs), [`p1-event-integrity.test.mjs`](../tests/p1-event-integrity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F06/F08/F18; closed ไม่แก้/แนบไฟล์จน reopen; void ถูกตัดจาก Active Event Views
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -366,7 +348,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** ตรวจชนิด MIME+Signature/ขนาด ≤5 MB และ Revision; สร้าง Private Drive File + Registry; ไฟล์ไม่ผ่าน/เหตุการณ์ closed/สิทธิ์ผิดถูกปฏิเสธ; remove = status removed ไม่ลบไฟล์
 - **ข้อมูลอ่าน/เขียน:** อ่าน/เขียน `EventAttachments` (13 columns), Drive Files, `MainData.Revision`, Audit
 - **Backend RPC / Function:** `listEventAttachments`, `uploadEventAttachment`, `downloadEventAttachment`, `removeEventAttachment`
-- **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`02-auth-and-attachments.gs`](../src/server/02-auth-and-attachments.gs), [`03-modals.html`](../src/web/03-modals.html), [`03f-client-event-controls.html`](../src/web/03f-client-event-controls.html)
 - **Tests/Contract:** [`g11-event-attachments.test.mjs`](../tests/g11-event-attachments.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F04/F07; ไม่ทำ public sharing และไม่รองรับไฟล์เกินขนาด
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -378,7 +360,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** รวมเฉพาะเกณฑ์ `เข้าเกณฑ์`; investigated = เข้าเกณฑ์และ col26 มีวัน; denom 0 => 0%; กราฟ/ข้อความเป็น deterministic ไม่เรียก Gemini; ถ้าข้อมูลไม่มีให้แสดงผลว่าง/0 ตามเงื่อนไข
 - **ข้อมูลอ่าน/เขียน:** อ่าน `MainData`; Chart Rendering ฝั่ง Browser, ไม่เขียน
 - **Backend RPC / Function:** `buildDashboardAggregate_`, `getPublicDashboardData`, `getDashboardData`, Browser `drawCharts`, `makePublicInsight`
-- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs), [`03d-client-dashboard.html`](../src/web/03d-client-dashboard.html)
 - **Tests/Contract:** [`g23-kpi-criteria.test.mjs`](../tests/g23-kpi-criteria.test.mjs), [`integration-p2-kpi-contract.test.mjs`](../tests/integration-p2-kpi-contract.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F01/F02/F16; Admin `getAnalytics` ใช้นิยาม `investigated` ต่างจาก Dashboard ห้ามสลับใช้
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -462,7 +444,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** Client Excel ใช้ Event ที่ได้รับสิทธิ์; Server Export สร้าง Spreadsheet พร้อม URL; Capture ใช้ html2canvas; ไม่มีสิทธิ์/ผิดพลาดต้องแสดง Error ไม่ปล่อย Raw ผ่าน Public RPC
 - **ข้อมูลอ่าน/เขียน:** อ่าน filtered authenticated rows; Server export เขียน Google Spreadsheet ใหม่; ภาพดาวน์โหลดฝั่ง Browser
 - **Backend RPC / Function:** `exportData`, Browser `exportClientExcel`, `captureDashboard`
-- **Source:** [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`03e-client-dashboard-export.html`](../src/web/03e-client-dashboard-export.html)
 - **Tests/Contract:** [`p2-privacy-kpi.test.mjs`](../tests/p2-privacy-kpi.test.mjs) (สัญญา Public Aggregate/Raw Access ที่เกี่ยวข้องทางอ้อม); **ไม่พบ Dedicated Automated Tests สำหรับ `exportData`, `exportClientExcel` และ `captureDashboard` จากไฟล์ Tests ที่อ้างอิง**. ไม่ถือว่า Export/Capture ผ่านการทดสอบโดยตรงหรือ Live E2E
 - **สัมพันธ์กับ/ข้อจำกัด:** F01/F02; Server export ไม่ใช่ XLSX binary response
 - **สถานะหลักฐาน:** Source=merged in main; Automated=CI ผ่านสำหรับ Related/Indirect Tests เท่านั้น; **ไม่มีหลักฐานว่ามี Dedicated Test ครอบคลุม RPC ทุกตัวของฟีเจอร์นี้**; Runtime=Not independently verified per feature.
@@ -486,7 +468,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** อ่านประวัติเรียงฉบับใหม่ก่อน; ถ้ามีหลายฉบับยังคงทุก ReportID; URL/DocID ผิดหรือ Registry เสียต้อง fail-closed; สร้างใหม่ต้องยืนยันความตั้งใจ
 - **ข้อมูลอ่าน/เขียน:** อ่าน `ReportRegistry` (11 cols) และ Event non-void; การ append ทำผ่าน F19; ไม่แก้/ลบ Registry เดิม
 - **Backend RPC / Function:** `listReportsForEvent`, `getReportSummariesForEvents`, `appendReportRegistry_`
-- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`03g-client-event-history.html`](../src/web/03g-client-event-history.html)
 - **Tests/Contract:** [`g17-report-registry.test.mjs`](../tests/g17-report-registry.test.mjs), [`g27-event-report-history.test.mjs`](../tests/g27-event-report-history.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F19/F20/F21; legacy Google Doc ที่ไม่มี Registry ไม่ auto-backfill
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Product Owner reported limited UI smoke; exact deployed SHA not verified.
@@ -510,7 +492,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** create queued → run → running/finalizing → completed; cancelling cooperative; unknown/timeout ต้อง recover status+registry ไม่ auto retry; ผู้อื่นห้ามดู/ยกเลิก Job
 - **ข้อมูลอ่าน/เขียน:** ScriptProperties เก็บ Job metadata ชั่วคราว; ไม่ใช่ทะเบียนรายงาน; successful doc อยู่ F18
 - **Backend RPC / Function:** `createReportJob`, `runReportJob`, `getReportJobStatus`, `getCurrentReportJob`, `cancelReportJob`, `dismissReportJob`
-- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03-modals.html`](../src/web/03-modals.html), [`03j-client-report-job.html`](../src/web/03j-client-report-job.html)
 - **Tests/Contract:** [`g32-report-job.test.mjs`](../tests/g32-report-job.test.mjs), [`g32-uat-modal-and-button.test.mjs`](../tests/g32-uat-modal-and-button.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F18/F19/F21; 1 active job ต่อ Project; Apps Script ไม่รับรอง background worker เมื่อปิด Tab; unknown ไม่ใช่ failed
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
@@ -522,22 +504,20 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** 0 = `สร้างรายงาน AI`; 1 = `ดูรายงาน`; N = `ดูรายงาน (N)`; in-flight/unknown = ดูสถานะ/ตรวจสอบ; lookup fail-closed; ยืนยัน `สร้างรายงานฉบับใหม่` ก่อนเริ่มอีกฉบับ
 - **ข้อมูลอ่าน/เขียน:** อ่าน `ReportRegistry` summary ≤500 EventIDs/RPC; ไม่เขียนจน F19 สำเร็จ
 - **Backend RPC / Function:** `getReportSummariesForEvents`, Browser `reportActionState`, `handleReportAction`, `preflightFirstReportGeneration`
-- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`04-browser-app.html`](../src/web/04-browser-app.html)
+- **Source:** [`05-reports-and-models.gs`](../src/server/05-reports-and-models.gs), [`03i-client-report-actions.html`](../src/web/03i-client-report-actions.html)
 - **Tests/Contract:** [`g33-single-report-action.test.mjs`](../tests/g33-single-report-action.test.mjs), [`g33-logout-race-and-focus.test.mjs`](../tests/g33-logout-race-and-focus.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
 - **สัมพันธ์กับ/ข้อจำกัด:** F17/F18/F20; ป้องกัน duplicate requests และ stale callbacks แต่ไม่ใช่หลักฐาน full live E2E
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Product Owner reported limited UI smoke; exact deployed SHA not verified.
 
-### F22 — One-Click Compatibility และ Native Multi-file Package (G-30/G-34)
+### F22 — Native Multi-file Package และ Frozen One-Click Archives (G-30/G-34)
 
-- **หน้าจอ/เมนู:** ไม่มีหน้าจอใหม่: tooling สำหรับผู้พัฒนา/ผู้ดูแล Apps Script
-- **ผู้ใช้และสิทธิ์:** Developer/Reviewer; Deploy เฉพาะ Operator ที่ได้รับอนุมัติ
-- **ขั้นตอน ผลสำเร็จ และข้อผิดพลาด:** `npm run build:check` ตรวจ tracked One-Click; `npm run build:gas-multifile` สร้าง 13 ไฟล์ใน `dist/apps-script/` และ `npm run check:gas-multifile` ตรวจ parity; mismatch ต้อง FAIL; build ไม่ Deploy
-- **ข้อมูลอ่าน/เขียน:** อ่าน `src/server/` 7 + `src/web/` 5; เขียนเฉพาะ generated dist เมื่อใช้ build; ไม่แตะ Workspace
-- **Backend RPC / Function:** `tools/build-one-click.mjs`, `tools/build-apps-script-multifile.mjs`, `include`, `doGet`
-- **Source:** [`build-one-click.mjs`](../tools/build-one-click.mjs), [`build-apps-script-multifile.mjs`](../tools/build-apps-script-multifile.mjs), [`00-bootstrap.gs`](../src/server/00-bootstrap.gs)
-- **Tests/Contract:** [`g30-release-parity.test.mjs`](../tests/g30-release-parity.test.mjs), [`g34-multifile-parity.test.mjs`](../tests/g34-multifile-parity.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
-- **สัมพันธ์กับ/ข้อจำกัด:** F13/F23; 7 .gs + 5 partials + Index.html = 13; no appsscript.json; V8 ordering/manifest/staging/human cutover required
-- **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=G-34 package NOT runtime verified/deployed.
+- **ผู้ใช้/หน้าที่:** Developer/Reviewer ตรวจ offline package; Operator Deploy ได้เมื่อได้รับอนุมัติแยก
+- **Current build:** [`tools/native-sources.mjs`](../tools/native-sources.mjs) กำหนด 8 GS + 17 HTML partials + Index = **Native26**. `build:gas-multifile` เขียน generated stage; `build:check` ตรวจ CSS + Native staged bytes; `npm run build` เขียน CSS + Native เท่านั้น ตาม [`package.json`](../package.json)
+- **Data boundary:** ไม่มี Workspace IO จาก build; ไม่รวม `appsscript.json`/private target config. Native33 เป็น [separate candidate](implementation/d331-p0-11-native33-guarded-preflight.md) ไม่ใช่ default manifest
+- **Historical integrity:** One-Click root artifacts frozen; `build-one-click.mjs` ไม่ใช่ current release path และห้ามรัน `--write`
+- **Source:** [`build-apps-script-multifile.mjs`](../tools/build-apps-script-multifile.mjs), [`native-release-inspection.mjs`](../tools/native-release-inspection.mjs), [`00-bootstrap.gs`](../src/server/00-bootstrap.gs)
+- **Tests/Contract:** [G-30](../tests/g30-release-parity.test.mjs), [G-34](../tests/g34-multifile-parity.test.mjs), [archival freeze](../tests/legacy-one-click-freeze.test.mjs), [Native stabilization](../tests/ux-r2-m01-final-stabilization.test.mjs)
+- **Evidence:** Implemented/registered in source; automated parity ไม่พิสูจน์ actual V8/HTML Service runtime หรือ deployment approval ดู [environment evidence](INDEX.md#environment-and-evidence)
 
 ### F23 — Installer, Schema Check และ Explicit Migration (v7/P1/P4)
 
@@ -558,7 +538,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 | Feature | Implemented in Source | Verified by Automated Tests / Coverage | Observed in Deployed UI |
 | --- | --- | --- | --- |
 | Public Aggregate + Privacy/KPI | Yes | P2/G-23/Integration P2 | — |
-| Login/Logout/User Permissions | Yes | Integration P2 + G-33 Session cases | — |
+| Login/Logout/User Permissions | Yes | GS-S3/RR-01 + Integration P2/G-33 Session cases | — |
 | EventID / Revision / Soft Void | Yes | P1/G-03 | — |
 | Lifecycle, Owner, Close/Reopen, Warnings | Yes | G-03/G-04/G-05/G-19 + P3 | — |
 | Event Attachments | Yes | G-11/P4 | — |
@@ -567,35 +547,90 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 | Audit Retention / Archive | Yes | G-21 | — |
 | VisitLogs Semantic Cleanup | Yes | G-29 | — |
 | G-17 ReportRegistry + G-27 History | Yes | G-17/G-27 | Operator รายงานเส้นทาง History ผ่าน UI Smoke |
+| GS-S1/S2/S4/S5 operator/audit/consent protections | Yes | Dedicated security contracts | ไม่ได้ตรวจ live enforcement ใหม่ |
 | G-26 Advisory Readiness | Yes | G-26 | — |
 | G-31/G-32 Gemini/Job/Cancel/Retry | Yes | G-31/G-32/V8 mocked regression | — |
 | G-33 Single Report Action/New Draft | Yes | G-33 mocked regression | Operator รายงานปุ่มรายงานและประวัติผ่าน UI Smoke |
-| One-Click Source/Build Parity | Yes | G-30 contract + CI | ไม่ใช่การพิสูจน์ Deployed Parity |
-| G-34 Native Multi-file Package (13 files) | Yes — merged PR #70 | G-34 parity + CI offline | **Not verified/deployed**; controlled deployment approval required |
+| Frozen One-Click archival integrity | Archives only | Legacy freeze test; ไม่ใช่ latest source parity | Historical |
+| G-34 default Native26 package | Yes — manifest registered | G-30/G-34/M01 source/stage contracts | ไม่มี fresh deployed-SHA attestation ในรอบนี้ |
 
-**หลักฐานรวม ณ Baseline:** PR #64, #67 และ #70 รวมเข้า main; [GitHub Actions (main @ 1486211)](https://github.com/9GotStory/smart-srrt/actions/runs/38061906543) สำเร็จตาม workflow offline tests. Product Owner เคยรายงาน Deploy UI รอบ G-33 และ Basic UI Smoke 12/12 PASS แต่ยังไม่มี independent deployed-SHA verification; ไม่ใช่หลักฐานว่า G-34 ชุด 13 ไฟล์ Deploy แล้ว และไม่ใช่การทดสอบ Full E2E
+**Current evidence:** ดู [source/CI/environment register](INDEX.md#environment-and-evidence). ทุกแถวข้างต้นเป็น source/related-test inventory ไม่รับรอง coverage ทุก RPC หรือ current runtime; old UI-smoke/13-file evidence เก็บใน Historical ด้านล่าง
 
 ### 9.1 Planned / Deferred / Not Supported
 
 | สถานะ | ความสามารถหรือข้อจำกัด |
 | --- | --- |
 | **Planned / Deferred** | Historical P4→v7 Migration พร้อม Backup, Mapping, Review, Operator Approval; ยังไม่อนุญาตให้ทำกับข้อมูลจริง |
-| **Deferred / Not independently verified** | G-34 manual staging/cutover, Deployed SHA/Artifact Parity และ Full End-to-End ทุกเส้นทาง; ในรอบ Documentation นี้ไม่เปิด Browser UAT ใหม่ตามคำสั่ง Product Owner |
+| **Deferred / Not independently verified** | Fresh runtime source/binding attestation และ Full End-to-End ทุกเส้นทาง; ในรอบ Documentation นี้ไม่เปิด Browser UAT ใหม่ตามคำสั่ง Product Owner |
 | **Not Supported / Out of Scope** | Report Approval/Sign-off/Document Replacement, Automatic Medical Diagnosis, HIS/LIS, Full Contact Tracing/Case Management, Task/SLA/Escalation Engine, Persistent Distributed Job Queue |
 | **Not Supported / Out of Scope** | การเปิด Public Access ให้ Raw MainData/Attachment, Auto-backfill เอกสารรายงานเก่าที่ไม่มีทะเบียน, การแก้ Registry Row เก่าเพื่อเปลี่ยนรายงานฉบับเดิม |
 | **Not Supported** | อนุมานว่า `npm test`, GitHub Merge หรือการ Deploy Reported เท่ากับการอนุญาต Migration หรือเป็นหลักฐาน Production Live E2E |
+
+## D331 Development Status
+
+**D331 OFF; live data authorization HOLD.** ตารางนี้สรุปสถานะเท่านั้น ข้อกำหนดและ gates ใช้ [Remaining Feature Briefs](implementation/d331-remaining-feature-briefs.md) และ [CaseID/privacy/security decisions](implementation/d331-p0-30d-caseid-privacy-security-decision-gates.md) เป็นแหล่งหลัก D331 F01–F08 เป็น document-local backlog IDs แยกจาก Core F01–F23 ด้านบน
+
+| D331 brief | Source / registration / tests | Operational status |
+| --- | --- | --- |
+| F01 / P0-31B Case→Plan mock UI | P0-31A model merged, **unregistered**; [7 synthetic model tests](../tests/d331-p031a-offline-case-plan.test.mjs); ยังไม่ integrated UI/lifecycle | Proposed next planning; ยังไม่เริ่มใน Documentation Alignment |
+| F02 Event→Case | Records มี registered synthetic Case mirror; standalone mock/real private reader unregistered; [mock tests](../tests/d331-p0-25-native26-case-mirror.test.mjs), [reader tests](../tests/d331-p0-22b2-server-case-read.test.mjs) | Mock-only; live reads/writes HOLD แยก gates |
+| F03 Plans | Offline model + schema/guarded CRUD groundwork | ไม่มี live Plan workflow |
+| F04 Control Actions | Offline lifecycle + schema/guarded CRUD groundwork | ไม่มี functional authorized UI |
+| F05 Entomology HI/CI | [Pure workflow/count engine](../src/dengue/11-p0-06-offline-workflow-engine.gs), [offline tests](../tests/d331-p0-06-offline-workflow-engine.test.mjs) | Real survey/reporting scope HOLD; denominator ศูนย์เป็น null |
+| F06 Follow-ups | Offline schema/workflow/CRUD groundwork | Checkpoint/clinical policy HOLD |
+| F07 3-3-1 SLA | `NOT_EVALUATED`; ไม่มี approved clinical clock | C1/C2 HOLD; ยังไม่ให้ operational PASS/FAIL |
+| F08 Dengue summary/DEV E2E | Original Dashboard + owner-reported mock smoke; ไม่มี complete live D331 E2E | Privacy/permissions/clinical/binding/UAT gates HOLD |
+
+**Registration/schema distinction:** Native26 รวมเพียง [G1-A provisional v1](../src/dengue/00-g1a-foundation.gs) แบบ pure/OFF และ inert status partial; [v2 draft schema](../src/dengue/07-p0-02a-mvp-schema-contract.gs) มี 7 tables/113 ordered headers รวม grants แทน provisional Containers. Historical DEV empty-tab setup ไม่ใช่ current binding หรือ permission. [Private Case reader](../src/dengue/15-p0-22b2-case-read-integration.gs) ยัง OFF/unregistered; global identifier scan เป็น P1 decision แยกจาก D2 identity และ P2 disclosure. Existing Admin/role ไม่ใช่ D331 grant
+
+DEV v20/mock UAT เป็น owner-reported dated evidence ตาม [INDEX](INDEX.md#environment-and-evidence); ไม่ใช่ real-data/clinical acceptance. Work authorization รอบนี้เป็น docs-only; ไม่เริ่ม F01/P0-31B และไม่อนุมาน policy approval จาก merged code
 
 ## 10. เอกสารอ้างอิงและหลักในการอ่าน
 
 **ลำดับความน่าเชื่อถือสำหรับ "ทำอะไรได้จริงในปัจจุบัน":** (1) Source/Tests ที่ SHA ข้างต้น → (2) เอกสาร Current Implementation ฉบับนี้ → (3) Contract/Governance รุ่นปัจจุบันที่สอดคล้อง Source → (4) Baseline, Roadmap และ Stacked-PR Design ที่อาจสะท้อนสถานะก่อน Merge
 
-- [README.md](../README.md) — ภาพรวม/ติดตั้ง/ลิงก์เริ่มต้น
+- [INDEX.md](INDEX.md) — Navigation, authority และ current/historical/proposed classification
+- [README.md](../README.md) — ภาพรวม/Native development/ลิงก์เริ่มต้น
 - [AGENTS.md](../AGENTS.md) — ขอบเขตและกฎสำหรับ AI Agents รวม Context7
 - [`src/server/`](../src/server/) และ [`src/web/`](../src/web/) — Implementation จริง
 - [Architecture](./architecture/) · [Governance](./governance/) · [Deployment](./deployment/)
 - [UX G-33](./ux/g33-single-report-action.md) · [Roadmap](./roadmap/group-a-b-development-plan.md)
 - [P4→v7 Migration Design](./integration/p4-to-v7-migration-design-2026-10-09.md) และ [Readiness HOLD Matrix](./integration/p4-v7-migration-readiness-2026-10-09.md)
 
-**เพิ่มเติมสำหรับ G-34:** เอกสาร [Native Multi-file Deployment Candidate](deployment/g34-native-multifile-apps-script.md) ยังคงเป็นคู่มือ Authoritative สำหรับการทดลอง Staging และการ Rollback; `main` ปัจจุบันมีเครื่องมือสร้างแพ็กเกจแล้ว แต่ไม่มีหลักฐานว่ามีการ Cutover Google Apps Script ที่ใช้งานจริง. ปัจจุบัน Workflow `.github/workflows/tests.yml` ตรวจ One-Click parity, Multi-file build+check, RPC contracts, release preflight และ `npm test`.
+**Current verification authority:** [`package.json`](../package.json), [Native manifest](../tools/native-sources.mjs), [CI workflow](../.github/workflows/tests.yml) และ matched tests เป็นหลักสำหรับ build/parity/contract. Deployment guides เป็น dated runbooks ต้องเทียบ approved target/topology/source ใหม่ก่อนใช้ ไม่มีคำสั่ง Deploy จาก reference นี้
 
 เอกสารนี้เป็น **Description / Reference** ไม่มีการเปลี่ยน Source, Runtime, Schema, Deployment หรือ Migration ในการจัดทำ
+
+
+## Historical evidence — 11–12 October 2026
+
+<details>
+<summary>Preserved security/extraction banners and original baseline evidence</summary>
+
+Original feature reference baseline: `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` (11 October 2026); security source snapshot `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` (12 October 2026). Candidate/NOT MERGED, Google Charts, topology และ @10 ข้างล่างเป็นบันทึกเดิม ไม่ใช่ current description หรือ approval. เอกสาร historical ภายนอกทั้งหมดคงเดิม
+
+> **Security Source State (12 Oct 2026):** GS-S1→GS-S5 are merged to `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` and all source-level CI checks pass; Apps Script @10 deployment and migration remain **HOLD**. Release blockers are recorded in [Security Release Readiness Review](release/security-release-readiness-review-2026-10-12.md). Older feature-status banners below were written as PR candidates and may still say “not merged”; GitHub PRs #95–#99 are the authority for their merge status.
+
+> **GS-S5 Audit Observability (Source Candidate — ยังไม่ได้ Merge/Deploy):** แสดงสถานะการบันทึก AuditLogs ในหน้า Admin สำหรับผู้มีสิทธิ์ `audit` โดยไม่บันทึกข้อมูลผู้ป่วย/รหัสผ่าน/ข้อความ Error ลง Health Telemetry เพิ่ม Tests ความล้มเหลวและการกลับมาบันทึกได้ ทั้งนี้ `writeAudit_` ยังไม่เปลี่ยนผลธุรกิจที่ Commit สำเร็จ และสถานะ `unobserved` ไม่ได้หมายความว่ามี Audit ครบทุกงาน. [GS-S5](implementation/gs-s5-audit-observability.md).
+
+> **GS-S4 (Source Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่มการยืนยันสร้างรายงาน AI ซ้ำจากฝั่ง Server ผ่าน Consent Token ใช้ครั้งเดียว อายุ 5 นาที ผูกกับผู้ใช้ EventID ประวัติ Report Registry และ Revision ตรวจใน G-32 Lock ก่อนสร้าง Job ใหม่ พร้อม Tests กรณีไม่มีรายงาน, มีรายงานซ้ำ, Token ปลอม/หมดอายุ/ใช้งานแล้ว, Registry เปลี่ยน และงานสถานะ Unknown. [อ่าน GS-S4](implementation/gs-s4-server-report-consent.md).
+
+> **GS-S3 (Candidate Source — ยังไม่ได้ Merge หรือ Deploy):** รองรับรหัสผ่านบัญชีเดิม SHA-256 ด้วยการ Migration เป็น PBKDF2-HMAC-SHA256 + Salt หลัง Login สำเร็จเท่านั้น, เพิ่ม Password Policy, Login Failure Throttling และ Session Revocation เมื่อรหัสผ่านเปลี่ยน พร้อม Security Tests. ต้องวัดเวลาการคำนวณจริงบน Apps Script ทดสอบก่อน Deploy. [เอกสาร GS-S3](implementation/gs-s3-authentication-modernization.md).
+
+> **GS-S2 (Source Candidate — ยังไม่ได้ Merge/Deploy):** แก้ AuditLogs สำหรับการแก้ไขผู้ใช้ไม่ให้บันทึก PasswordHash และ `newPassword` พร้อมเพิ่ม Redaction ที่จุดเขียน Audit และ Security Contract Tests. ไม่แก้ข้อมูล AuditLogs เดิมหรือ Schema v7; ต้องได้รับอนุมัติแยกหากจะตรวจ/จัดการ Logs ย้อนหลัง. [รายละเอียด GS-S2](implementation/gs-s2-credential-audit-redaction.md).
+
+> **GS-S1 (Candidate — ยังไม่ได้ Merge/Deploy):** เพิ่ม Server Guard สำหรับ 15 ฟังก์ชันระดับผู้ดูแลระบบ/การย้ายข้อมูล/การจัดการ Gemini โดยต้องกำหนด Google Script Property `GS_TRUSTED_OPERATOR_EMAIL` และต้องตรงทั้ง Active + Effective Google Identity มิฉะนั้นปฏิเสธก่อนทำงานทุกครั้ง รวมทั้งจำกัด `include()` เฉพาะ 16 HTML Partials ใน Manifest และเพิ่ม Security Contract Tests. ระบบทั่วไปไม่เปลี่ยน; ต้องมีแผนกำหนด Property ก่อน Deploy ในอนาคต. [รายละเอียด GS-S1](implementation/gs-s1-operator-rpc-boundary.md).
+
+> **UX-R2-M01-05 (Candidate Test Stabilization — ยังไม่ได้ Merge/Deploy):** เพิ่มชุดทดสอบตรวจโครงสร้าง Native 24 ไฟล์ ลำดับ Script และ Global Functions, Bootstrap เพียงครั้งเดียว, HTML Handlers, การป้องกัน RPC ก่อน Boot, Guest/AI Reporter Unknown-state และ Negative Fixtures พร้อมเชื่อมเข้า `npm run check:contracts` โดย **ไม่มีการแก้ Runtime**. ดู [M01-05](implementation/ux-r2-m01-05-final-stabilization.md).
+
+> **UX-R2-M01-04 (Source Candidate — ยังไม่ Merge หรือ Deploy):** ระบบ AI Reporter แยกเป็น Native HTML Partials `03i-client-report-actions.html` (ความพร้อมข้อมูลและปุ่มรายงาน), `03j-client-report-job.html` (สถานะงาน, Polling, Recovery, ยกเลิก), และ `03k-client-report-generation.html` (สร้างรายงานและยืนยันคำเตือน). Native Stage 24 ไฟล์: 7 GS + 16 HTML + Index; ยังคง G-26/G-32/G-33, ความปลอดภัย Session, ป้องกันรายงานซ้ำ, สถานะ Unknown และ One-Click เดิม. ดู [M01-04](implementation/ux-r2-m01-04-ai-reporter.md).
+
+> **UX-R2-M01-03 (Source Candidate — ยังไม่ได้ Merge หรือ Deploy):** ย้าย Event badges/Owner/Attachment, ประวัติรายงาน Event, และตาราง/ฟอร์ม Event เป็น `03f-client-event-controls.html`, `03g-client-event-history.html`, `03h-client-event-records.html`; Native Stage 21 ไฟล์ (7 GS + 13 HTML + Index) โดยไม่เปลี่ยน 26 fields, RBAC, EventID/Revision, G-27/G-32/G-33, Schema v7 และ Frozen One-Click. ดู [M01-03](implementation/ux-r2-m01-03-event-management.md).
+
+> **UX-R2-M01-02 (candidate code only, not deployed):** Dashboard Filters, KPI/Insights, Google Charts และ Export/Capture ย้ายเป็น Native HTML Partials `03d-client-dashboard.html` และ `03e-client-dashboard-export.html`; Stage เป็น 18 ไฟล์ รวม Index (7 GS + 10 HTML). ไม่มีการเปลี่ยน Feature/RPC, Google Charts ยังคงเดิม, One-Click Frozen, Apps Script @10 ไม่ได้ Deploy. ดู [M01-02](implementation/ux-r2-m01-02-dashboard.md).
+
+> **UX-R2-M01-01 Native Client Split (source candidate, not deployed):** Client JS ใน `src/web/04-browser-app.html` ถูกแยกเฉพาะ Shared Core และ Auth/Session ลงใน `03b-client-core.html` และ `03c-client-auth.html` ตาม `tools/native-sources.mjs` (7 GS + 8 HTML + generated Index = 16). ฟีเจอร์และ RPC เดิมยังไม่เปลี่ยน. โปรดดู [M01-01](implementation/ux-r2-m01-01-shared-core.md); ห้ามสรุปว่ามีการ Deploy @10 แล้ว.
+
+**หลักฐานรวม ณ Baseline:** PR #64, #67 และ #70 รวมเข้า main; [GitHub Actions (main @ 1486211)](https://github.com/9GotStory/smart-srrt/actions/runs/38061906543) สำเร็จตาม workflow offline tests. Product Owner เคยรายงาน Deploy UI รอบ G-33 และ Basic UI Smoke 12/12 PASS แต่ยังไม่มี independent deployed-SHA verification; ไม่ใช่หลักฐานว่า G-34 ชุด 13 ไฟล์ Deploy แล้ว และไม่ใช่การทดสอบ Full E2E
+
+</details>

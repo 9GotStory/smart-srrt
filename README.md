@@ -1,34 +1,6 @@
-> **Current Security Release Status (2026-10-12):** GS-S1 through GS-S5 have **all merged into `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`** and post-merge CI passed 60 contract / 419 regression tests with Native 24-file parity. **No Apps Script production deployment was performed; releaseDecision=HOLD.** See [Security Release Readiness Review](docs/release/security-release-readiness-review-2026-10-12.md) and [New-chat Handoff](docs/handoff/smart-srrt-security-release-2026-10-12.md). Older “candidate / NOT MERGED” notices below refer to their original PR-writing dates and are superseded for *GitHub merge status only*; they are not proof of deployment.
-
-> **GS-S5 Audit Observability (source candidate; NOT merged/deployed):** The AuditLogs write sink records non-secret, best-effort degraded/recovered health under a bounded Script Property and a safe Apps Script execution warning when an append fails. The existing Audit-retention Admin panel exposes health through the protected `audit` permission; once a report is committed, an Audit failure still cannot force duplicate report generation. No health alerts imply perfect completeness. [GS-S5 runbook](docs/implementation/gs-s5-audit-observability.md).
-
-> **GS-S4 Server-side Report Consent (candidate; not merged/deployed):** An authenticated G-27 history confirmation now requests a short-lived server-issued one-use regeneration capability, tied to the owner, EventID, Report Registry count/latest ReportID and Event Revision. `createReportJob` checks this inside the G-32 job lock before allowing a repeat report; guest, stale, cross-user, forged or unknown-state retries fail closed. See [GS-S4](docs/implementation/gs-s4-server-report-consent.md).
-
-> **GS-S3 Authentication Modernization — source candidate, NOT deployed (2026-10-12):** Adds versioned salted PBKDF2-HMAC-SHA256 verifier for new/updated passwords, one-time successful legacy SHA-256 migration, stronger registration policy, account-scoped best-effort login throttling and password-bound sessions with revocation on password change. Explicit non-production performance and identity-policy validation remain required before production. No user rows or Apps Script deployments changed. [GS-S3 details](docs/implementation/gs-s3-authentication-modernization.md).
-
-> **GS-S2 Credential / Audit Redaction (source candidate; not merged/deployed):** UpdateUser audit records now use an allowlisted non-secret change summary; central AuditLogs sink masks structured credential fields and Bearer tokens. Synthetic VM contract tests ensure passwords and PasswordHash never reach new audit rows. Existing/historical AuditLogs are **not** scanned, migrated or deleted. See [GS-S2](docs/implementation/gs-s2-credential-audit-redaction.md).
-
-> **GS-S1 Security Boundary (source candidate; not merged/deployed):** Fifteen privileged Apps Script maintenance/migration/model entrypoints now require an explicitly provisioned `GS_TRUSTED_OPERATOR_EMAIL` plus matching nonblank Google active and effective identities. Trusted HTML `include()` names are allowlisted to the 16 Native partials; the normal app RPC surface and 24-file stage remain unchanged. Future operator maintenance will fail closed until this property is configured. [Read GS-S1](docs/implementation/gs-s1-operator-rpc-boundary.md).
-
-> **GS Architecture Review (2026-10-12; documentation only):** Seven Native server modules are structurally sufficient. Source review identified privileged-operator RPC boundaries and credential-bearing audit payloads needing priority security triage before a new production release. No Runtime changes, Merge or Apps Script deployment. Read [GS Architecture Review](docs/architecture/gs-architecture-review-2026-10-12.md).
-
-> **UX-R2-M01-05 Final Native Stabilization (12 Oct 2026; source-only candidate):** A new test-only 24-file Native topology and browser-global contract checks exact script order, unique final `boot()`, original `fileToBase64` duplicate, no pre-boot RPC, HTML inline handlers, and fail-closed AI Reporter state. Includes negative drift fixtures. The gate is wired to `npm run check:contracts` and `npm test`. **No runtime behavior change, no Merge or Apps Script @10 deployment.** See [M01-05](docs/implementation/ux-r2-m01-05-final-stabilization.md).
-
-> **UX-R2-M01-04 AI Reporter Modularization (12 Oct 2026; candidate source only):** Report readiness/actions, job polling/recovery/cancellation, and AI generation have been extracted byte-for-byte into `03i-client-report-actions.html`, `03j-client-report-job.html`, and `03k-client-report-generation.html`. The Native candidate stages **24 files** (7 GS + 16 HTML + generated Index). Admin/Library and single final `boot()` remain in `04-browser-app.html`. G-26/G-32/G-33 safeguards, frozen One-Click and Apps Script @10 stay unchanged; not merged or deployed. See [M01-04](docs/implementation/ux-r2-m01-04-ai-reporter.md).
-
-> **UX-R2-M01-03 Event Management Modularization (12 Oct 2026; source candidate, not deployed):** Separate Event Owner/Attachments (`03f-client-event-controls.html`), Event Report History (`03g-client-event-history.html`) and Event Records/Lifecycle (`03h-client-event-records.html`) from `04-browser-app.html` without rewriting logic. Native stage now **21 files** (7 GS + 13 HTML + Index); Reporter Job remains in final 04. Frozen One-Click, production Apps Script @10 and schema v7 are unchanged. See [M01-03](docs/implementation/ux-r2-m01-03-event-management.md).
-
-> **UX-R2-M01-02 Dashboard Modularization (12 Oct 2026; candidate source only):** Native HTML manifest now includes `03d-client-dashboard.html` and `03e-client-dashboard-export.html` before `04-browser-app.html` (7 GS + 10 HTML + Index = **18 stage files**). The original Dashboard filtering, KPI, guest aggregation, Google Charts, XLSX/server exports, and capture functions are moved without logic changes; Chart.js migration is separately gated. AI Reporter and frozen One-Click remain unchanged. Source is **not deployed** to Apps Script @10. See [M01-02](docs/implementation/ux-r2-m01-02-dashboard.md).
-
-> **UX-R2-M01-01 (12 ต.ค. 2569; Source Candidate ไม่ใช่ Deploy):** แยก Shared Core + Auth/Session ออกจาก `04-browser-app.html` เป็น `03b-client-core.html` และ `03c-client-auth.html` ตาม Native Manifest; เปลี่ยน Candidate Stage เป็น **16 ไฟล์** (7 server + 8 HTML + Index). คง Google Apps Script HTML Service, `google.script.run`, RBAC, AI Reporter Job Guards และ `boot()` ที่จุดสุดท้าย. One-Click ไม่เปลี่ยน และ Apps Script @10 ยังไม่ Deploy. ดู [M01-01](docs/implementation/ux-r2-m01-01-shared-core.md).
-
-> **UX-R2-M01-00 (12 ต.ค. 2569):** เตรียม Test Foundation สำหรับแยก Client JavaScript เป็น Native HTML Partials ตามลำดับ Manifest โดยยังไม่แก้ Runtime Source, ยังคง 14 ไฟล์ และยังไม่ Deploy; ดู [M01-00 Test Foundation](docs/implementation/ux-r2-m01-00-browser-module-foundation.md). งานแยก Module จริงต้องรับอนุมัติและเปิด PR แยกต่างหาก.
-
 # Smart SRRT
 
-> **UX-R2-03B (12 ต.ค. 2569):** การตรวจ Release/Regression ปัจจุบันใช้ **Native Source 14 ไฟล์** ผ่าน `tools/native-release-inspection.mjs`, G-30/G-34 และ P6 Native Offline Preflight. `npm run release:preflight` ต้องมี `dist/apps-script/` ที่ Stage แล้วและทำงานแบบ Read-only โดย Release Decision ยังเป็น **HOLD**. One-Click สองไฟล์เป็นเพียงหลักฐานเก่า มี Test ตรวจ Git Blob ที่ตรึงไว้เท่านั้น ไม่ใช่ Current Release. ดู [คู่มือ R2-03B](docs/implementation/ux-r2-03b-native-release-tests.md).
-
-> **สำคัญ — UX-R2-03 (11 ต.ค. 2569):** ตั้งแต่ R2-03 ให้พัฒนา/Build/ตรวจรับผ่าน **Native Multi-file** ตาม [Source Manifest](tools/native-sources.mjs) เท่านั้น (7 .gs + 6 HTML partials + Index.html = **14 ไฟล์**). **ห้ามแก้หรือ Generate One-Click สองไฟล์เดิมอีก**; เป็นเพียง Legacy Snapshot ของระบบที่เคยใช้. การอ้างอิง One-Click/G-34 จำนวน 13 ไฟล์ในหัวข้อประวัติด้านล่างเป็นข้อมูลก่อน R2-03 และไม่ใช่คำสั่ง Build ปัจจุบัน. ดู [คู่มือ R2-03](docs/implementation/ux-r2-03-native-dashboard-mobile.md). ไม่อนุญาต Deploy @10 โดยอัตโนมัติ.
+> **Current reference — 21 October 2026:** Implementation baseline `main@29ca13ba33f87d46f1f50fba90fe904773b6594a`. Source/automated evidence ไม่เท่ากับ deployed parity หรือสิทธิ์เข้าถึงข้อมูลจริง ดู [Documentation Index](docs/INDEX.md) และ [Current Feature Status](docs/features.md)
 
 **ระบบสนับสนุนการเฝ้าระวังเหตุการณ์ทางระบาดวิทยาและการสร้างรายงานสอบสวนโรคเบื้องต้นด้วย AI**
 
@@ -66,7 +38,7 @@ Smart SRRT เป็น Web App สำหรับหน่วยงานสา
 | ชั้น | เทคโนโลยี |
 | --- | --- |
 | Runtime / Backend | Google Apps Script (JavaScript) |
-| Frontend | HTML, CSS, Vanilla JavaScript; Google Charts |
+| Frontend | HTML, CSS, Vanilla JavaScript; pinned Chart.js 4.5.1 |
 | ฐานข้อมูลเชิงตาราง | Google Sheets |
 | เอกสารแนบและที่เก็บไฟล์ | Google Drive |
 | รายงานและแม่แบบ | Google Docs |
@@ -75,18 +47,20 @@ Smart SRRT เป็น Web App สำหรับหน่วยงานสา
 | Repository / CI | GitHub / GitHub Actions |
 | การเผยแพร่ | Google Apps Script Web App |
 
-หลักการ: **Modular Source, Multi-file Apps Script Candidate, One-Click Legacy Compatibility** — พัฒนาในไฟล์แยกส่วนที่ `src/server/` และ `src/web/` โดยกำลังเปลี่ยนรูปแบบการเผยแพร่ที่ต้องการเป็น Native Multi-file จำนวน 14 Source/HTML Files. ในระหว่างรอตรวจรับและ Cutover ยังคง One-Click Artifacts เดิมไว้สำหรับการใช้งานที่ผ่านการตรวจและการย้อนกลับ; ยังไม่ถือว่ารูปแบบ Multi-file ถูก Deploy แล้ว
+หลักการ: **Modular Source + Native Apps Script Package** — พัฒนาใน `src/server/`, `src/dengue/`, `src/web/`; ลำดับ/registration เป็นไปตาม [Native manifest](tools/native-sources.mjs) ปัจจุบัน 8 GS + 17 HTML partials + generated Index = **26 ไฟล์**. One-Click ที่ root เป็น frozen historical archives. Native33 เป็น separate disabled D331 dependency candidate; default build ยัง Native26. การมี source/package ไม่พิสูจน์ว่า deployment ใช้ source ชุดนั้น
 
 ### โครงสร้าง Repository ปัจจุบัน
 
 ```text
 src/server/    00-bootstrap.gs ... 06-gemini-and-prompts.gs
-src/web/       00-document-head.html ... 04-browser-app.html
-tools/         build-one-click.mjs และเครื่องมือตรวจ release/migration แบบ offline
+src/dengue/    pure foundation, offline models และ disabled backend candidates
+src/web/       ordered classic-script HTML partials ... 04-browser-app.html
+tools/         native-sources.mjs, Native build/inspection และ guarded release tools
 tests/         Node.js tests และ contract/integration tests
 docs/          architecture, baseline, deployment, governance,
                integration, migrations, roadmap, testing, ux, workflow
-docs/features.md  เอกสารความสามารถระบบปัจจุบัน (เอกสารชุดนี้)
+docs/INDEX.md     Documentation navigation / Source-of-Truth Map
+docs/features.md  Current Feature Status
 AGENTS.md      กติกาและบริบทสำหรับ AI Coding Agents
 Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
 Index_Smart_SRRT_OneClick.html
@@ -96,21 +70,65 @@ README_ติดตั้ง_Smart_SRRT_OneClick.txt
 
 ไฟล์ `Code_Smart_SRRT_OneClick_v2026.09.08.1.gs` และ `Index_Smart_SRRT_OneClick.html` เป็น One-Click Artifacts ที่ประกอบตามลำดับ Source ที่กำหนดไว้ใน [`tools/build-one-click.mjs`](tools/build-one-click.mjs) **ไฟล์นี้เป็น Snapshot เก่า ห้าม Generate/แก้ไขใหม่**; งานพัฒนาต่อให้แก้ `src/server/` หรือ `src/web/` และ Build Native เท่านั้น
 
-สำหรับผู้พัฒนา (ตั้งแต่ UX-R2-01 เมื่อ PR ได้รับอนุมัติและ Merge):
+คำสั่งพัฒนาปัจจุบันตาม [package.json](package.json) (Node ≥20; CI ใช้ Node 24):
 
 ```bash
 npm ci --ignore-scripts --no-audit --no-fund # ติดตั้ง Dependencies จาก package-lock.json
 npm run check:ui-assets # ตรวจ Tailwind CSS ที่ Compile ไว้แบบ Read-only
 npm run build:ui-assets # เขียน CSS Generated เฉพาะเมื่อเปลี่ยน Source CSS โดยเจตนา
-npm run build:gas-multifile # สร้าง Native Candidate 14 ไฟล์ใน dist/apps-script/
+npm run build:gas-multifile # สร้าง default Native26 package ใน dist/apps-script/
 npm run build:check      # ตรวจ byte-for-byte Native Stage และ CSS โดยไม่แก้ One-Click
 npm run build            # สร้าง CSS และ Native Multi-file Candidate เท่านั้น (ไม่แตะ One-Click)
-npm run check:contracts  # ตรวจ G-30 contract
+npm run check:contracts  # ตรวจ Native/RPC/security contracts
 npm test                 # Node test suite
 npm run release:preflight
 ```
 
 คำสั่งข้างต้นเป็นข้อมูลอ้างอิงสำหรับกระบวนการพัฒนา **ไม่ใช่คำสั่งให้ดำเนินการกับระบบ Production หรือข้อมูลจริง**
+
+## การติดตั้งและอัปเดต
+
+Native package เป็น source/build artifact; การนำไปใช้กับ Apps Script ต้องตรวจ exact target/source, manifest/OAuth/V8, private backup/rollback และการอนุมัติแยกก่อนเสมอ ดู [deployment navigation](docs/INDEX.md#documentation-categories). คู่มือติดตั้ง One-Click เป็น Historical เท่านั้น ไม่ใช่คำสั่งติดตั้ง source ปัจจุบัน Historical P4→v7 migration ยัง HOLD ตาม [Migration Policy](docs/governance/migration-version-release-policy.md)
+
+## D331 Development Scope และสถานะหลักฐาน
+
+Dengue 3-3-1 อยู่ในขอบเขตพัฒนาต่อของแอปเดิม โดยใช้ auth, Records, Apps Script และ Sheets เดิม **D331 ยัง OFF**. มี synthetic Case list/add/edit ใน Records และ offline Case→Plan model แล้ว; มี private reader/guarded CRUD candidates แต่ยังไม่มี operational workflow ข้อมูลจริงครบวงจร
+
+Product backlog และข้อกำหนดที่เหลืออยู่ที่ [D331 Remaining Feature Briefs](docs/implementation/d331-remaining-feature-briefs.md); สถานะ source/registration/tests ดู [Feature Reference](docs/features.md#d331-development-status). ไม่คัดลอก requirements ใหม่ที่นี่ การตัดสินใจ privacy/security/clinical และการอนุมัติ read/write/Deploy ยังแยกกัน
+
+ทะเบียนล่าสุดระบุ existing **DEV Web App v20**, owner-reported **mock-only UAT 8/8** และไม่มี Production environment; เป็น dated owner evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Current Script↔Deployment↔Workbook binding ยังไม่ re-attest ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
+
+การอนุมัติรอบนี้ครอบคลุม Documentation Alignment และ Draft PR เท่านั้น ยังไม่เริ่ม F01/P0-31B. หลัง PO ตรวจรับเอกสาร จึงเสนอแผน feature นั้นก่อนสร้าง/ปรับ Issue; ไม่มีการอนุมัติ Merge/Deploy/Migration/ข้อมูลจริงจาก green CI
+
+## เริ่มอ่านที่นี่
+
+เอกสารอ้างอิง **`docs/features.md`** เป็น Feature Reference ฉบับปัจจุบันที่มี Traceability รายฟีเจอร์, ข้อจำกัด, Tests และสถานะหลักฐาน; เก็บ `doc/features.md` เป็นเอกสาร Legacy Snapshot ไม่ควรใช้แทนฉบับปัจจุบัน.
+
+- [Documentation Navigation และ Source-of-Truth Map](docs/INDEX.md)
+- [ความสามารถและสถานะฟีเจอร์ทั้งหมด — `docs/features.md`](docs/features.md)
+- [แนวทางสำหรับ AI Agents — `AGENTS.md`](AGENTS.md)
+- [Current Native source/build authority](docs/INDEX.md#source-of-truth-map)
+- [Privacy & KPI](docs/architecture/p2-privacy-kpi-contract.md)
+- [ReportRegistry G-17](docs/governance/g17-report-registry.md), [Readiness G-26](docs/governance/g26-ai-report-readiness.md), [History G-27](docs/governance/g27-event-report-history.md)
+- [Report Jobs G-32](docs/deployment/g32-report-jobs.md) และ [Single Report Action G-33](docs/ux/g33-single-report-action.md)
+- [Migration Readiness P4→v7](docs/integration/p4-v7-migration-readiness-2026-10-09.md)
+
+## การสำรองข้อมูลและการดูแลรักษา
+
+ก่อนแก้ไข Google Apps Script/Schema หรือย้ายวิธี Deploy ต้องเก็บ Snapshot ของ Spreadsheet, โฟลเดอร์ Drive/Template, `appsscript.json`/OAuth scopes, Script source และเวอร์ชัน Deployment สำหรับการกู้คืน (ไม่ส่งข้อมูลจริงหรือรหัสเข้าถึงขึ้น GitHub). การสำรองข้อมูลเป็นขั้นตอนของผู้ดูแลที่ได้รับอนุญาต ไม่ใช่ผลของ `npm run build`. การย้าย Historical P4→v7 ยัง **HOLD** ตาม [Migration Policy](docs/governance/migration-version-release-policy.md).
+
+## การดูแลรักษาและการมีส่วนร่วม
+
+ใช้ GitHub เป็น Source of Truth: อ่านข้อกำหนดใน `AGENTS.md` → ระบุ Scope → ตรวจ Source/Tests → ทำงานใน Branch แยก → เปิด PR → ตรวจรับโดยผู้ตรวจอิสระตามกระบวนการ → รอ Product Owner อนุมัติ Merge/Deploy/Migration แยกแต่ละขั้น หลีกเลี่ยงการนำข้อมูลสุขภาพจริง, Session Token, Gemini API Key, Spreadsheet ID หรือไฟล์หลักฐานที่ระบุตัวบุคคลเข้าสู่ GitHub, Test Fixtures และ Logs
+
+เอกสารนี้เป็น **ภาพรวมระบบ** ไม่ใช่คำอนุญาตให้เปลี่ยนแปลงระบบที่ใช้งานอยู่
+
+## Historical release and extraction notes — 11–12 October 2026
+
+<details>
+<summary>Historical banners/status (preserved; not current release instructions)</summary>
+
+คำว่า candidate/NOT MERGED, Google Charts, Native counts และ @10 ด้านล่างเป็นบริบทวันที่เดิม ใช้ source/tests และ evidence map ด้านบนสำหรับสถานะปัจจุบัน การเก็บบันทึกนี้ไม่รับรองการ Deploy หรือยกเลิก HOLD
 
 รายละเอียด R2-01: [Frontend Build Foundation](docs/implementation/ux-r2-01-build-foundation.md) — Tailwind v4 ใช้แบบ Compile ล่วงหน้าและไม่มี Preflight ในระยะแรก; ยังไม่ใช่การปรับ UI ทุกหน้า, ยังไม่ติดตั้ง Lucide/Chart.js, และไม่เปลี่ยน Deployment Apps Script ที่ใช้งานอยู่.
 
@@ -126,6 +144,37 @@ npm run release:preflight
 npm run build:gas-multifile   # สร้าง Native 14 ไฟล์ใน dist/apps-script/
 npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร้างแล้วและความตรงกับ Source (ไม่เขียนไฟล์)
 ```
+
+> **Current Security Release Status (2026-10-12):** GS-S1 through GS-S5 have **all merged into `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726`** and post-merge CI passed 60 contract / 419 regression tests with Native 24-file parity. **No Apps Script production deployment was performed; releaseDecision=HOLD.** See [Security Release Readiness Review](docs/release/security-release-readiness-review-2026-10-12.md) and [New-chat Handoff](docs/handoff/smart-srrt-security-release-2026-10-12.md). Older “candidate / NOT MERGED” notices below refer to their original PR-writing dates and are superseded for *GitHub merge status only*; they are not proof of deployment.
+
+> **GS-S5 Audit Observability (source candidate; NOT merged/deployed):** The AuditLogs write sink records non-secret, best-effort degraded/recovered health under a bounded Script Property and a safe Apps Script execution warning when an append fails. The existing Audit-retention Admin panel exposes health through the protected `audit` permission; once a report is committed, an Audit failure still cannot force duplicate report generation. No health alerts imply perfect completeness. [GS-S5 runbook](docs/implementation/gs-s5-audit-observability.md).
+
+> **GS-S4 Server-side Report Consent (candidate; not merged/deployed):** An authenticated G-27 history confirmation now requests a short-lived server-issued one-use regeneration capability, tied to the owner, EventID, Report Registry count/latest ReportID and Event Revision. `createReportJob` checks this inside the G-32 job lock before allowing a repeat report; guest, stale, cross-user, forged or unknown-state retries fail closed. See [GS-S4](docs/implementation/gs-s4-server-report-consent.md).
+
+> **GS-S3 Authentication Modernization — source candidate, NOT deployed (2026-10-12):** Adds versioned salted PBKDF2-HMAC-SHA256 verifier for new/updated passwords, one-time successful legacy SHA-256 migration, stronger registration policy, account-scoped best-effort login throttling and password-bound sessions with revocation on password change. Explicit non-production performance and identity-policy validation remain required before production. No user rows or Apps Script deployments changed. [GS-S3 details](docs/implementation/gs-s3-authentication-modernization.md).
+
+> **GS-S2 Credential / Audit Redaction (source candidate; not merged/deployed):** UpdateUser audit records now use an allowlisted non-secret change summary; central AuditLogs sink masks structured credential fields and Bearer tokens. Synthetic VM contract tests ensure passwords and PasswordHash never reach new audit rows. Existing/historical AuditLogs are **not** scanned, migrated or deleted. See [GS-S2](docs/implementation/gs-s2-credential-audit-redaction.md).
+
+> **GS-S1 Security Boundary (source candidate; not merged/deployed):** Fifteen privileged Apps Script maintenance/migration/model entrypoints now require an explicitly provisioned `GS_TRUSTED_OPERATOR_EMAIL` plus matching nonblank Google active and effective identities. Trusted HTML `include()` names are allowlisted to the 16 Native partials; the normal app RPC surface and 24-file stage remain unchanged. Future operator maintenance will fail closed until this property is configured. [Read GS-S1](docs/implementation/gs-s1-operator-rpc-boundary.md).
+
+> **GS Architecture Review (2026-10-12; documentation only):** Seven Native server modules are structurally sufficient. Source review identified privileged-operator RPC boundaries and credential-bearing audit payloads needing priority security triage before a new production release. No Runtime changes, Merge or Apps Script deployment. Read [GS Architecture Review](docs/architecture/gs-architecture-review-2026-10-12.md).
+
+> **UX-R2-M01-05 Final Native Stabilization (12 Oct 2026; source-only candidate):** A new test-only 24-file Native topology and browser-global contract checks exact script order, unique final `boot()`, original `fileToBase64` duplicate, no pre-boot RPC, HTML inline handlers, and fail-closed AI Reporter state. Includes negative drift fixtures. The gate is wired to `npm run check:contracts` and `npm test`. **No runtime behavior change, no Merge or Apps Script @10 deployment.** See [M01-05](docs/implementation/ux-r2-m01-05-final-stabilization.md).
+
+> **UX-R2-M01-04 AI Reporter Modularization (12 Oct 2026; candidate source only):** Report readiness/actions, job polling/recovery/cancellation, and AI generation have been extracted byte-for-byte into `03i-client-report-actions.html`, `03j-client-report-job.html`, and `03k-client-report-generation.html`. The Native candidate stages **24 files** (7 GS + 16 HTML + generated Index). Admin/Library and single final `boot()` remain in `04-browser-app.html`. G-26/G-32/G-33 safeguards, frozen One-Click and Apps Script @10 stay unchanged; not merged or deployed. See [M01-04](docs/implementation/ux-r2-m01-04-ai-reporter.md).
+
+> **UX-R2-M01-03 Event Management Modularization (12 Oct 2026; source candidate, not deployed):** Separate Event Owner/Attachments (`03f-client-event-controls.html`), Event Report History (`03g-client-event-history.html`) and Event Records/Lifecycle (`03h-client-event-records.html`) from `04-browser-app.html` without rewriting logic. Native stage now **21 files** (7 GS + 13 HTML + Index); Reporter Job remains in final 04. Frozen One-Click, production Apps Script @10 and schema v7 are unchanged. See [M01-03](docs/implementation/ux-r2-m01-03-event-management.md).
+
+> **UX-R2-M01-02 Dashboard Modularization (12 Oct 2026; candidate source only):** Native HTML manifest now includes `03d-client-dashboard.html` and `03e-client-dashboard-export.html` before `04-browser-app.html` (7 GS + 10 HTML + Index = **18 stage files**). The original Dashboard filtering, KPI, guest aggregation, Google Charts, XLSX/server exports, and capture functions are moved without logic changes; Chart.js migration is separately gated. AI Reporter and frozen One-Click remain unchanged. Source is **not deployed** to Apps Script @10. See [M01-02](docs/implementation/ux-r2-m01-02-dashboard.md).
+
+> **UX-R2-M01-01 (12 ต.ค. 2569; Source Candidate ไม่ใช่ Deploy):** แยก Shared Core + Auth/Session ออกจาก `04-browser-app.html` เป็น `03b-client-core.html` และ `03c-client-auth.html` ตาม Native Manifest; เปลี่ยน Candidate Stage เป็น **16 ไฟล์** (7 server + 8 HTML + Index). คง Google Apps Script HTML Service, `google.script.run`, RBAC, AI Reporter Job Guards และ `boot()` ที่จุดสุดท้าย. One-Click ไม่เปลี่ยน และ Apps Script @10 ยังไม่ Deploy. ดู [M01-01](docs/implementation/ux-r2-m01-01-shared-core.md).
+
+> **UX-R2-M01-00 (12 ต.ค. 2569):** เตรียม Test Foundation สำหรับแยก Client JavaScript เป็น Native HTML Partials ตามลำดับ Manifest โดยยังไม่แก้ Runtime Source, ยังคง 14 ไฟล์ และยังไม่ Deploy; ดู [M01-00 Test Foundation](docs/implementation/ux-r2-m01-00-browser-module-foundation.md). งานแยก Module จริงต้องรับอนุมัติและเปิด PR แยกต่างหาก.
+
+
+> **UX-R2-03B (12 ต.ค. 2569):** การตรวจ Release/Regression ปัจจุบันใช้ **Native Source 14 ไฟล์** ผ่าน `tools/native-release-inspection.mjs`, G-30/G-34 และ P6 Native Offline Preflight. `npm run release:preflight` ต้องมี `dist/apps-script/` ที่ Stage แล้วและทำงานแบบ Read-only โดย Release Decision ยังเป็น **HOLD**. One-Click สองไฟล์เป็นเพียงหลักฐานเก่า มี Test ตรวจ Git Blob ที่ตรึงไว้เท่านั้น ไม่ใช่ Current Release. ดู [คู่มือ R2-03B](docs/implementation/ux-r2-03b-native-release-tests.md).
+
+> **สำคัญ — UX-R2-03 (11 ต.ค. 2569):** ตั้งแต่ R2-03 ให้พัฒนา/Build/ตรวจรับผ่าน **Native Multi-file** ตาม [Source Manifest](tools/native-sources.mjs) เท่านั้น (7 .gs + 6 HTML partials + Index.html = **14 ไฟล์**). **ห้ามแก้หรือ Generate One-Click สองไฟล์เดิมอีก**; เป็นเพียง Legacy Snapshot ของระบบที่เคยใช้. การอ้างอิง One-Click/G-34 จำนวน 13 ไฟล์ในหัวข้อประวัติด้านล่างเป็นข้อมูลก่อน R2-03 และไม่ใช่คำสั่ง Build ปัจจุบัน. ดู [คู่มือ R2-03](docs/implementation/ux-r2-03-native-dashboard-mobile.md). ไม่อนุญาต Deploy @10 โดยอัตโนมัติ.
 
 อ่าน [คู่มือการย้ายเป็น Native Multi-file Apps Script](docs/deployment/g34-native-multifile-apps-script.md) ก่อนนำไปใช้จริง **สถานะปัจจุบันเป็น Deployment Candidate เท่านั้น**: การสร้างไฟล์ใน GitHub หรือ CI PASS ยังไม่ใช่การทดสอบบน Apps Script และไม่อนุญาตให้เปลี่ยนโปรเจกต์/Deployment จริงโดยอัตโนมัติ ไฟล์ One-Click เดิมจึงยังคงอยู่เพื่อการใช้งานและย้อนกลับในระหว่างเปลี่ยนผ่าน
 
@@ -152,24 +201,5 @@ npm run check:gas-multifile   # ตรวจสอบไฟล์ที่สร
 
 เอกสารรายละเอียดเชิงลึกอ้างอิง **โค้ด `main` เป็น Current Implementation**; เอกสารเก่าที่มีถ้อยคำว่า Draft/HOLD/Legacy ให้ตีความตามบริบทเวลาที่เอกสารถูกสร้าง ไม่ใช่สถานะ PR ปัจจุบัน
 
-## เริ่มอ่านที่นี่
 
-เอกสารอ้างอิง **`docs/features.md`** เป็น Feature Reference ฉบับปัจจุบันที่มี Traceability รายฟีเจอร์, ข้อจำกัด, Tests และสถานะหลักฐาน; เก็บ `doc/features.md` เป็นเอกสาร Legacy Snapshot ไม่ควรใช้แทนฉบับปัจจุบัน.
-
-- [ความสามารถและสถานะฟีเจอร์ทั้งหมด — `docs/features.md`](docs/features.md)
-- [แนวทางสำหรับ AI Agents — `AGENTS.md`](AGENTS.md)
-- [แหล่ง Source และวิธีสร้าง One-Click Artifacts](docs/architecture/g30-canonical-modular-release.md)
-- [Privacy & KPI](docs/architecture/p2-privacy-kpi-contract.md)
-- [ReportRegistry G-17](docs/governance/g17-report-registry.md), [Readiness G-26](docs/governance/g26-ai-report-readiness.md), [History G-27](docs/governance/g27-event-report-history.md)
-- [Report Jobs G-32](docs/deployment/g32-report-jobs.md) และ [Single Report Action G-33](docs/ux/g33-single-report-action.md)
-- [Migration Readiness P4→v7](docs/integration/p4-v7-migration-readiness-2026-10-09.md)
-
-## การสำรองข้อมูลและการดูแลรักษา
-
-ก่อนแก้ไข Google Apps Script/Schema หรือย้ายวิธี Deploy ต้องเก็บ Snapshot ของ Spreadsheet, โฟลเดอร์ Drive/Template, `appsscript.json`/OAuth scopes, Script source และเวอร์ชัน Deployment สำหรับการกู้คืน (ไม่ส่งข้อมูลจริงหรือรหัสเข้าถึงขึ้น GitHub). การสำรองข้อมูลเป็นขั้นตอนของผู้ดูแลที่ได้รับอนุญาต ไม่ใช่ผลของ `npm run build`. การย้าย Historical P4→v7 ยัง **HOLD** ตาม [Migration Policy](docs/governance/migration-version-release-policy.md). 
-
-## การดูแลรักษาและการมีส่วนร่วม
-
-ใช้ GitHub เป็น Source of Truth: อ่านข้อกำหนดใน `AGENTS.md` → ระบุ Scope → ตรวจ Source/Tests → ทำงานใน Branch แยก → เปิด PR → ตรวจรับโดยผู้ตรวจอิสระตามกระบวนการ → รอ Product Owner อนุมัติ Merge/Deploy/Migration แยกแต่ละขั้น หลีกเลี่ยงการนำข้อมูลสุขภาพจริง, Session Token, Gemini API Key, Spreadsheet ID หรือไฟล์หลักฐานที่ระบุตัวบุคคลเข้าสู่ GitHub, Test Fixtures และ Logs
-
-เอกสารนี้เป็น **ภาพรวมระบบ** ไม่ใช่คำอนุญาตให้เปลี่ยนแปลงระบบที่ใช้งานอยู่
+</details>

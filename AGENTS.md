@@ -1,10 +1,8 @@
-> **Current source authority (2026-10-12):** `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` includes GS-S1…GS-S5 merged (PRs #95–#99), verified 60 contract/419 full regression tests and **24 Native staged files**. The older 11 October 2026 14-file/one-click notes in this file are historical and must not be treated as the current Native topology. **DEPLOYMENT=HOLD**. See [Security Release Readiness Review](docs/release/security-release-readiness-review-2026-10-12.md) and [Project Handoff](docs/handoff/smart-srrt-security-release-2026-10-12.md). Source review does not authorize Apps Script writes, live account migration or Merge without explicit owner approval.
-
 # AGENTS.md — Smart SRRT AI Coding Agent Instructions
 
-> ใช้กับ Codex, Claude Code, Antigravity, Multica และ AI Coding Agents ที่ทำงานใน Repository นี้  
-> Canonical Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt)  
-> เอกสารชุดนี้อ้างอิง `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` ณ 11 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
+> **Current reference — 21 October 2026:** Implementation baseline `main@29ca13ba33f87d46f1f50fba90fe904773b6594a`. ตรวจ GitHub/local HEAD และ Diff ใหม่ก่อนทำงาน; SHA นี้เป็นหลักฐาน ณ วันที่ตรวจ ไม่ใช่ HEAD ถาวร
+>
+> Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt). [Documentation Index / Source-of-Truth Map](docs/INDEX.md) แยก Current, Historical, Proposed และ HOLD. บันทึกงานวันที่ 12 ต.ค. อยู่ท้ายไฟล์และไม่ใช่คำสั่งปัจจุบันหรือสิทธิ์ Deploy
 
 ## 1. Project Context
 
@@ -19,9 +17,9 @@ Smart SRRT เป็นระบบ **Event-based Epidemiological Surveillance**
 ก่อนวิเคราะห์ แก้โค้ด หรือรีวิวงาน:
 
 1. **`AGENTS.md`** — ข้อกำหนดการทำงานของ Agent (ไฟล์นี้)
-2. **[`README.md`](README.md)** — ขอบเขต ระบบ และวิธีพัฒนา/ปล่อย One-Click
+2. **[`README.md`](README.md)** — ขอบเขต ระบบ และวิธีพัฒนา Native
 3. **[`docs/features.md`](docs/features.md)** — ความสามารถจริงและ Feature Status Matrix
-4. เอกสาร Architecture, Governance, Workflow, UX, Deployment, Integration/Migration ที่เกี่ยวข้องกับงานใน `docs/` โดยต้องพิจารณาวันที่และสถานะของเอกสาร
+4. **[`docs/INDEX.md`](docs/INDEX.md)** → เอกสาร Architecture, Governance, Workflow, UX, Deployment และ Integration/Migration เฉพาะงาน โดยตรวจวันที่/สถานะก่อนใช้
 5. Source Code และ Tests ที่เกี่ยวข้องกับ Issue จริง; ตรวจ HEAD, Diff, Branch Base และ Acceptance Criteria ก่อนตัดสินใจ
 
 **Source of Truth สำหรับพฤติกรรมภายใน:** Source และ Tests ที่อยู่ใน GitHub Commit เดียวกัน **เหนือกว่า** Roadmap หรือ Draft Contract เก่า. เอกสาร `docs/baseline/` คือ AS-IS Snapshot; ห้ามใช้แทน Current Implementation โดยไม่ตรวจสอบ. เอกสารที่เขียนไว้ก่อน Merge อาจยังบอกว่า HOLD/Draft แม้ GitHub PR ปัจจุบัน Merge แล้ว; ต้องแยก **สถานะโค้ด** ออกจาก **สิทธิ์ Deploy/Migrate**
@@ -29,38 +27,25 @@ Smart SRRT เป็นระบบ **Event-based Epidemiological Surveillance**
 ## 3. Current Repository Layout
 
 ```text
-src/server/
-  00-bootstrap.gs
-  01-schema-and-db.gs
-  02-auth-and-attachments.gs
-  03-events-and-dashboard.gs
-  04-admin-and-audit.gs
-  05-reports-and-models.gs
-  06-gemini-and-prompts.gs
-src/web/
-  00-document-head.html
-  01-styles.html
-  02-app-layout.html
-  03-modals.html
-  03a-dashboard-mobile.html
-  04-browser-app.html
-tools/                Build, Release Preflight, Offline Migration Assessment
-tests/                Node Tests, Integration/Contract and Mocked Tests
-docs/                 Architecture, Governance, Migration, Deployment, UX, Roadmap
-docs/features.md       Human + Agent System Feature Reference
-README.md             Project Overview
-AGENTS.md             Repository-wide Agent Rules
-Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
-Index_Smart_SRRT_OneClick.html
+src/server/    7 core Apps Script modules (00-bootstrap ... 06-gemini-and-prompts)
+src/dengue/    D331 foundation และ offline/disabled candidates; registration ดู manifest
+src/web/       HTML/CSS/classic inline scripts; 04-browser-app owns final boot/closing tags
+tools/         Native build/inspection และ guarded offline/release tools
+tests/         Node contracts, VM/mocked behavior และ synthetic integration
+docs/INDEX.md  Documentation navigation และ authority map
+docs/features.md  Current feature reference
+README.md     System overview
 ```
 
-**Native Modular Source is canonical (UX-R2-03 onwards)**. `tools/native-sources.mjs` ประกอบ Native 7+6 ไฟล์และ `Index.html` เป็น Apps Script 14 ไฟล์. One-Click Artifacts สองไฟล์ที่ Root เป็น Snapshot Legacy และห้ามเขียนทับ. Source Code ไม่ได้แยก Deploy เป็น GAS Files รายตัวโดยอัตโนมัติ. ผู้ดูแลใช้ Artifacts ไปวางใน `Code.gs` และ `Index` ตาม Deployment Guide
+**Native source is canonical:** [`tools/native-sources.mjs`](tools/native-sources.mjs) กำหนดลำดับจริง ปัจจุบัน **8 GS + 17 HTML partials + generated Index = 26 staged files**: core server 7 ไฟล์ + pure `src/dengue/00-g1a-foundation.gs`; HTML รวม inert D331 status partial แล้ว Browser ยังใช้ classic scripts/shared lexical state และหนึ่ง final `boot()` ไม่ใช่ ES modules
 
-**G-34 Native Multi-file Candidate:** `tools/build-apps-script-multifile.mjs` สร้าง `dist/apps-script/` แบบ Generated/Untracked ประกอบด้วย 7 `.gs` + 6 HTML Partials + `Index.html` (ใช้ `<?!= include(...) ?>`). ต้องตรวจ `npm run build:gas-multifile` → `npm run check:gas-multifile` และ Regression Tests ก่อนส่งให้ผู้ตรวจอิสระ. **ชุด 14 ไฟล์ไม่รวม `appsscript.json`**: ต้องรักษา Project Manifest, OAuth scopes, V8 runtime และสิทธิ์ของโปรเจกต์ Apps Script เดิมไว้ และห้ามนำ Candidate เข้าระบบใช้งานจริงหรือถอด One-Click เดิมออกจาก Apps Script ที่กำลังให้บริการเพียงเพราะสร้างไฟล์สำเร็จ; Deployment/Migration ยังคงใช้ Human Gate แยก. หากใช้ `clasp` ในอนาคต ต้องรักษา Config/Credentials นอก Git และระวังว่า `clasp push` เขียนทับไฟล์ทั้งหมดของ Project. ดู [คู่มือ G-34](docs/deployment/g34-native-multifile-apps-script.md).
+[`tools/build-apps-script-multifile.mjs`](tools/build-apps-script-multifile.mjs) สร้าง generated/untracked `dist/apps-script/`; `Index.html` include trusted partials ตาม manifest ชุดนี้ไม่รวม `appsscript.json` ต้องรักษา manifest, V8, OAuth scopes และ project identity เดิมเมื่อมีการอนุมัติ Deploy แยกต่างหาก การ build ไม่เขียน Apps Script
+
+One-Click สองไฟล์ที่ root เป็น **frozen historical archives** ห้ามแก้/Generate ใหม่; ไม่ใช่ current release source. **Native33** เป็น D331 dependency candidate แยกจาก default Native26 ดู [runtime dependency assessment](docs/implementation/d331-p0-10-dev-runtime-readiness.md); อย่านำจำนวนไฟล์หรือ source ที่มีใน repo ไปอนุมานว่า registered/deployed/authorized แล้ว
 
 ## 4. Engineering Invariants — DO NOT BREAK
 
-1. **Native Source/Build Parity (UX-R2-03+):** แก้ `src/server/` หรือ `src/web/` เป็นอันดับแรก จัดเรียง `tools/native-sources.mjs` อย่างชัดเจน และตรวจ `npm run build:gas-multifile` → `npm run build:check`/ `check:gas-multifile`. `npm run build` สร้าง Native Package ไม่สร้าง One-Click. **ห้ามปรับ One-Click Artifacts ทั้งสอง**; G-30/P6 legacy checks ต้องปรับสู่ Native ก่อนแก้โมดูลเดิมในเฟสอนาคต.
+1. **Native Source/Build Parity (UX-R2-03+):** แก้ `src/server/` หรือ `src/web/` เป็นอันดับแรก จัดเรียง `tools/native-sources.mjs` อย่างชัดเจน และตรวจ `npm run build:gas-multifile` → `npm run build:check`/ `check:gas-multifile`. `npm run build` สร้าง Native Package ไม่สร้าง One-Click. **ห้ามปรับ One-Click Artifacts ทั้งสอง**; G-30/G-34/P6 ตรวจ current Native และตรวจ One-Click เฉพาะ archival integrity.
 2. **Public Privacy Boundary:** `getPublicDashboardData` ต้องคืน Aggregate เท่านั้น ห้ามส่ง Raw `MainData`, `EventID`, `Revision`, ชื่อผู้แจ้ง, รายละเอียดเหตุการณ์, Document URL, Token หรือข้อมูลระบุตัวบุคคลสู่ Anonymous Dashboard. Raw Event ต้องผ่าน `getDashboardData` และ `view` Permission
    **Privacy Review Caveat:** `buildDashboardAggregate_` ปัจจุบันไม่มี Small-cell Suppression; Aggregate ตามหมู่บ้าน/โรคอาจมีจำนวนต่ำและเสี่ยงต่อการอนุมานตัวบุคคล. ให้แยก **Data Minimization (ส่งเฉพาะ Aggregate)** จาก **การรับรอง Anonymity (ยังไม่ได้พิสูจน์)** และห้ามขยายการเปิดเผยข้อมูลโดยไม่มีการทบทวน Privacy.
 3. **Authentication/RBAC:** Server-side `requireAuth_` และ Permission Matrix เป็น Authority. อย่าเชื่อเพียงการซ่อนปุ่ม/เมนูใน Browser. Roles: `Super Admin`, `Manager`, `Admin`, `Staff`. UI Guards ไม่แทน Server Authorization
@@ -113,6 +98,47 @@ Index_Smart_SRRT_OneClick.html
 
 อย่าอัปเดตสถานะ `Deployed` ด้วย GitHub Merge เพียงอย่างเดียว. อย่ากรอก `Observed in Deployed UI` เมื่อไม่มีผลที่ Operator ยืนยันเฉพาะเส้นทางนั้น. เอกสารอ้างอิงเก่าคงไว้ได้โดยไม่บังคับให้แก้ประวัติ แต่ต้องอธิบายความขัดแย้งกับ Current Source ในเอกสารใหม่
 
+## 9. Pre-change Checklist (must be followed)
+
+- **Baseline/identity:** Record repository, exact `main` SHA, branch base SHA, accepted task/PR scope; inspect `git diff --name-status` and file list.
+- **Read in priority order:** `AGENTS.md` → `README.md` → `docs/features.md` → `docs/INDEX.md` → relevant `docs/**` → canonical `src/**` + matched `tests/**`. Historical `doc/features.md` is preserved but not the up-to-date feature authority.
+- **Frontend/RPC:** Verify visible Thai menu/button/error labels from `src/web/02-app-layout.html`, `03-modals.html` และ client partial เจ้าของพฤติกรรมตาม manifest. Check `google.script.run` calls against public `src/server/*.gs` functions and server-side `requireAuth_`.
+- **Build commands (only when applicable):** `npm run build:check`, `npm run build:gas-multifile && npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test`. `package.json` เป็น authority ของคำสั่ง: `npm run build` เขียน CSS + Native stage เท่านั้น; documentation-only ใช้ check scripts กับ stage เดิม ไม่ rebuild โดยไม่จำเป็น.
+- **GAS deployment:** Default package ตาม manifest คือ Native26; Native33 เป็น separate candidate; `dist/apps-script/` is generated and untracked. Keep target Apps Script manifest/project identifiers/OAuth permissions outside the bundle. V8 file evaluation order and actual Web App behavior require separate runtime verification.
+- **Data boundaries:** v7 MainData 39 columns (OwnerUserID at 39), EventAttachments 13, ReportRegistry 11, AuditLogs 10, VisitLogs 3. Treat P3/P4 conceptual contracts as historical unless reconciled to live source.
+- **Report guardrails:** Permission `report`; G-26 warnings advisory; G-17 registry append-only; G-32 one active job per project and unknown-state recovery; G-33 one primary action per Event; Gemini report path pinned to `models/gemini-3.8-flash` and bounded 503 retry only. Human must review generated drafts.
+- **Security/privacy:** Never commit real event/health data, Drive/Sheet URLs or IDs copied from production, secrets, access tokens, private configuration, or raw logs. Public aggregate is *not* guaranteed anonymous when groups are small.
+- **Review authority:** For UX-R2, Product Owner selected ChatGPT Technical Review even when author-assisted; explicitly disclose that it is not an independent/distinct-author approval. Verify exact SHA, diff, docs, CI, parity and privacy. Product Owner alone authorizes Merge. Deploy/Migration remain separate approvals. Other projects may maintain stricter independent-review requirements.
+- **Context7:** Detect tools first. For version-dependent external APIs use Context7 library resolution and version-matched docs where available; fall back to official Google Apps Script/Sheets/Drive/Docs/Gemini or Node docs. External docs never supersede repository source, schema or approved baseline.
+
+**Documentation-only boundary (unless a later explicit task authorizes a different scope):** Never modify `src/`, `tests/`, `tools/`, `.github/`, schema, generated One-Click files, existing `doc/features.md`, Workspace data, or production deployment. No Browser UAT or additional UAT task.
+
+---
+**Agent reminder:** Read first → Inspect current code → Respect privacy/data integrity → Keep changes scoped → Separate implementation, review, merge, deploy and migration → Report evidence precisely.
+
+
+## 10. D331 current scope and planning frontier
+
+อ่าน [D331 Remaining Feature Briefs](docs/implementation/d331-remaining-feature-briefs.md) ก่อนวางแผนงาน Dengue; ใช้ existing Issues/decisions ที่ลิงก์ไว้และ source/tests ปัจจุบัน ไม่สร้าง backlog หรือ policy packet ซ้ำ
+
+- **Current source:** D331 OFF. Foundation/status registered แบบ inert; Records มี synthetic Case mock. Private readers/guarded CRUD/offline engine มี groundwork แล้ว แต่ยังไม่ใช่ live authorized workflow; P0-31A Case→Plan model merged แต่ยัง unregistered
+- **Proposed / HOLD:** D2/P1/P2/S1/S2/C1/C2 และ current trusted DEV binding/allowed data ยังต้องมี scoped, dated/versioned accountable decisions. Role Admin หรือ mock DTO ไม่ใช่ D331 data grant; clinical assessment ยัง `NOT_EVALUATED`
+- **Evidence:** DEV version/browser observations เป็น owner-reported ตามวันที่ในทะเบียน ไม่เท่ากับ independent deployed-SHA/binding verification ดู [evidence map](docs/INDEX.md#environment-and-evidence)
+- **Current task frontier:** Documentation Alignment เท่านั้นตาม PO approval: `AGENTS.md`, `README.md`, `docs/features.md`, `docs/INDEX.md`; อนุญาต scoped Commit/Push/Draft PR หลัง checks ผ่าน แต่ยังไม่ Merge/Deploy หรือเริ่ม F01/P0-31B. หลังตรวจรับเอกสารจึงวางแผนหนึ่ง feature และเสนอ PO ก่อนสร้าง/ปรับ Issue ตาม workflow ใน briefs
+
+## Historical task records — 11–12 October 2026
+
+<details>
+<summary>Historical source/review snapshots and task-specific instructions (not current instructions)</summary>
+
+ข้อความด้านล่างรักษาบริบทเดิม รวม candidate/NOT MERGED, topology เก่า และข้อกำหนดเฉพาะงาน ณ เวลานั้น Current source/permission ต้องอ่านส่วนบนและ INDEX; ข้อความเหล่านี้ไม่ยกเลิก scope ที่ PO อนุมัติในงานปัจจุบัน และไม่เป็นสิทธิ์ Deploy/Migrate
+
+> **Current source authority (2026-10-12):** `main@7a8e2efeab239bac9bf708ed1e86f28b710f6726` includes GS-S1…GS-S5 merged (PRs #95–#99), verified 60 contract/419 full regression tests and **24 Native staged files**. The older 11 October 2026 14-file/one-click notes in this file are historical and must not be treated as the current Native topology. **DEPLOYMENT=HOLD**. See [Security Release Readiness Review](docs/release/security-release-readiness-review-2026-10-12.md) and [Project Handoff](docs/handoff/smart-srrt-security-release-2026-10-12.md). Source review does not authorize Apps Script writes, live account migration or Merge without explicit owner approval.
+
+> ใช้กับ Codex, Claude Code, Antigravity, Multica และ AI Coding Agents ที่ทำงานใน Repository นี้
+> Canonical Repository: [9GotStory/smart-srrt](https://github.com/9GotStory/smart-srrt)
+> เอกสารชุดนี้อ้างอิง `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f778` ณ 11 ตุลาคม 2026; **ทุก Agent ต้องตรวจ HEAD จริงก่อนเริ่มงานครั้งต่อไป** ห้ามถือ SHA นี้เป็น HEAD ถาวร
+
 ## 9. UX-R2-03B Native Release Inspection Gate (12 October 2026)
 
 Product Owner authorized Issue #86 following PR #85 merge at `main@60f6eca0300341879d227b25121cdb31af351439`, specifically to eliminate old One-Click dependency from release verification and regression tests.
@@ -123,24 +149,6 @@ Product Owner authorized Issue #86 following PR #85 merge at `main@60f6eca030034
 - **Allowed work:** Tests, read-only Native inspector, P6 source/stage checks, documentation, CI when needed and analysis of guarded clasp staging. **Forbidden:** production `.gs`, Browser App, UI behavior, Data/Sheets schema, permissions, report generation, `clasp push`, installer, migration, Apps Script @10 deployment.
 - **Ordered pipeline:** `npm ci --ignore-scripts` → `check:ui-assets` → `build:gas-multifile` → `build:check` / `check:gas-multifile` → `check:contracts` → `release:preflight` → `npm test`. Source/Stage drift and missing files fail closed. All checks read-only except explicit output staging.
 - **Human gates:** ChatGPT Technical Review (author-assisted, not independent), explicit Product Owner **PR Merge** approval, and separate explicit **Apps Script Deployment** approval. CI PASS is not HTML Service/real-user/UAT approval.
-
-## 10. Pre-change Checklist (must be followed)
-
-- **Baseline/identity:** Record repository, exact `main` SHA, branch base SHA, accepted task/PR scope; inspect `git diff --name-status` and file list.
-- **Read in priority order:** `AGENTS.md` → `README.md` → `docs/features.md` → relevant `docs/**` → canonical `src/**` + matched `tests/**`. Historical `doc/features.md` is preserved but not the up-to-date feature authority.
-- **Frontend/RPC:** Verify visible Thai menu/button/error labels from `src/web/02-app-layout.html`, `03-modals.html`, `04-browser-app.html`. Check `google.script.run` calls against public `src/server/*.gs` functions and server-side `requireAuth_`.
-- **Build commands (only when applicable):** `npm run build:check`, `npm run build:gas-multifile && npm run check:gas-multifile`, `npm run check:contracts`, `npm run release:preflight`, `npm test`. `npm run build` writes tracked One-Click artifacts and **must not** run in a documentation-only change.
-- **GAS deployment:** 7 script files + 5 HTML fragments + generated `Index.html` are a candidate; `dist/apps-script/` is generated and untracked. Keep target Apps Script manifest/project identifiers/OAuth permissions outside the bundle. V8 file evaluation order and actual Web App behavior require separate runtime verification.
-- **Data boundaries:** v7 MainData 39 columns (OwnerUserID at 39), EventAttachments 13, ReportRegistry 11, AuditLogs 10, VisitLogs 3. Treat P3/P4 conceptual contracts as historical unless reconciled to live source.
-- **Report guardrails:** Permission `report`; G-26 warnings advisory; G-17 registry append-only; G-32 one active job per project and unknown-state recovery; G-33 one primary action per Event; Gemini report path pinned to `models/gemini-3.8-flash` and bounded 503 retry only. Human must review generated drafts.
-- **Security/privacy:** Never commit real event/health data, Drive/Sheet URLs or IDs copied from production, secrets, access tokens, private configuration, or raw logs. Public aggregate is *not* guaranteed anonymous when groups are small.
-- **Review authority:** For UX-R2, Product Owner selected ChatGPT Technical Review even when author-assisted; explicitly disclose that it is not an independent/distinct-author approval. Verify exact SHA, diff, docs, CI, parity and privacy. Product Owner alone authorizes Merge. Deploy/Migration remain separate approvals. Other projects may maintain stricter independent-review requirements.
-- **Context7:** Detect tools first. For version-dependent external APIs use Context7 library resolution and version-matched docs where available; fall back to official Google Apps Script/Sheets/Drive/Docs/Gemini or Node docs. External docs never supersede repository source, schema or approved baseline.
-
-**Documentation-only boundary of this PR:** Never modify `src/`, `tests/`, `tools/`, `.github/`, schema, generated One-Click files, existing `doc/features.md`, Workspace data, or production deployment. No Browser UAT or additional UAT task.
-
----
-**Agent reminder:** Read first → Inspect current code → Respect privacy/data integrity → Keep changes scoped → Separate implementation, review, merge, deploy and migration → Report evidence precisely.
 
 ## UX-R2-M01-00 — Browser Modular Test Foundation (12 October 2026)
 
@@ -189,3 +197,5 @@ Source candidate: `docs/implementation/gs-s4-server-report-consent.md`. The newl
 ## GS-S5 Audit Observability & Maintainability (2026-10-12 candidate)
 
 Read `docs/implementation/gs-s5-audit-observability.md`. `writeAudit_` returns **boolean success/failure** while still preserving its pre-existing **best-effort never-throw** policy, particularly after durable G-32 ReportRegistry commits and other completed business mutations. Source-only health telemetry is tracked at Script Property `SRRT_GS5_AUDIT_WRITE_HEALTH_V1` with at most state, advisory failure count, ISO timestamps and allowlisted operation code; never record actor email, EventID, targetId, payload, passwords, exception.message or stack in telemetry/Logger. A failed telemetry write must not turn committed work into failure. Existing `getAuditRetentionStatus(sessionToken)` remains protected by `audit` RBAC and adds an `auditWriteHealth` summary shown in the Admin view. A missing health record is `unobserved` (NOT proof of audit completeness), and telemetry store errors are `unavailable`; counters are advisory, not exactly-once atomic due to concurrent operations. Keep G-32 idempotency and post-commit semantics, GS-S2 credential redaction, untouched schema/One-Click and Native staging. `tests/gs-s5-audit-observability.test.mjs` joins the contract/full suite. **No real Script Properties, AuditLogs, archives or Workspace actions were performed; Merge and Apps Script deployment require separate Owner approval.**
+
+</details>
