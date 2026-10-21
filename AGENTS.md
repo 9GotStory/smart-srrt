@@ -61,14 +61,19 @@ One-Click สองไฟล์ที่ root เป็น **frozen historical a
 
 ## 5. Allowed Development and Review Workflow
 
-1. ยืนยัน Product Owner Intent, Scope และ Acceptance Criteria; ตรวจ `main` HEAD ใหม่ทุกครั้ง
-2. อ่าน Source/Tests/Docs ที่เกี่ยวข้อง. ระบุความแตกต่างระหว่าง Current Code และ Proposal ก่อนเสนอ Implementation
-3. แยก Feature Branch/Documentation Branch, ห้ามแก้งานนอก Scope และห้าม Direct Push ไป `main`
-4. เมื่อเป็นงาน Code ให้ผู้รับบท **Developer** เป็นผู้เขียน/แก้ไข และให้ **Independent Reviewer** ที่แยกจากผู้เขียนตรวจ Diff, Tests, Security, Schema, Parity และ Evidence ตามหน้าที่. Reviewer ไม่แก้ Code ของตนเพื่อให้ตัดสิน PASS เอง
-5. ทำเฉพาะการตรวจแบบ Offline/Mock/Code Review ที่ได้รับมอบหมาย; ห้ามขยายเป็น Browser UAT, External API, Live Workspace หรือ Production โดยอนุมานจาก CI ที่ผ่าน
-6. เปิด PR พร้อม Base/Head SHA, Scope, รายการไฟล์, เหตุผล, หลักฐานที่มีจริง, ผลที่ยังไม่ยืนยัน, สิ่งที่ **ไม่ได้** ดำเนินการ และความเสี่ยงคงเหลือ
-7. **ต้องได้รับ Product Owner Authorization แยกต่างหากก่อน Merge, Deploy, ใช้ Credentials จริง, เรียก Gemini จริง, เปิดข้อมูลสุขภาพจริง หรือดำเนินการ Migration**. Green CI ไม่ใช่สิทธิ์ในการข้าม Human Gate
-8. หากไม่ทราบหรือพิสูจน์ไม่ได้ ให้ระบุ `Unknown / Not Verified / HOLD` ตามจริง ห้ามเขียนว่า `PASS` หรือ `Deployed` จากการคาดเดา
+### Matt Pocock Skills — Development Workflow
+
+ก่อนใช้ Skill ให้ Codex ตรวจรายการที่ environment เปิดให้ใช้และ `SKILL.md` ที่ติดตั้งจริง อ่านเฉพาะ Skill ที่เกี่ยวข้อง และตรวจวิธีเรียก/ข้อจำกัดของ Skill นั้น ห้ามเดาชื่อคำสั่งหรือถือว่ามี Skill จากชื่อในเอกสาร ตัวอย่างด้านล่างเป็นตัวเลือกตามงาน ไม่บังคับเรียกทุก Skill; หากไม่มี Skill ที่ต้องใช้ ให้รายงานข้อจำกัดและเสนอวิธีทำในขอบเขตที่ได้รับอนุมัติ Skills ไม่เพิ่มสิทธิ์แก้ไฟล์หรือข้าม approval gates ของโครงการ
+
+1. **Research:** ยืนยัน Product Owner Intent, Scope และ Acceptance Criteria; ตรวจ GitHub/local `main` HEAD, Branch Base และ Diff ใหม่ อ่าน Requirements → Source/Tests/Docs ตาม Section 2 พร้อม GitHub Issues/PRs เดิมและ comments ที่เกี่ยวข้อง สรุป Current Implementation, Proposal และสิ่งที่ยังไม่ทราบก่อนวางแผน ใช้งานเดิมเป็นฐานเพื่อหลีกเลี่ยง Issue/เอกสารซ้ำ
+2. **Planning:** ใช้ Matt Skills ที่เหมาะสมและตรวจพบจริง เช่น `codebase-design` เมื่อออกแบบ interface/test seam, `domain-modeling` เมื่อปรับความหมาย domain, `grilling` เมื่อมี design decision ที่ต้องถาม PO และ `writing-for-agents` เมื่อแก้เอกสารสำหรับ Agent เสนอแผนที่เล็กและครบหนึ่ง feature: user workflow, source/data boundaries, changes, acceptance/negative tests, test seams, dependencies/blocked decisions และ CI ถาม PO เฉพาะประเด็นสำคัญที่หาคำตอบจากหลักฐานไม่ได้
+3. **Product Owner Approval:** ส่ง Implementation Plan ให้ PO อนุมัติ scope และ test seams ก่อนสร้าง/ปรับ Issue หรือเริ่ม Implementation หาก scope/decision สำคัญเปลี่ยน ให้แก้แผนและขออนุมัติส่วนที่เปลี่ยนก่อนเดินต่อ
+4. **Specification / GitHub Issue:** หลังแผนได้รับอนุมัติ ใช้ workflow ของ Matt ที่มีให้ใช้จริง เช่น `to-spec` สำหรับสังเคราะห์และเผยแพร่ spec Issue หรือ `to-tickets` เมื่อต้องแบ่งงาน โดยปฏิบัติตามเงื่อนไขการเรียก Skill สร้าง/ปรับ Issue ใน `9GotStory/smart-srrt` ให้ตรงแผน พร้อม acceptance criteria, negative tests, dependencies และ approval gates; ใช้ Issue เดิมเมื่อครอบคลุมงาน สำหรับ D331 ใช้ขอบเขต Planning/Specification ของหนึ่ง feature เป็นค่าเริ่มต้นตาม [Remaining Feature Briefs](docs/implementation/d331-remaining-feature-briefs.md); เพิ่ม implementation tickets ที่เชื่อมโยงกับ spec Issue ได้เฉพาะเมื่อ PO อนุมัติการแบ่งงานอย่างชัดเจน โดยไม่สร้าง Issues ซ้ำหรือขยายไป feature อื่น สถานะ `ready-for-agent` เป็น triage ไม่แทนสิทธิ์ Implementation
+5. **Implementation:** เมื่อได้รับอนุมัติ Implementation ตามแผน/Issue ให้ **Developer** พัฒนาใน Feature/Documentation Branch แยกจาก `main` และรักษา exact file scope ใช้ `tdd` สำหรับงาน Code ที่ test seams ซึ่ง PO ยืนยันแล้ว: failing behavior test → minimal passing implementation ทีละ slice; ใช้ synthetic/offline fixtures และ Skills อื่นเฉพาะที่เหมาะสม งาน documentation-only ใช้ checks ตาม scope โดยไม่เพิ่ม code/tests เปิด Draft PR พร้อม Base/Exact Head SHA, Issue/approved scope, changed files, เหตุผล, test evidence, ผลที่ยังไม่ยืนยัน, สิ่งที่ไม่ได้ทำ และความเสี่ยงคงเหลือ
+6. **Independent Review:** ให้ **ChatGPT ผู้ตรวจที่แยกจากผู้เขียน** ตรวจ Exact HEAD SHA, Diff เทียบ Base, approved Issue/Plan, Tests และ GitHub CI ที่ HEAD เดียวกัน รวม Security, Schema, Native Parity และ Evidence ตาม scope ใช้ `code-review` เมื่อมีให้ใช้และเหมาะสม; ผล author-assisted ไม่ใช่ independent approval Reviewer ส่ง findings ให้ Developer แก้; เมื่อ HEAD เปลี่ยนต้องตรวจ Diff/Tests/CI และยืนยันผล review ที่ SHA ใหม่
+7. **Merge:** หลัง Independent Review ผ่านและมี CI evidence ที่ Exact HEAD ต้องรอ **Product Owner อนุมัติ Merge แยกต่างหาก** ห้าม Direct Push ไป `main` หรือเปิด Auto-merge เพื่อข้าม Gate
+
+ทำเฉพาะ Offline/Mock/Code Review ที่ได้รับมอบหมาย; Browser UAT, External API, Live Workspace และ Production ต้องมีขอบเขตที่อนุมัติเฉพาะ การ Deploy, ใช้ Credentials จริง, เรียก Gemini จริง, เปิดข้อมูลสุขภาพจริง และ Migration ต้องได้รับ **Product Owner Authorization แยกต่างหาก** ตาม Section 6; Green CI ไม่ข้าม Human Gate หากพิสูจน์ไม่ได้ให้ระบุ `Unknown / Not Verified / HOLD` ตามจริง
 
 **GitHub Repository เป็น Source of Truth ของ Code/Docs; การ Merge GitHub ไม่เท่ากับการ Deploy Apps Script**. ไม่เปลี่ยน Deployment ID/URL, Schema, Template, Google Sheet, Drive หรือ Script Properties เพียงเพราะ PR ผ่าน
 
@@ -124,7 +129,8 @@ One-Click สองไฟล์ที่ root เป็น **frozen historical a
 - **Current source:** D331 OFF. Foundation/status registered แบบ inert; Records มี synthetic Case mock. Private readers/guarded CRUD/offline engine มี groundwork แล้ว แต่ยังไม่ใช่ live authorized workflow; P0-31A Case→Plan model merged แต่ยัง unregistered
 - **Proposed / HOLD:** D2/P1/P2/S1/S2/C1/C2 และ current trusted DEV binding/allowed data ยังต้องมี scoped, dated/versioned accountable decisions. Role Admin หรือ mock DTO ไม่ใช่ D331 data grant; clinical assessment ยัง `NOT_EVALUATED`
 - **Evidence:** DEV version/browser observations เป็น owner-reported ตามวันที่ในทะเบียน ไม่เท่ากับ independent deployed-SHA/binding verification ดู [evidence map](docs/INDEX.md#environment-and-evidence)
-- **Current task frontier:** Documentation Alignment เท่านั้นตาม PO approval: `AGENTS.md`, `README.md`, `docs/features.md`, `docs/INDEX.md`; อนุญาต scoped Commit/Push/Draft PR หลัง checks ผ่าน แต่ยังไม่ Merge/Deploy หรือเริ่ม F01/P0-31B. หลังตรวจรับเอกสารจึงวางแผนหนึ่ง feature และเสนอ PO ก่อนสร้าง/ปรับ Issue ตาม workflow ใน briefs
+- **Documentation Alignment complete:** [PR #255](https://github.com/9GotStory/smart-srrt/pull/255) Merge แล้วที่ `main@b289d969b915c91db996b48b19a00bf294c107d1` ครอบคลุม `AGENTS.md`, `README.md`, `docs/features.md`, `docs/INDEX.md`; ไม่ใช่สิทธิ์ Deploy หรือเปิดข้อมูลจริง
+- **Next frontier — F01 / P0-31B Planning:** F01/P0-31B เป็น Planning only: วางแผน Case→Plan mock UI/lifecycle ทีละหนึ่ง feature ตาม briefs และ Workflow ใน Section 5 แล้วเสนอ PO อนุมัติแผนก่อนสร้าง/ปรับ Issue หรือเริ่ม Implementation; D331 ยังคง OFF การวางแผนไม่ใช่สิทธิ์เข้าถึงข้อมูลจริงหรือ Deploy
 
 ## Historical task records — 11–12 October 2026
 
