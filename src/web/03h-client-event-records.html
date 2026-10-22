@@ -708,12 +708,123 @@ var d331P030bSelectedEventCaseContract_=(function(){
 // P0-30B END
 
 // P0-25: exact synthetic JS mirror of unregistered P0-23/P0-24 source.
+// P0-31B: exact Plan mirror begins.
+/**
+ * P0-31A: Browser-memory-only Plan draft built on existing P0-23 synthetic Case model.
+ * Not a clinical policy, live permission, approved database FK, or actual SLA.
+ */
+var d331P031aOfflineCasePlan_=(function(){
+  'use strict';
+  var EVENT='00000000-0000-4000-8000-000000002300';
+  var CASE_RE=/^00000000-0000-4000-8000-0000000023(?:0[1-9]|[1-9][0-9])$/;
+  var EPISODE_RE=/^TEST-EP-[0-9]{1,3}$/;
+  function d331P031aDeny_(){throw new Error('D331_P031A_SYNTHETIC_ONLY');}
+  function validCases(source){
+    if(!source||typeof source.snapshot!=='function'||
+       typeof source.reset!=='function'||typeof source.resetGeneration!=='function')d331P031aDeny_();
+    var snapshot=source.snapshot();
+    if(!snapshot||snapshot.kind!=='SYNTHETIC_ONLY'||
+       snapshot.eventId!==EVENT||snapshot.canEnable!==false||
+       snapshot.canWrite!==false||snapshot.clinicalPolicyApproved!==false||
+       snapshot.slaAssessment!=='NOT_EVALUATED'||
+       !Number.isSafeInteger(source.resetGeneration())||source.resetGeneration()<0||
+       !Array.isArray(snapshot.cases)||snapshot.cases.length>99)d331P031aDeny_();
+    var ids=Object.create(null);
+    snapshot.cases.forEach(function(row){
+      if(!row||!CASE_RE.test(row.caseId)||
+         !['ACTIVE','VOID'].includes(row.caseStatus)||
+         !Number.isSafeInteger(row.caseRevision)||row.caseRevision<1||
+         Object.prototype.hasOwnProperty.call(ids,row.caseId))d331P031aDeny_();
+      ids[row.caseId]=true;
+    });
+    return snapshot;
+  }
+  function createPlanModel_(source){
+    validCases(source);var sourceGeneration=source.resetGeneration();
+    var plans=[],draft=null,busy=false,epoch=0,nextPlan=1,disposed=false;
+    function guard(){if(disposed)d331P031aDeny_();}
+    function current(){
+      guard();var state;
+      try{state=validCases(source);}catch(_){dispose();d331P031aDeny_();}
+      if(source.resetGeneration()!==sourceGeneration){
+        epoch++;plans=[];draft=null;busy=false;nextPlan=1;
+        sourceGeneration=source.resetGeneration();
+      }
+      return state.cases;
+    }
+    function activeCase(caseId){
+      return current().filter(function(row){
+        return row.caseId===caseId&&row.caseStatus==='ACTIVE';
+      }).length===1;
+    }
+    function snapshot(){
+      guard();current();
+      return {kind:'SYNTHETIC_PLAN_ONLY',eventId:EVENT,
+        plans:plans.map(function(p){return {
+          planId:p.planId,eventId:p.eventId,triggerCaseId:p.triggerCaseId,
+          episodeKey:p.episodeKey,planRevision:p.planRevision,planStatus:p.planStatus
+        };}),
+        draft:draft?{triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey}:null,
+        busy:busy,canWrite:false,canEnable:false,canReadPatientData:false,
+        clinicalPolicyApproved:false,slaAssessment:'NOT_EVALUATED'};
+    }
+    function beginPlan(eventId,caseId){
+      current();if(busy||draft||eventId!==EVENT||typeof caseId!=='string'||
+         !CASE_RE.test(caseId)||!activeCase(caseId))d331P031aDeny_();
+      draft={triggerCaseId:caseId,episodeKey:''};return snapshot();
+    }
+    function setEpisodeKey(value){
+      current();if(busy||!draft||typeof value!=='string'||
+        (value!==''&&!EPISODE_RE.test(value)))d331P031aDeny_();
+      draft.episodeKey=value;return snapshot();
+    }
+    function cancel(){current();if(busy)d331P031aDeny_();draft=null;return snapshot();}
+    function save(){
+      current();if(busy)return Promise.resolve({status:'BUSY'});
+      if(!draft||!EPISODE_RE.test(draft.episodeKey)||
+         !activeCase(draft.triggerCaseId)||nextPlan>99||
+         plans.some(function(p){return p.triggerCaseId===draft.triggerCaseId&&
+           p.episodeKey===draft.episodeKey;}))d331P031aDeny_();
+      var candidate={triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey};
+      busy=true;var ticket=++epoch;
+      return Promise.resolve().then(function(){
+        if(disposed)return {status:'STALE'};
+        current();
+        if(ticket!==epoch)return {status:'STALE'};
+        // Recheck the source Case after the microtask boundary.
+        if(!activeCase(candidate.triggerCaseId)){
+          busy=false;return {status:'DENIED'};
+        }
+        plans.push({planId:'00000000-0000-4000-8000-0000000031'+
+          String(nextPlan++).padStart(2,'0'),eventId:EVENT,
+          triggerCaseId:candidate.triggerCaseId,episodeKey:candidate.episodeKey,
+          planRevision:1,planStatus:'OPEN'});
+        draft=null;busy=false;return {status:'SYNTHETIC_PLAN_SAVED'};
+      }).catch(function(){
+        if(ticket===epoch&&!disposed)busy=false;
+        return {status:'DENIED'};
+      });
+    }
+    function reset(){
+      guard();epoch++;busy=false;draft=null;plans=[];nextPlan=1;
+      return snapshot();
+    }
+    function dispose(){
+      epoch++;busy=false;draft=null;plans=[];disposed=true;
+    }
+    return Object.freeze({snapshot:snapshot,beginPlan:beginPlan,
+      setEpisodeKey:setEpisodeKey,cancel:cancel,save:save,reset:reset,dispose:dispose});
+  }
+  return Object.freeze({createModel:createPlanModel_});
+})();
+// P0-31B: exact Plan mirror ends.
+
 // Standalone 03m source and native 03h mirror are parity-tested; no D331 RPC.
 /**
  * P0-23 MVP-01 — interactive, completely synthetic Event -> Case workspace.
  * P0-24 prepares a session-fenced offline Records bridge for mock tests.
  * This standalone partial stays UNREGISTERED. Its exact CSS/JS is mirrored
- * inside the already registered 03l Native26 partial for synthetic display.
+ * inside the already registered 03h Native26 partial for synthetic display.
  * No standalone partial registration, real RPC or real patient data is allowed.
  * Not authorized for real Events, Case reads/writes or clinical policy.
  * No external DTO, authentication, clinical rule or transport.
@@ -1052,42 +1163,68 @@ var d331P023OfflineCaseWorkspace_=(function(){
        typeof options.session!=='function'||
        typeof options.mountView!=='function')deny();
     var root=options.root,region=options.region;
-    var connected=false,active=null,owner=null;
+    var connected=false,active=null,owner=null,epoch=0,disposed=false;
     function current(){
       try{
         var s=options.session();
         if(!s||s.allowed!==true||typeof s.token!=='string'||!s.token||
            !s.user||typeof s.user!=='object')return null;
-        return {token:s.token,user:s.user};
+        return {token:s.token,user:s.user,userId:s.user.userId,
+          email:s.user.email,role:s.user.role};
       }catch(_){return null;}
     }
+    function sameSession(a,b){
+      return !!a&&!!b&&a.token===b.token&&a.user===b.user&&
+        a.userId===b.userId&&a.email===b.email&&a.role===b.role;
+    }
     function clear(){
-      if(active){active.dispose();active=null;}
-      region.replaceChildren();
-      region.hidden=true;owner=null;
+      epoch++;
+      var previous=active;active=null;owner=null;
+      if(previous)previous.dispose();
+      region.replaceChildren();region.hidden=true;
     }
     function reset(){clear();root.open=false;}
-    function refresh(){
+    function contextValid(){
+      try{return !options.syntheticEvent||options.syntheticEvent()===EVENT;}
+      catch(_){return false;}
+    }
+    function reconcile(){
+      if(disposed)return false;
       var s=current();
-      if(!s){reset();return;}
-      // Never retain a draft across a changed login/user identity.
-      if(owner&&(owner.token!==s.token||owner.user!==s.user)){
-        reset();return;
+      if(!s||!contextValid()||(owner&&!sameSession(owner,s))){reset();return false;}
+      if(!root.open){clear();return false;}
+      return true;
+    }
+    function refresh(){
+      if(!reconcile()||active)return;
+      var started=epoch,origin=current();
+      owner=origin;
+      function valid(){
+        if(disposed||started!==epoch)return false;
+        if(!root.open||!sameSession(origin,current())||!contextValid()){
+          reset();return false;
+        }
+        return true;
       }
-      if(!root.open){clear();return;}
-      if(active)return; // re-filtering Records must not discard the mock draft
-      // A failed mount must not expose an active DOM or stale state.
       try{
         region.hidden=false;
-        active=options.mountView(region);
-        owner=s;
+        active=options.mountView(region,{isValid:valid,
+          syntheticEvent:function(){return contextValid()?EVENT:null;}});
       }catch(_){clear();}
     }
     function connect(){
+      if(disposed)return;
       if(!connected){root.addEventListener('toggle',refresh);connected=true;}
       refresh();
     }
-    return Object.freeze({connect:connect,refresh:refresh,reset:reset});
+    function dispose(){
+      if(disposed)return;
+      disposed=true;reset();
+      if(connected&&typeof root.removeEventListener==='function')
+        root.removeEventListener('toggle',refresh);
+    }
+    return Object.freeze({connect:connect,refresh:refresh,reset:reset,
+      reconcile:reconcile,dispose:dispose});
   }
   return Object.freeze({createModel:createModel,mount:mountSyntheticCase_,
     mountComposed:function(root,options){return mountSyntheticCase_(root,options,true);},
@@ -1107,7 +1244,7 @@ var d331P024RecordsMockBridge_=(function(){
        typeof region.replaceChildren!=='function'||
        !region.ownerDocument||typeof region.ownerDocument.createElement!=='function')return;
     if(root!==activeRoot){
-      if(active)active.reset();
+      if(active)active.dispose();
       activeRoot=root;
       active=d331P023OfflineCaseWorkspace_.createRecordsBridge({
         root:root,region:region,
@@ -1115,13 +1252,15 @@ var d331P024RecordsMockBridge_=(function(){
           return {token:token,user:currentUser,
             allowed:!!token&&!!currentUser&&!!roleCanRecord()};
         },
-        mountView:d331P023OfflineCaseWorkspace_.mount
+        mountView:d331P023OfflineCaseWorkspace_.mountComposed
       });
       active.connect();
     }
     active.refresh();
   }
   function resetRecordsMock_(){if(active)active.reset();}
-  return Object.freeze({mount:mountRecordsMock_,reset:resetRecordsMock_});
+  function reconcileRecordsMock_(){if(active)active.reconcile();}
+  return Object.freeze({mount:mountRecordsMock_,reset:resetRecordsMock_,
+    reconcile:reconcileRecordsMock_});
 })();
 </script>

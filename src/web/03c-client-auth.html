@@ -115,6 +115,8 @@
   }
 
   function updateAuthBox(){
+    if(typeof d331P024RecordsMockBridge_!=='undefined')
+      d331P024RecordsMockBridge_.reconcile();
     const box=el('authBox');
     document.querySelectorAll('.auth-only').forEach(x=>x.style.display=roleCanRecord()?'flex':'none');
     document.querySelectorAll('.manager-only').forEach(x=>x.style.display=roleCanManage()?'flex':'none');
