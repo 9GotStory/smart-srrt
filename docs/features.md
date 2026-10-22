@@ -572,7 +572,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 
 | D331 brief | Source / registration / tests | Operational status |
 | --- | --- | --- |
-| F01 / P0-31B Case→Plan mock UI | P0-31A model merged, **unregistered**; [7 synthetic model tests](../tests/d331-p031a-offline-case-plan.test.mjs); ยังไม่ integrated UI/lifecycle | Proposed next planning; ยังไม่เริ่มใน Documentation Alignment |
+| F01 / P0-31B Case→Plan mock UI | T1 [#258](https://github.com/9GotStory/smart-srrt/issues/258): composed UI ใน supplied offline root, Case reset-generation และ precommit/disposal fences; [S1 model tests](../tests/d331-p031a-offline-case-plan.test.mjs), [S2 DOM tests](../tests/d331-p0-31b-case-plan-records.test.mjs); standalone Plan ยัง **unregistered** | Implemented in Source / Verified by Automated Tests เฉพาะ T1 offline; Native Records ยัง Case-only; T2 [#259](https://github.com/9GotStory/smart-srrt/issues/259) และ parent #257 ยังไม่ครบ |
 | F02 Event→Case | Records มี registered synthetic Case mirror; standalone mock/real private reader unregistered; [mock tests](../tests/d331-p0-25-native26-case-mirror.test.mjs), [reader tests](../tests/d331-p0-22b2-server-case-read.test.mjs) | Mock-only; live reads/writes HOLD แยก gates |
 | F03 Plans | Offline model + schema/guarded CRUD groundwork | ไม่มี live Plan workflow |
 | F04 Control Actions | Offline lifecycle + schema/guarded CRUD groundwork | ไม่มี functional authorized UI |
@@ -583,7 +583,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 
 **Registration/schema distinction:** Native26 รวมเพียง [G1-A provisional v1](../src/dengue/00-g1a-foundation.gs) แบบ pure/OFF และ inert status partial; [v2 draft schema](../src/dengue/07-p0-02a-mvp-schema-contract.gs) มี 7 tables/113 ordered headers รวม grants แทน provisional Containers. Historical DEV empty-tab setup ไม่ใช่ current binding หรือ permission. [Private Case reader](../src/dengue/15-p0-22b2-case-read-integration.gs) ยัง OFF/unregistered; global identifier scan เป็น P1 decision แยกจาก D2 identity และ P2 disclosure. Existing Admin/role ไม่ใช่ D331 grant
 
-DEV v20/mock UAT เป็น owner-reported dated evidence ตาม [INDEX](INDEX.md#environment-and-evidence); ไม่ใช่ real-data/clinical acceptance. Work authorization รอบนี้เป็น docs-only; ไม่เริ่ม F01/P0-31B และไม่อนุมาน policy approval จาก merged code
+DEV v20/mock UAT เป็น owner-reported dated evidence ตาม [INDEX](INDEX.md#environment-and-evidence); ไม่ใช่ real-data/clinical acceptance. หลักฐาน T1 วันที่ 22 October 2026 เป็น offline models/fake-DOM เท่านั้น ไม่ใช่ Browser UAT หรือ Observed in Deployed UI. Native26/manifest คงเดิม และ Case mirror ตรง canonical source; ยังไม่ wire Plan เข้า Records/Auth. T2 ต้องรอ independent review, PO Merge approval, authorized merge และ post-merge CI ที่ exact merge/main SHA ของ T1; ไม่อนุมาน policy/data/deploy approval จาก source หรือ green tests
 
 ## 10. เอกสารอ้างอิงและหลักในการอ่าน
 

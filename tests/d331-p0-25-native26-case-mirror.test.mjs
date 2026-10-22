@@ -94,6 +94,7 @@ test('P0-25 only explicit authenticated Records preview opening shows local synt
  assert.equal(h.region.hidden,false);
  assert.ok(h.button('เพิ่ม Case ตัวอย่าง'));
  assert.ok(h.button('แก้ไขตัวอย่าง'));
+ assert.equal(h.button('สร้าง Plan ตัวอย่าง'),undefined,'T1 retains the Native Records Case-only view');
  assert.equal(h.nodes(n=>n.tagName==='table').length,1);
  assert.equal(h.nodes(n=>n.textContent.includes('ตัวอย่างเท่านั้น · D331 OFF')).length,1);
  assert.equal(h.nodes(n=>n.textContent.includes('NOT_EVALUATED')).length,1);
