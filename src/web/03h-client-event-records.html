@@ -722,6 +722,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
   'use strict';
   var EVENT='00000000-0000-4000-8000-000000002300';
   var LABEL='TEST-ONLY / เหตุการณ์จำลอง';
+  var mountedRoots=new WeakMap();
   var CLASSIFICATIONS=['SUSPECTED','PROBABLE','CONFIRMED','UNKNOWN'];
   function deny(){throw new Error('D331_P023_SYNTHETIC_ONLY');}
   function validDate(input){
@@ -741,11 +742,22 @@ var d331P023OfflineCaseWorkspace_=(function(){
       caseRevision:1,caseStatus:'ACTIVE',classification:'SUSPECTED',
       onsetLocalDate:'2026-10-01'}];
   }
-  function createModel(){
-    var rows=seeded(),draft=null,pending=false,generation=0,nextId=2,
+  function createModel(options){
+    var rows=seeded(),draft=null,pending=false,generation=0,resetGeneration=0,nextId=2,
       notice='ข้อมูลจำลองเท่านั้น · ไม่เชื่อม EventID หรือผู้ป่วยจริง';
+    var disposed=false;
+    function dispose(){
+      if(disposed)return;
+      disposed=true;generation++;resetGeneration++;rows=[];draft=null;pending=false;
+    }
+    function guard(){
+      var valid=!disposed;
+      try{if(options&&options.isValid&&options.isValid()!==true)valid=false;}
+      catch(_){valid=false;}
+      if(!valid){dispose();deny();}
+    }
     function snapshot(){
-      return {kind:'SYNTHETIC_ONLY',eventId:EVENT,eventLabel:LABEL,
+      guard();return {kind:'SYNTHETIC_ONLY',eventId:EVENT,eventLabel:LABEL,
         cases:rows.map(copyCase),draft:draft?{
           mode:draft.mode,caseId:draft.caseId,
           classification:draft.classification,onsetLocalDate:draft.onsetLocalDate
@@ -754,11 +766,13 @@ var d331P023OfflineCaseWorkspace_=(function(){
         canWrite:false,canEnable:false};
     }
     function beginAdd(){
+      guard();
       if(pending||draft)deny();
       draft={mode:'add',caseId:null,classification:'SUSPECTED',onsetLocalDate:''};
       notice='เพิ่มรายการจำลองในหน่วยความจำเท่านั้น';return snapshot();
     }
     function beginEdit(caseId){
+      guard();
       if(pending||draft||typeof caseId!=='string')deny();
       var match=rows.filter(function(r){return r.caseId===caseId;});
       if(match.length!==1||match[0].caseStatus!=='ACTIVE')deny();
@@ -767,6 +781,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
       notice='แก้ไขรายการจำลองในหน่วยความจำเท่านั้น';return snapshot();
     }
     function setField(field,value){
+      guard();
       if(pending||!draft||typeof value!=='string')deny();
       if(field==='classification'&&CLASSIFICATIONS.indexOf(value)>=0)
         draft.classification=value;
@@ -776,10 +791,12 @@ var d331P023OfflineCaseWorkspace_=(function(){
       return snapshot();
     }
     function cancel(){
+      guard();
       if(pending)deny();
       draft=null;notice='ยกเลิกข้อมูลจำลองแล้ว';return snapshot();
     }
     function save(){
+      guard();
       if(pending)return Promise.resolve({status:'BUSY'});
       if(!draft||!validDate(draft.onsetLocalDate)||
          CLASSIFICATIONS.indexOf(draft.classification)<0)deny();
@@ -788,7 +805,8 @@ var d331P023OfflineCaseWorkspace_=(function(){
       pending=true;notice='กำลังบันทึกแบบจำลอง (ไม่มีการส่งข้อมูล)';
       var run=++generation;
       return Promise.resolve().then(function(){
-        if(run!==generation)return {status:'STALE'};
+        if(run!==generation||disposed)return {status:'STALE'};
+        guard();
         if(change.mode==='add'){
           if(nextId>99)deny();
           var id='00000000-0000-4000-8000-0000000023'+String(nextId++).padStart(2,'0');
@@ -804,43 +822,72 @@ var d331P023OfflineCaseWorkspace_=(function(){
         draft=null;pending=false;notice='บันทึกแบบจำลองสำเร็จ · ไม่มีข้อมูลส่งไปยังระบบ';
         return {status:'SYNTHETIC_SAVED'};
       }).catch(function(){
-        if(run===generation){pending=false;notice='ไม่สามารถบันทึกตัวอย่างได้';}
+        if(run!==generation||disposed)return {status:'STALE'};
+        pending=false;notice='ไม่สามารถบันทึกตัวอย่างได้';
         return {status:'ERROR'};
       });
     }
     function reset(){
-      generation++;rows=seeded();draft=null;pending=false;nextId=2;
+      guard();
+      generation++;resetGeneration++;rows=seeded();draft=null;pending=false;nextId=2;
       notice='ล้างข้อมูลจำลองแล้ว · ไม่แตะข้อมูลใน Smart SRRT';
       return snapshot();
     }
     return Object.freeze({snapshot:snapshot,beginAdd:beginAdd,beginEdit:beginEdit,
-      setField:setField,cancel:cancel,save:save,reset:reset});
+      setField:setField,cancel:cancel,save:save,reset:reset,dispose:dispose,
+      resetGeneration:function(){guard();return resetGeneration;}});
   }
   function node(doc,tag,text){
     var n=doc.createElement(tag);
     if(typeof text==='string')n.textContent=text;
     return n;
   }
-  function mountSyntheticCase_(root){
+  function mountSyntheticCase_(root,options,composed){
     if(!root||!root.ownerDocument||!root.ownerDocument.createElement||
        typeof root.replaceChildren!=='function')deny();
-    var doc=root.ownerDocument,model=createModel(),disposed=false;
-    function button(label,fn,disabled){
-      var b=node(doc,'button',label);b.type='button';b.disabled=!!disabled;
-      if(!disabled)b.addEventListener('click',fn);
-      return b;
+    var previous=mountedRoots.get(root);
+    if(previous)previous.dispose();
+    options=options||{};
+    var doc=root.ownerDocument,disposed=false,invalid=false,lifetime=0;
+    function valid(){
+      if(disposed||invalid)return false;
+      try{
+        if((options.isValid&&options.isValid()!==true)||
+           (options.syntheticEvent&&options.syntheticEvent()!==EVENT))invalid=true;
+      }catch(_){invalid=true;}
+      return !invalid;
     }
-    function render(){
-      if(disposed)return;
+    if(!valid())deny();
+    var model=createModel({isValid:valid});
+    var plans=composed?d331P031aOfflineCasePlan_.createModel(model):null;
+    var message='',focusTarget=null,renderVersion=0,planReturnFocus=null,caseReturnFocus=null;
+    function focusable(control,label){
+      if(label===focusTarget&&typeof control.focus==='function')focusTarget=control;
+      return control;
+    }
+    function button(label,fn,disabled,focusKey){
+      var b=node(doc,'button',label);b.type='button';b.disabled=!!disabled;
+      var version=renderVersion;
+      b.addEventListener('click',function(){
+        if(b.disabled||version!==renderVersion||!ensureCurrent())return;
+        try{fn();}catch(_){message='ไม่สามารถดำเนินการตัวอย่างได้';render();}
+      });
+      return focusable(b,focusKey||label);
+    }
+    function render(focusLabel){
+      if(!ensureCurrent())return;
+      renderVersion++;focusTarget=focusLabel||null;
+      var p=plans?plans.snapshot():null;
+      var locked=!!(p&&(p.draft||p.busy));
       var s=model.snapshot(),wrap=node(doc,'section');
       wrap.className='srrt-d331-p023';
       wrap.setAttribute('aria-label','Dengue 3-3-1 MVP-01 ตัวอย่างจำลอง');
-      wrap.setAttribute('aria-busy',s.busy?'true':'false');
+      wrap.setAttribute('aria-busy',(s.busy||(p&&p.busy))?'true':'false');
       wrap.appendChild(node(doc,'h3','Dengue 3-3-1 · ตัวอย่างรายการผู้ป่วย'));
       var caution=node(doc,'p','ตัวอย่างเท่านั้น · D331 OFF · ไม่เชื่อมข้อมูลผู้ป่วยจริง');
       caution.className='srrt-d331-p023__notice';wrap.appendChild(caution);
       wrap.appendChild(node(doc,'p',s.eventLabel));
-      var status=node(doc,'p',s.notice);status.setAttribute('role','status');
+      var status=node(doc,'p',message||s.notice);status.setAttribute('role','status');
       status.setAttribute('aria-live','polite');wrap.appendChild(status);
       var tableWrap=node(doc,'div');tableWrap.className='srrt-d331-p023__table';
       var table=node(doc,'table'),thead=node(doc,'thead'),tr=node(doc,'tr');
@@ -854,46 +901,145 @@ var d331P023OfflineCaseWorkspace_=(function(){
         });
         var action=node(doc,'td');
         action.appendChild(button('แก้ไขตัวอย่าง',function(){
-          model.beginEdit(c.caseId);render();
-        },!!s.draft||s.busy));
+          caseReturnFocus='edit-'+c.caseId;
+          model.beginEdit(c.caseId);message='';render('Classification จำลอง');
+        },!!s.draft||s.busy||locked,'edit-'+c.caseId));
+        if(plans)action.appendChild(button('สร้าง Plan ตัวอย่าง',function(){
+          planReturnFocus='plan-'+c.caseId;
+          plans.beginPlan(s.eventId,c.caseId);message='สร้าง Plan จำลองในหน่วยความจำเท่านั้น';
+          render('EpisodeKey จำลอง');
+        },!!s.draft||s.busy||locked||c.caseStatus!=='ACTIVE','plan-'+c.caseId));
         row.appendChild(action);tbody.appendChild(row);
       });
       table.appendChild(tbody);tableWrap.appendChild(table);wrap.appendChild(tableWrap);
       if(!s.draft){
         var actions=node(doc,'div');actions.className='srrt-d331-p023__toolbar';
-        actions.appendChild(button('เพิ่ม Case ตัวอย่าง',function(){model.beginAdd();render();},s.busy));
-        actions.appendChild(button('ล้างตัวอย่าง',function(){model.reset();render();},s.busy));
+        actions.appendChild(button('เพิ่ม Case ตัวอย่าง',function(){caseReturnFocus='เพิ่ม Case ตัวอย่าง';model.beginAdd();message='';render('Classification จำลอง');},s.busy||locked));
         wrap.appendChild(actions);
       }else{
         var form=node(doc,'div');form.className='srrt-d331-p023__grid';
         var category=node(doc,'label','ประเภทกรณีจำลอง');
-        var select=node(doc,'select');select.setAttribute('aria-label','Classification จำลอง');
+        var select=node(doc,'select');select.setAttribute('aria-label','Classification จำลอง');focusable(select,'Classification จำลอง');
         CLASSIFICATIONS.forEach(function(key){
           var opt=node(doc,'option',key);opt.value=key;select.appendChild(opt);
         });
         select.value=s.draft.classification;select.disabled=s.busy;
-        select.addEventListener('change',function(){model.setField('classification',select.value);render();});
+        var fieldVersion=renderVersion;
         category.appendChild(select);form.appendChild(category);
         var when=node(doc,'label','วันที่เริ่มป่วย (ข้อมูลสมมติ)');
         var date=node(doc,'input');date.type='date';date.value=s.draft.onsetLocalDate;date.disabled=s.busy;
-        date.setAttribute('aria-label','วันที่เริ่มป่วยจำลอง');
-        date.addEventListener('change',function(){model.setField('onsetLocalDate',date.value);render();});
+        date.setAttribute('aria-label','วันที่เริ่มป่วยจำลอง');focusable(date,'วันที่เริ่มป่วยจำลอง');
+        function updateCaseFields(){
+          if(fieldVersion!==renderVersion||!ensureCurrent())return;
+          var categoryValid=CLASSIFICATIONS.indexOf(select.value)>=0;
+          var dateValid=validDate(date.value);
+          message=!categoryValid?'ประเภทกรณีจำลองไม่ถูกต้อง':
+            (!dateValid&&date.value?'วันที่จำลองไม่ถูกต้อง':'');
+          try{
+            if(categoryValid)model.setField('classification',select.value);
+            if(dateValid||date.value==='')model.setField('onsetLocalDate',date.value);
+          }catch(_){categoryValid=false;message='ไม่สามารถแก้ไขตัวอย่างได้';}
+          select.setAttribute('aria-invalid',categoryValid?'false':'true');
+          date.setAttribute('aria-invalid',!dateValid&&date.value?'true':'false');
+          caseSave.disabled=s.busy||!categoryValid||!dateValid;
+          status.textContent=message||s.notice;
+        }
+        select.addEventListener('input',updateCaseFields);
+        select.addEventListener('change',updateCaseFields);
+        date.addEventListener('input',updateCaseFields);
+        date.addEventListener('change',updateCaseFields);
         when.appendChild(date);form.appendChild(when);
         wrap.appendChild(form);
         var controls=node(doc,'div');controls.className='srrt-d331-p023__toolbar';
-        controls.appendChild(button(s.busy?'กำลังบันทึกตัวอย่าง...':'บันทึกแบบจำลอง',function(){
-          var work=model.save();render();work.then(function(){render();});
-        },s.busy||!validDate(s.draft.onsetLocalDate)));
-        controls.appendChild(button('ยกเลิก',function(){model.cancel();render();},s.busy));
+        var caseSave=button(s.busy?'กำลังบันทึกตัวอย่าง...':'บันทึกแบบจำลอง',function(){
+          updateCaseFields();if(caseSave.disabled)return;
+          var ticket=lifetime,work=model.save();render();work.then(function(){
+            if(ticket===lifetime&&ensureCurrent())render(caseReturnFocus);
+          });
+        },s.busy||!validDate(s.draft.onsetLocalDate));
+        controls.appendChild(caseSave);
+        controls.appendChild(button('ยกเลิก',function(){model.cancel();message='';render(caseReturnFocus);},s.busy));
         wrap.appendChild(controls);
+      }
+      var resetControls=node(doc,'div');resetControls.className='srrt-d331-p023__toolbar';
+      resetControls.appendChild(button('ล้างตัวอย่าง',reset,false));wrap.appendChild(resetControls);
+      if(plans){
+        wrap.appendChild(node(doc,'h3','Plan ตัวอย่าง'));
+        if(!p.plans.length)wrap.appendChild(node(doc,'p','ยังไม่มี Plan ตัวอย่าง'));
+        else{
+          var planWrap=node(doc,'div');planWrap.className='srrt-d331-p023__table';
+          var planTable=node(doc,'table'),head=node(doc,'tr'),body=node(doc,'tbody');
+          ['Event จำลอง','Trigger Case จำลอง','EpisodeKey','Status','Revision'].forEach(function(h){head.appendChild(node(doc,'th',h));});
+          var heading=node(doc,'thead');heading.appendChild(head);planTable.appendChild(heading);
+          p.plans.forEach(function(plan){
+            var row=node(doc,'tr');
+            [plan.eventId,plan.triggerCaseId,plan.episodeKey,plan.planStatus,String(plan.planRevision)].forEach(function(value){row.appendChild(node(doc,'td',value));});
+            body.appendChild(row);
+          });
+          planTable.appendChild(body);planWrap.appendChild(planTable);wrap.appendChild(planWrap);
+        }
+        if(p.draft){
+          var planForm=node(doc,'div');planForm.className='srrt-d331-p023__grid';
+          planForm.appendChild(node(doc,'p','Event จำลอง: '+p.eventId));
+          planForm.appendChild(node(doc,'p','Trigger Case จำลอง: '+p.draft.triggerCaseId));
+          var label=node(doc,'label','EpisodeKey จำลอง (TEST-EP- ตามด้วยเลข 1 ถึง 3 หลัก)');
+          var episode=node(doc,'input');episode.type='text';episode.value=p.draft.episodeKey;
+          episode.setAttribute('aria-label','EpisodeKey จำลอง');episode.disabled=p.busy;
+          episode.setAttribute('maxlength','11');episode.setAttribute('pattern','TEST-EP-[0-9]{1,3}');
+          focusable(episode,'EpisodeKey จำลอง');
+          var version=renderVersion;
+          function updateEpisode(){
+            if(version!==renderVersion||!ensureCurrent())return;
+            var valid=false;
+            try{plans.setEpisodeKey(episode.value);valid=!!episode.value;message='';}
+            catch(_){message='EpisodeKey ไม่ถูกต้อง ใช้ TEST-EP- ตามด้วยเลข 1 ถึง 3 หลัก';}
+            episode.setAttribute('aria-invalid',message?'true':'false');
+            planSave.disabled=p.busy||!valid;status.textContent=message||s.notice;
+          }
+          episode.addEventListener('input',updateEpisode);
+          episode.addEventListener('change',updateEpisode);
+          label.appendChild(episode);planForm.appendChild(label);wrap.appendChild(planForm);
+          var planControls=node(doc,'div');planControls.className='srrt-d331-p023__toolbar';
+          var planSave=button(p.busy?'กำลังบันทึก Plan ตัวอย่าง...':'บันทึก Plan ตัวอย่าง',function(){
+            updateEpisode();if(planSave.disabled)return;
+            var ticket=lifetime,work=plans.save();message='กำลังบันทึก Plan จำลอง (ไม่มีการส่งข้อมูล)';render();
+            work.then(function(result){
+              if(ticket!==lifetime||!ensureCurrent())return;
+              message=result.status==='SYNTHETIC_PLAN_SAVED'?'บันทึก Plan ตัวอย่างแล้ว':'ไม่สามารถบันทึก Plan ตัวอย่างได้';
+              render(planReturnFocus);
+            });
+          },p.busy||!p.draft.episodeKey);
+          planControls.appendChild(planSave);
+          planControls.appendChild(button('ยกเลิก Plan',function(){plans.cancel();message='ยกเลิก Plan ตัวอย่างแล้ว';render(planReturnFocus);},p.busy));
+          wrap.appendChild(planControls);
+        }
       }
       wrap.appendChild(node(doc,'p','3-3-1 SLA: NOT_EVALUATED · ไม่มีการบันทึก Google Sheets'));
       root.replaceChildren(wrap);
+      if(focusTarget&&typeof focusTarget.focus==='function')focusTarget.focus();
+    }
+    function dispose(){
+      if(disposed)return;
+      disposed=true;lifetime++;renderVersion++;
+      if(plans)plans.dispose();model.dispose();root.replaceChildren();
+    }
+    function ensureCurrent(){
+      if(valid())return true;
+      dispose();return false;
+    }
+    function reset(){
+      if(!ensureCurrent())return;
+      lifetime++;if(plans)plans.reset();model.reset();
+      message='ล้างตัวอย่างแล้ว';render('เพิ่ม Case ตัวอย่าง');
     }
     render();
-    return Object.freeze({snapshot:model.snapshot,reset:function(){model.reset();render();},
-      dispose:function(){disposed=true;model.reset();root.replaceChildren();}});
+    var controller=Object.freeze({snapshot:function(){
+      if(!ensureCurrent())deny();
+      return plans?{cases:model.snapshot(),plans:plans.snapshot()}:model.snapshot();
+    },refresh:render,reset:reset,dispose:dispose});
+    mountedRoots.set(root,controller);return controller;
   }
+
   /**
    * UI-only bridge: gate the synthetic preview on the existing Records
    * disclosure + current session. The identity snapshot is NEVER passed to
@@ -944,6 +1090,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
     return Object.freeze({connect:connect,refresh:refresh,reset:reset});
   }
   return Object.freeze({createModel:createModel,mount:mountSyntheticCase_,
+    mountComposed:function(root,options){return mountSyntheticCase_(root,options,true);},
     createRecordsBridge:createRecordsBridge});
 })();
 

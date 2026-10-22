@@ -12,12 +12,13 @@ var d331P031aOfflineCasePlan_=(function(){
   function deny(){throw new Error('D331_P031A_SYNTHETIC_ONLY');}
   function validCases(source){
     if(!source||typeof source.snapshot!=='function'||
-       typeof source.reset!=='function')deny();
+       typeof source.reset!=='function'||typeof source.resetGeneration!=='function')deny();
     var snapshot=source.snapshot();
     if(!snapshot||snapshot.kind!=='SYNTHETIC_ONLY'||
        snapshot.eventId!==EVENT||snapshot.canEnable!==false||
        snapshot.canWrite!==false||snapshot.clinicalPolicyApproved!==false||
        snapshot.slaAssessment!=='NOT_EVALUATED'||
+       !Number.isSafeInteger(source.resetGeneration())||source.resetGeneration()<0||
        !Array.isArray(snapshot.cases)||snapshot.cases.length>99)deny();
     var ids=Object.create(null);
     snapshot.cases.forEach(function(row){
@@ -27,13 +28,21 @@ var d331P031aOfflineCasePlan_=(function(){
          Object.prototype.hasOwnProperty.call(ids,row.caseId))deny();
       ids[row.caseId]=true;
     });
-    return snapshot.cases;
+    return snapshot;
   }
   function createModel(source){
-    validCases(source);
+    validCases(source);var sourceGeneration=source.resetGeneration();
     var plans=[],draft=null,busy=false,epoch=0,nextPlan=1,disposed=false;
     function guard(){if(disposed)deny();}
-    function current(){guard();return validCases(source);}
+    function current(){
+      guard();var state;
+      try{state=validCases(source);}catch(_){dispose();deny();}
+      if(source.resetGeneration()!==sourceGeneration){
+        epoch++;plans=[];draft=null;busy=false;nextPlan=1;
+        sourceGeneration=source.resetGeneration();
+      }
+      return state.cases;
+    }
     function activeCase(caseId){
       return current().filter(function(row){
         return row.caseId===caseId&&row.caseStatus==='ACTIVE';
@@ -51,18 +60,18 @@ var d331P031aOfflineCasePlan_=(function(){
         clinicalPolicyApproved:false,slaAssessment:'NOT_EVALUATED'};
     }
     function beginPlan(eventId,caseId){
-      guard();if(busy||draft||eventId!==EVENT||typeof caseId!=='string'||
+      current();if(busy||draft||eventId!==EVENT||typeof caseId!=='string'||
          !CASE_RE.test(caseId)||!activeCase(caseId))deny();
       draft={triggerCaseId:caseId,episodeKey:''};return snapshot();
     }
     function setEpisodeKey(value){
-      guard();if(busy||!draft||typeof value!=='string'||
+      current();if(busy||!draft||typeof value!=='string'||
         (value!==''&&!EPISODE_RE.test(value)))deny();
       draft.episodeKey=value;return snapshot();
     }
-    function cancel(){guard();if(busy)deny();draft=null;return snapshot();}
+    function cancel(){current();if(busy)deny();draft=null;return snapshot();}
     function save(){
-      guard();if(busy)return Promise.resolve({status:'BUSY'});
+      current();if(busy)return Promise.resolve({status:'BUSY'});
       if(!draft||!EPISODE_RE.test(draft.episodeKey)||
          !activeCase(draft.triggerCaseId)||nextPlan>99||
          plans.some(function(p){return p.triggerCaseId===draft.triggerCaseId&&
@@ -70,7 +79,9 @@ var d331P031aOfflineCasePlan_=(function(){
       var candidate={triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey};
       busy=true;var ticket=++epoch;
       return Promise.resolve().then(function(){
-        if(ticket!==epoch||disposed)return {status:'STALE'};
+        if(disposed)return {status:'STALE'};
+        current();
+        if(ticket!==epoch)return {status:'STALE'};
         // Recheck the source Case after the microtask boundary.
         if(!activeCase(candidate.triggerCaseId)){
           busy=false;return {status:'DENIED'};

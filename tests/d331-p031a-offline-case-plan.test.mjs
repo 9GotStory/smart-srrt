@@ -65,7 +65,7 @@ test('P0-31A denies foreign event, unknown/invalid/VOID Case references and inva
     assert.throws(()=>h.plans.setEpisodeKey(episode),/SYNTHETIC_ONLY/);
   assert.throws(()=>h.plans.save(),/SYNTHETIC_ONLY/);
   const voidSource={snapshot:()=>({...h.cases.snapshot(),
-    cases:[{...h.cases.snapshot().cases[0],caseStatus:'VOID'}]}),reset:()=>{}};
+    cases:[{...h.cases.snapshot().cases[0],caseStatus:'VOID'}]}),reset:()=>{},resetGeneration:h.cases.resetGeneration};
   const voidPlans=h.context.d331P031aOfflineCasePlan_.createModel(voidSource);
   assert.throws(()=>voidPlans.beginPlan(EVENT,CASE),/SYNTHETIC_ONLY/);
   assert.throws(()=>h.context.d331P031aOfflineCasePlan_.createModel({snapshot:()=>({status:'READ_ONLY'}),reset:()=>{}}),/SYNTHETIC_ONLY/);
@@ -111,4 +111,55 @@ test('P0-31A never upgrades a Case mock to an authorized read, clinical or write
   assert.equal(out.canReadPatientData,false);
   assert.equal(out.slaAssessment,'NOT_EVALUATED');
   assert.equal(out.plans.length,0);
+});
+
+test('P0-31B Case reset generation clears saved and pending Plans despite identical reseeded identity',async()=>{
+  const h=harness();
+  const generation=h.cases.resetGeneration();
+  assert.equal(Number.isSafeInteger(generation),true);
+  h.plans.beginPlan(EVENT,CASE);h.plans.setEpisodeKey('TEST-EP-5');
+  await h.plans.save();
+  h.cases.beginEdit(CASE);h.cases.setField('classification','CONFIRMED');
+  await h.cases.save();
+  assert.equal(h.cases.resetGeneration(),generation);
+  assert.equal(h.plans.snapshot().plans.length,1);
+  h.plans.beginPlan(EVENT,CASE);h.plans.setEpisodeKey('TEST-EP-6');
+  const pending=h.plans.save();h.cases.reset();
+  assert.equal(h.cases.resetGeneration(),generation+1);
+  assert.equal(h.cases.snapshot().cases[0].caseId,CASE);
+  assert.equal(h.cases.snapshot().cases[0].caseRevision,1);
+  assert.equal((await pending).status,'STALE');
+  assert.equal(h.plans.snapshot().plans.length,0);
+  assert.equal(h.plans.snapshot().draft,null);
+  assert.equal(h.plans.snapshot().busy,false);
+  h.plans.beginPlan(EVENT,CASE);h.plans.setEpisodeKey('TEST-EP-7');
+  h.cases.reset();
+  assert.equal(h.plans.snapshot().draft,null);
+});
+
+test('P0-31B source context invalidation cannot revive old Plans when the context returns',async()=>{
+  const h=harness();let event=EVENT;
+  const source={snapshot:()=>({...h.cases.snapshot(),eventId:event}),
+    reset:h.cases.reset,resetGeneration:h.cases.resetGeneration};
+  const plans=h.context.d331P031aOfflineCasePlan_.createModel(source);
+  plans.beginPlan(EVENT,CASE);plans.setEpisodeKey('TEST-EP-8');await plans.save();
+  event='00000000-0000-4000-8000-000000002399';
+  assert.throws(()=>plans.snapshot(),/SYNTHETIC_ONLY/);
+  event=EVENT;
+  assert.throws(()=>plans.snapshot(),/SYNTHETIC_ONLY/);
+});
+
+test('P0-31B source validity is checked before Case and Plan asynchronous commits',async()=>{
+  const h=harness();let valid=true;
+  const cases=h.context.d331P023OfflineCaseWorkspace_.createModel({isValid:()=>valid});
+  cases.beginAdd();cases.setField('onsetLocalDate','2026-10-22');
+  const caseWork=cases.save();valid=false;
+  assert.equal((await caseWork).status,'STALE');valid=true;
+  assert.throws(()=>cases.snapshot(),/SYNTHETIC_ONLY/);
+  const second=h.context.d331P023OfflineCaseWorkspace_.createModel({isValid:()=>valid});
+  const plans=h.context.d331P031aOfflineCasePlan_.createModel(second);
+  plans.beginPlan(EVENT,CASE);plans.setEpisodeKey('TEST-EP-10');
+  const work=plans.save();valid=false;
+  assert.equal((await work).status,'DENIED');valid=true;
+  assert.throws(()=>plans.snapshot(),/SYNTHETIC_ONLY/);
 });
