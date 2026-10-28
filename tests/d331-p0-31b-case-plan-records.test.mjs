@@ -259,6 +259,26 @@ test('P0-31B invalid visible edits disable Save without replacing fields or savi
 
 function nativeHarness(role='Admin'){
   const elements=new Map(),calls=[];
+  // DOM boundary: attribute records arrive in a microtask, before toggle tasks.
+  const observers=new Set();
+  class MutationObserver {
+    constructor(callback){this.callback=callback;this.records=[];this.target=null;this.scheduled=false;}
+    observe(target,options){this.target=target;this.options=options;observers.add(this);}
+    takeRecords(){return this.records.splice(0);}
+    disconnect(){observers.delete(this);this.records=[];this.target=null;}
+    enqueue(target,oldValue){
+      if(this.target!==target||!this.options.attributes||
+         !this.options.attributeFilter.includes('open'))return;
+      this.records.push({type:'attributes',target,attributeName:'open',
+        oldValue:this.options.attributeOldValue?oldValue:null});
+      if(this.scheduled)return;
+      this.scheduled=true;
+      queueMicrotask(()=>{
+        this.scheduled=false;const records=this.takeRecords();
+        if(records.length)this.callback(records,this);
+      });
+    }
+  }
   const doc={readyState:'loading',activeElement:null,createElement(tag){return new Element(tag,doc);},
     getElementById(id){
       if(!elements.has(id)){
@@ -271,7 +291,7 @@ function nativeHarness(role='Admin'){
       return elements.get(id);
     },querySelectorAll(){return[];},querySelector(){return null;},addEventListener(){},
     documentElement:{style:{setProperty(){}}}};
-  const ctx=vm.createContext({Promise,Date,document:doc,console,
+  const ctx=vm.createContext({Promise,Date,document:doc,console,MutationObserver,
     localStorage:{getItem(){return null;},setItem(){},removeItem(){}},
     setTimeout(){},clearTimeout(){},setInterval(){return 1;},clearInterval(){}});
   for(const {path,code} of readOrderedClientScripts()){
@@ -283,6 +303,12 @@ function nativeHarness(role='Admin'){
   ctx.loadDashboard=async()=>{};ctx.destroyDashboardCharts=()=>{};ctx.toast=()=>{};
   run('token="TEST-NATIVE-SESSION";currentUser={role:'+JSON.stringify(role)+',name:"Synthetic",email:"test@example.invalid"};');
   const root=doc.getElementById('d331-p018-preview'),region=doc.getElementById('d331-p024-region');
+  let opened=false;
+  Object.defineProperty(root,'open',{get:()=>opened,set(value){
+    const oldValue=opened?'':null;opened=!!value;
+    if(!opened&&oldValue===null)return;
+    for(const observer of observers)observer.enqueue(root,oldValue);
+  }});
   root.open=false;region.hidden=true;
   function nodes(predicate){
     const found=[];function walk(n){if(predicate(n))found.push(n);n.children.forEach(walk);}walk(region);return found;
@@ -294,6 +320,46 @@ function nativeHarness(role='Admin'){
   const episode=value=>{const input=field('EpisodeKey จำลอง');input.value=value;input.fire('input');};
   return {ctx,run,doc,root,region,nodes,button,field,open,text,episode,calls};
 }
+
+test('P0-31B S3 coalesced disclosure close/reopen starts from a fresh seed without saved Plans',async()=>{
+  const h=nativeHarness();h.run('renderTables()');h.open(true);await settle();
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-40');
+  h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+  assert.match(h.text(),/TEST-EP-40/);
+  const previous=h.region.children[0];
+  h.root.open=false;h.root.open=true;
+  await settle();h.root.fire('toggle');await settle();
+  assert.notEqual(h.region.children[0],previous,'close/reopen creates a new workspace');
+  assert.match(h.text(),/ยังไม่มี Plan ตัวอย่าง/);
+  assert.doesNotMatch(h.text(),/TEST-EP-40/);
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+  assert.equal(h.calls.length,0);
+});
+
+test('P0-31B S3 coalesced disclosure close/reopen denies queued Case and Plan before observer delivery',async()=>{
+  for(const type of ['Case','Plan']){
+    const h=nativeHarness();let controller;
+    const bridge=h.ctx.d331P023OfflineCaseWorkspace_.createRecordsBridge({
+      root:h.root,region:h.region,
+      session:()=>h.run('({token,user:currentUser,allowed:!!token&&!!roleCanRecord()})'),
+      mountView:(root,options)=>{controller=h.ctx.d331P023OfflineCaseWorkspace_.mountComposed(root,options);return controller;}
+    });
+    bridge.connect();h.open(true);await settle();
+    if(type==='Plan'){
+      h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-41');
+    }else h.button('แก้ไขตัวอย่าง').fire('click');
+    const previous=controller;
+    const retained=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');
+    retained.fire('click');h.root.open=false;h.root.open=true;
+    assert.throws(()=>previous.snapshot(),/SYNTHETIC_ONLY/,'old state is invalid before queued observer or save work');
+    await settle();h.root.fire('toggle');
+    const fresh=h.region.children[0];retained.fire('click');await settle();
+    assert.equal(h.region.children[0],fresh,'retained controls cannot repaint the new lifetime');
+    assert.equal(controller.snapshot().plans.plans.length,0);
+    assert.equal(controller.snapshot().cases.cases[0].caseRevision,1);
+    assert.equal(h.calls.length,0);bridge.dispose();
+  }
+});
 
 test('P0-31B S3 actual registered Records uses composed Plan flow only for existing authorized roles',async()=>{
   for(const role of ['Staff','Admin','Manager','Super Admin']){
@@ -399,6 +465,7 @@ test('P0-31B S3 filtering preserves draft and fields while close/reopen resets b
   const h=nativeHarness();h.run('renderTables()');h.open(true);
   h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-25');
   const input=h.field('EpisodeKey จำลอง');
+  h.root.open=true;await settle(); // Same-value attribute writes are not a close.
   h.run('el("recordSearch").value="synthetic filter";renderTables();resetRecordFilters();renderTables()');
   assert.equal(h.field('EpisodeKey จำลอง'),input);assert.equal(input.value,'TEST-EP-25');
   assert.equal(h.root.listeners.toggle.length,2,'one existing count-preview and one Case/Plan bridge listener');

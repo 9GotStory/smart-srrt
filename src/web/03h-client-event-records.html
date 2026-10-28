@@ -1163,7 +1163,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
        typeof options.session!=='function'||
        typeof options.mountView!=='function')deny();
     var root=options.root,region=options.region;
-    var connected=false,active=null,owner=null,epoch=0,disposed=false;
+    var connected=false,active=null,owner=null,epoch=0,disposed=false,observer=null;
     function current(){
       try{
         var s=options.session();
@@ -1184,12 +1184,22 @@ var d331P023OfflineCaseWorkspace_=(function(){
       region.replaceChildren();region.hidden=true;
     }
     function reset(){clear();root.open=false;}
+    function invalidateDisclosure(records){
+      // Reconstruct each transition: toggle tasks may hide a close/reopen.
+      var opened=root.open;
+      for(var i=records.length-1;i>=0;i--){
+        var wasOpen=records[i].oldValue!==null;
+        if(wasOpen&&!opened){clear();return;}
+        opened=wasOpen;
+      }
+    }
     function contextValid(){
       try{return !options.syntheticEvent||options.syntheticEvent()===EVENT;}
       catch(_){return false;}
     }
     function reconcile(){
       if(disposed)return false;
+      if(observer)invalidateDisclosure(observer.takeRecords());
       var s=current();
       if(!s||!contextValid()||(owner&&!sameSession(owner,s))){reset();return false;}
       if(!root.open){clear();return false;}
@@ -1200,6 +1210,7 @@ var d331P023OfflineCaseWorkspace_=(function(){
       var started=epoch,origin=current();
       owner=origin;
       function valid(){
+        if(observer)invalidateDisclosure(observer.takeRecords());
         if(disposed||started!==epoch)return false;
         if(!root.open||!sameSession(origin,current())||!contextValid()){
           reset();return false;
@@ -1214,12 +1225,20 @@ var d331P023OfflineCaseWorkspace_=(function(){
     }
     function connect(){
       if(disposed)return;
-      if(!connected){root.addEventListener('toggle',refresh);connected=true;}
+      if(!connected){
+        root.addEventListener('toggle',refresh);
+        if(typeof MutationObserver==='function'){
+          observer=new MutationObserver(invalidateDisclosure);
+          observer.observe(root,{attributes:true,attributeFilter:['open'],attributeOldValue:true});
+        }
+        connected=true;
+      }
       refresh();
     }
     function dispose(){
       if(disposed)return;
       disposed=true;reset();
+      if(observer)observer.disconnect();
       if(connected&&typeof root.removeEventListener==='function')
         root.removeEventListener('toggle',refresh);
     }
