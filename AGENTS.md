@@ -131,7 +131,7 @@ One-Click สองไฟล์ที่ root เป็น **frozen historical a
 - **Evidence:** DEV version/browser observations เป็น owner-reported ตามวันที่ในทะเบียน ไม่เท่ากับ independent deployed-SHA/binding verification ดู [evidence map](docs/INDEX.md#environment-and-evidence)
 - **Documentation Alignment complete:** [PR #255](https://github.com/9GotStory/smart-srrt/pull/255) Merge แล้วที่ `main@b289d969b915c91db996b48b19a00bf294c107d1` ครอบคลุม `AGENTS.md`, `README.md`, `docs/features.md`, `docs/INDEX.md`; ไม่ใช่สิทธิ์ Deploy หรือเปิดข้อมูลจริง
 - **F01 / P0-31B complete — 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged ที่ `f8418c200564da7b9ef9370d350ad890b6a910ca`; exact post-merge CI ผ่าน และ #257/#258/#259 CLOSED/completed สำหรับ synthetic source/offline delivery เท่านั้น ดู [F01 completion evidence](docs/implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records)
-- **Next frontier:** รอ PO เลือกงานถัดไป แล้วใช้ briefs และ Workflow ใน Section 5 วางแผนหนึ่ง feature และเสนอ scope/test seams ให้อนุมัติก่อนสร้าง/ปรับ Issue หรือเริ่ม Implementation. ไม่เริ่ม F02–F08 อัตโนมัติ; #253 เป็น separate tests-only candidate. D331 OFF และ data/UAT/release/Deploy gates คงเดิม
+- **Next frontier:** รอ PO เลือกงานถัดไป แล้วใช้ briefs และ Workflow ใน Section 5 วางแผนหนึ่ง feature และเสนอ scope/test seams ให้อนุมัติก่อนสร้าง/ปรับ Issue หรือเริ่ม Implementation. ไม่เริ่ม F02–F08 อัตโนมัติ; #253 เป็น tests-only comparison แยกจาก F01 ไม่ใช่ D2/P1 approval. D331 OFF และ data/UAT/release/Deploy gates คงเดิม
 
 ## Historical task records — 11–12 October 2026
 
