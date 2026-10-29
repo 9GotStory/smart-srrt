@@ -7,6 +7,7 @@ import {readOrderedClientScripts} from './helpers/native-client.mjs';
 
 const paths=[
  '../src/server/00-bootstrap.gs',
+ '../src/server/01-schema-and-db.gs',
  '../src/dengue/00-g1a-foundation.gs',
  '../src/dengue/03-n1b1-trusted-event-contract.gs',
  '../src/dengue/07-p0-02a-mvp-schema-contract.gs',
@@ -23,13 +24,11 @@ const TOKEN='11111111-1111-4111-8111-111111111111.22222222-2222-4222-8222-222222
 const DB='MOCK_VALID_DEV_SHEET_ID_0123456789012';
 const POLICY='TEST-POLICY-1';
 const NOW='2026-10-18T00:00:00.000Z';
-const TAG='a'.repeat(64);
+const TAG=createHash('sha256').update('TEST_ONLY_HASH').digest('hex');
 const kinds=['case','plan','action','survey','followup'];
 function scriptCtx(){
  const ctx=vm.createContext({});
  sources.forEach((s,i)=>vm.runInContext(s,ctx,{filename:paths[i]}));
- ctx.sessionCredentialTag_=h=>h==='TEST_ONLY_HASH'?TAG:'b'.repeat(64);
- ctx.passwordConstantEqual_=(a,b)=>a===b;
  return ctx;
 }
 function grantRow(ctx,cap,i){
@@ -172,8 +171,8 @@ test('P0-07 production source stays private/unregistered/flags disabled',()=>{
  const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(manifest,/12-p0-07-guarded-dev-crud/);
  assert.match(sources.at(-2),/D331_P007_ENABLED_ = false/);
- assert.match(sources[1],/D331_G1A_ENABLED = false/);
- assert.match(sources[4],/D331_P003B_ENABLED_ = false/);
+ assert.match(sources[2],/D331_G1A_ENABLED = false/);
+ assert.match(sources[5],/D331_P003B_ENABLED_ = false/);
  assert.match(sources.at(-2),/LockService.getScriptLock\(\)/);
  assert.doesNotMatch(sources.at(-2),/\.deleteRow\(|deleteSheet\(|getDb_\(/);
 });
