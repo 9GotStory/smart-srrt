@@ -159,3 +159,76 @@ test('P6-03 Content save does not repaint private library after a session change
   assert.equal(h.el('libraryList').innerHTML,'');
   assert.equal(h.toasts.length,0)
 });
+
+test('R-07 ordinary Admin save omits blank secret replacement and keeps other settings',async()=>{
+  for(const blank of ['', ' \t ']){
+    const h=fixture();login(h);
+    h.el('set_APP_NAME').value='Changed name';
+    h.el('set_GEMINI_API_KEY').value=blank;
+    h.ctx.gs=(...args)=>{
+      h.calls.push(args);
+      return Promise.resolve(args[0]==='saveSystemSettings'?'Saved':args[0]==='getAppBoot'?{settings:{},areas:[]}:{});
+    };
+    await vm.runInContext('saveSettings()',h.ctx);
+    const saves=h.calls.filter(x=>x[0]==='saveSystemSettings');
+    assert.equal(saves.length,1);
+    assert.equal(saves[0][2].some(x=>x.key==='GEMINI_API_KEY'),false);
+    assert.equal(saves[0][2].find(x=>x.key==='APP_NAME').value,'Changed name');
+  }
+});
+
+test('R-07 explicit replacement is single-flight and cleared only after confirmed current-session save',async()=>{
+  const h=fixture();login(h);
+  h.el('set_GEMINI_API_KEY').value='  SYNTHETIC_REPLACEMENT_SECRET  ';
+  const d=deferred();
+  h.ctx.gs=(...args)=>{
+    h.calls.push(args);
+    return args[0]==='saveSystemSettings'?d.promise:Promise.resolve(args[0]==='getAppBoot'?{settings:{APP_NAME:'Synthetic'},areas:[]}:{});
+  };
+  const first=vm.runInContext('saveSettings()',h.ctx);
+  const duplicate=vm.runInContext('saveSettings()',h.ctx);
+  assert.equal(h.calls.filter(x=>x[0]==='saveSystemSettings').length,1);
+  assert.equal(h.calls[0][2].find(x=>x.key==='GEMINI_API_KEY').value,'  SYNTHETIC_REPLACEMENT_SECRET  ');
+  assert.equal(h.el('set_GEMINI_API_KEY').value,'  SYNTHETIC_REPLACEMENT_SECRET  ');
+  d.resolve('Saved');await Promise.all([first,duplicate]);
+  assert.equal(h.el('set_GEMINI_API_KEY').value,'');
+  assert.match(h.el('set_GEMINI_API_KEY').placeholder,/ตั้งค่าแล้ว/);
+  assert.doesNotMatch(vm.runInContext('JSON.stringify(settings)',h.ctx),/SYNTHETIC_REPLACEMENT_SECRET/);
+  assert.doesNotMatch(h.toasts.join(' '),/SYNTHETIC_REPLACEMENT_SECRET/);
+});
+
+test('R-07 old save completion preserves a new session or subsequently typed replacement',async()=>{
+  for(const changeSession of [false,true]){
+    const h=fixture();login(h);
+    h.el('set_GEMINI_API_KEY').value='SYNTHETIC_SUBMITTED_SECRET';
+    const d=deferred();
+    h.ctx.gs=(...args)=>{
+      h.calls.push(args);
+      return args[0]==='saveSystemSettings'?d.promise:Promise.resolve(args[0]==='getAppBoot'?{settings:{},areas:[]}:{});
+    };
+    const pending=vm.runInContext('saveSettings()',h.ctx);
+    if(changeSession){logout(h);login(h,'B')}
+    h.el('set_GEMINI_API_KEY').value='SYNTHETIC_LATER_DRAFT';
+    h.el('set_GEMINI_API_KEY').placeholder='new hint';
+    d.resolve('Saved');await pending;
+    assert.equal(h.el('set_GEMINI_API_KEY').value,'SYNTHETIC_LATER_DRAFT');
+    if(changeSession){
+      assert.equal(h.el('set_GEMINI_API_KEY').placeholder,'new hint');
+      assert.equal(h.calls.length,1);
+      assert.equal(h.toasts.length,0);
+    }
+  }
+});
+
+test('R-07 ambiguous secret save remains unknown and never automatically retries',async()=>{
+  const h=fixture();login(h);
+  h.el('set_GEMINI_API_KEY').value='SYNTHETIC_UNCONFIRMED_SECRET';
+  h.ctx.gs=(...args)=>{h.calls.push(args);return Promise.reject(Error('Synthetic transport failure'))};
+  await vm.runInContext('saveSettings()',h.ctx);
+  await vm.runInContext('saveSettings()',h.ctx);
+  assert.equal(h.calls.length,1);
+  assert.equal(h.el('adminSaveSettingsBtn').disabled,true);
+  assert.match(h.el('adminSettingsWriteStatus').textContent,/ไม่สามารถยืนยันผล/);
+  assert.doesNotMatch(h.toasts.join(' '),/SYNTHETIC_UNCONFIRMED_SECRET/);
+  assert.equal(vm.runInContext('Object.hasOwn(settings,"GEMINI_API_KEY")',h.ctx),false);
+});

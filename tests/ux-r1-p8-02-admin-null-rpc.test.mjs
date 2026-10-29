@@ -142,3 +142,138 @@ test('P8-02 raw Date objects and invalid DTO types cannot leak from new helper',
   assert.match(app,/areaAdminCache=requireAdminRows_/);
   assert.match(app,/masterTypePolicies=policies/);
 });
+
+// R-07 S1: actual RPC/auth/setting helpers; only principal and Sheet/Audit I/O are synthetic.
+function settingsRpcFixture(role='Manager',secret='SYNTHETIC_STORED_KEY_NEVER_RETURN'){
+  const rows=[['key','value','description','updatedAt','updatedBy'],
+    ['APP_NAME','Synthetic SRRT','name',new Date('2026-10-29T00:00:00Z'),'synthetic-owner'],
+    ['GEMINI_API_KEY',secret,secret,new Date('2026-10-29T00:00:00Z'),'synthetic-owner']];
+  const accesses=[],writes=[],audits=[],logs=[],io={failure:null};
+  const sheet={
+    getDataRange:()=>({getValues:()=>rows.map(r=>r.slice())}),
+    getRange(row,col){return {setValues(values){
+      if(io.failure)throw new Error(io.failure);
+      writes.push({key:rows[row-1][0],values:values[0].slice()});
+      values[0].forEach((value,i)=>{rows[row-1][col-1+i]=value});
+    }}},
+    appendRow(row){if(io.failure)throw new Error(io.failure);writes.push({key:row[0],values:row.slice(1)});rows.push(row.slice())}
+  };
+  const scope=vm.createContext({CONFIG:{SHEETS:{SETTINGS:'SystemSettings'}},
+    Logger:{log:(...args)=>logs.push(args)},console:{log:(...args)=>logs.push(args)}});
+  for(const file of ['01-schema-and-db.gs','03-events-and-dashboard.gs','04-admin-and-audit.gs'])
+    new vm.Script(read('src/server/'+file),{filename:file}).runInContext(scope);
+  scope.getUserByToken_=()=>role?{role,status:'active',email:'synthetic@example.invalid'}:null;
+  scope.getSheet_=name=>{accesses.push(name);return sheet};
+  scope.writeAudit_=(...args)=>audits.push(args.slice(1));
+  return {scope,rows,accesses,writes,audits,logs,io,
+    read:()=>scope.getSystemSettings('synthetic-token'),
+    save:payload=>scope.saveSystemSettings('synthetic-token',payload)};
+}
+
+test('R-07 settings read exposes configured status without any stored secret bytes',()=>{
+  for(const role of ['Manager','Super Admin']){
+    const h=settingsRpcFixture(role),reply=h.read();
+    const secret=reply.find(r=>r.key==='GEMINI_API_KEY');
+    assert.equal(secret.value,'');
+    assert.equal(secret.isConfigured,true);
+    assert.equal(JSON.stringify(reply).includes('SYNTHETIC_STORED_KEY_NEVER_RETURN'),false);
+    assert.equal(reply.find(r=>r.key==='APP_NAME').value,'Synthetic SRRT');
+    assert.equal(secret.updatedAt,'2026-10-29T00:00:00.000Z');
+  }
+});
+
+test('R-07 ordinary saves preserve configured or absent keys when replacement is missing or blank',()=>{
+  for(const stored of ['SYNTHETIC_STORED_KEY_NEVER_RETURN','']){
+    for(const payload of [
+      [{key:'APP_NAME',value:'Changed'}],
+      [{key:'APP_NAME',value:'Changed'},{key:'GEMINI_API_KEY',value:''}],
+      [{key:'APP_NAME',value:'Changed'},{key:'GEMINI_API_KEY',value:' \t '}]
+    ]){
+      const h=settingsRpcFixture('Manager',stored);
+      h.save(payload);
+      assert.equal(h.scope.getSettingsMap_().GEMINI_API_KEY,stored);
+      assert.equal(h.writes.some(x=>x.key==='GEMINI_API_KEY'),false);
+      assert.equal(h.read().find(x=>x.key==='GEMINI_API_KEY').isConfigured,stored!=='');
+      assert.equal(h.read().find(x=>x.key==='APP_NAME').value,'Changed');
+    }
+  }
+});
+
+test('R-07 invalid or duplicate replacement fails before any settings write without echoing input',()=>{
+  const badValues=[null,undefined,{},[],23,true];
+  const payloads=badValues.map(value=>[
+    {key:'APP_NAME',value:'MUST_NOT_COMMIT'},
+    {key:'GEMINI_API_KEY',value}
+  ]);
+  payloads.push([{key:'APP_NAME',value:'MUST_NOT_COMMIT'},
+    {key:'GEMINI_API_KEY',value:'SYNTHETIC_NEW_SECRET'},
+    {key:'GEMINI_API_KEY',value:'SYNTHETIC_DUPLICATE_SECRET'}]);
+  for(const payload of payloads){
+    const h=settingsRpcFixture();
+    assert.throws(()=>h.save(payload),error=>{
+      assert.doesNotMatch(String(error),/SYNTHETIC|MUST_NOT_COMMIT|TypeError/);
+      return true;
+    });
+    assert.equal(h.writes.length,0);
+    assert.equal(h.audits.length,0);
+    assert.equal(h.scope.getSettingsMap_().APP_NAME,'Synthetic SRRT');
+  }
+});
+
+test('R-07 actual settings permissions deny guests, Staff and Admin before Sheet I/O',()=>{
+  for(const role of [null,'Staff','Admin']){
+    const h=settingsRpcFixture(role);
+    assert.throws(()=>h.read(),/เข้าสู่ระบบ|สิทธิ์ไม่เพียงพอ/);
+    assert.throws(()=>h.save([{key:'GEMINI_API_KEY',value:'SYNTHETIC_NEW_SECRET'}]),/เข้าสู่ระบบ|สิทธิ์ไม่เพียงพอ/);
+    assert.equal(h.accesses.length,0);
+    assert.equal(h.writes.length,0);
+    assert.equal(h.audits.length,0);
+  }
+});
+
+test('R-07 explicit replacement preserves exact string for server use while read/public/audit stay secret-free',()=>{
+  for(const role of ['Manager','Super Admin']){
+    for(const stored of ['SYNTHETIC_STORED_KEY_NEVER_RETURN','']){
+      const h=settingsRpcFixture(role,stored),replacement='  SYNTHETIC_NEW_SECRET  ';
+      const result=h.save([{key:'DATABASE_SPREADSHEET_ID',value:'MUST_NOT_COMMIT'},
+        {key:'APP_NAME',value:'Changed'},{key:'GEMINI_API_KEY',value:replacement}]);
+      const serverSettings=h.scope.getSettingsMap_();
+      assert.equal(serverSettings.GEMINI_API_KEY,replacement);
+      assert.equal(serverSettings.APP_NAME,'Changed');
+      assert.equal(serverSettings.DATABASE_SPREADSHEET_ID,undefined);
+      assert.equal(h.writes.filter(x=>x.key==='GEMINI_API_KEY').length,1);
+      const browserReply=h.read();
+      assert.equal(browserReply.find(x=>x.key==='GEMINI_API_KEY').value,'');
+      const publicSettings=h.scope.getPublicSettings_(serverSettings);
+      assert.equal(publicSettings.GEMINI_API_KEY,undefined);
+      assert.doesNotMatch(JSON.stringify([result,browserReply,publicSettings,h.audits,h.logs]),/SYNTHETIC_NEW_SECRET|SYNTHETIC_STORED_KEY_NEVER_RETURN/);
+    }
+  }
+});
+
+test('R-07 secret write failures return generic unknown outcome without exposing the I/O error',()=>{
+  const h=settingsRpcFixture();
+  h.io.failure='SYNTHETIC_NEW_SECRET in synthetic backend error';
+  assert.throws(()=>h.save([{key:'GEMINI_API_KEY',value:'SYNTHETIC_NEW_SECRET'}]),error=>{
+    assert.doesNotMatch(String(error),/SYNTHETIC_NEW_SECRET|backend error/);
+    assert.match(String(error),/ไม่สามารถยืนยันผล/);
+    return true;
+  });
+  assert.equal(h.audits.length,0);
+  assert.equal(h.logs.length,0);
+});
+
+test('R-07 blank stored keys have only an unconfigured Boolean and empty settings remain transport-safe',()=>{
+  for(const value of ['', ' \t ',null]){
+    const h=settingsRpcFixture('Manager',value);
+    const row=h.read().find(x=>x.key==='GEMINI_API_KEY');
+    assert.equal(row.value,'');
+    assert.equal(row.isConfigured,false);
+  }
+  const h=settingsRpcFixture();h.rows.splice(1);
+  assert.equal(h.read().length,0);
+  for(const invalid of [null,{},'invalid']){
+    assert.throws(()=>h.save(invalid),/รายการตั้งค่าไม่ถูกต้อง/);
+    assert.equal(h.writes.length,0);
+  }
+});
