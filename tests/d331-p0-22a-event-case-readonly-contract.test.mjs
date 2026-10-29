@@ -33,13 +33,13 @@ test('P0-22A: current RPC is only count summary, not a patient detail API',()=>{
   assert.doesNotMatch(adapter,/function listDengueCasesForEvent\s*\(/);
 });
 
-test('P0-22A: app remains one inert Records-only preview without live case navigation',()=>{
+test('P0-22A: original mock stays Records-only and the F02 read interface remains OFF',()=>{
   assert.match(layout,/<details id="d331-p018-preview"/);
   assert.match(layout,/id="d331-p020-region"[^>]*hidden/);
   assert.match(layout,/Mock-only · D331 OFF/);
   assert.match(records,/d331P020PreviewBridge_\.mount\(\)/);
   assert.doesNotMatch(layout,/data-page="dengue"|id="page-dengue"/);
-  assert.doesNotMatch(records,/gs\(\s*['"]listDengueCasesForEvent['"]/);
+  assert.match(records,/var D331_F02_CASE_READ_AVAILABLE_ = false;/);
   assert.doesNotMatch(native,/src\/dengue\/09-p0-03b-dev-readonly-adapter\.gs/);
 });
 
