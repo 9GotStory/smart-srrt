@@ -206,44 +206,66 @@ function d331P007Prospective_(all,spec,targetRow,mode,existingIndex,eventId,area
   catch(e){d331P007Deny_();}
 }
 
+function d331P007RequireReady_(){
+  if(typeof D331_G1A_ENABLED==='undefined'||D331_G1A_ENABLED!==true||
+     typeof D331_P003B_ENABLED_==='undefined'||D331_P003B_ENABLED_!==true||
+     D331_P007_ENABLED_!==true||
+     typeof D331_P003B_APPROVED_DEV_SPREADSHEET_ID_!=='string'||
+     !/^[A-Za-z0-9_-]{20,160}$/.test(D331_P003B_APPROVED_DEV_SPREADSHEET_ID_)||
+     typeof D331_P003B_APPROVED_DISEASE_LABELS_==='undefined'||
+     !Array.isArray(D331_P003B_APPROVED_DISEASE_LABELS_)||
+     !D331_P003B_APPROVED_DISEASE_LABELS_.length||
+     typeof D331_P003B_APPROVED_POLICY_REVISION_!=='string'||
+     !D331_P003B_APPROVED_POLICY_REVISION_||
+     [typeof d331IsUuid_,typeof d331P003bGetRequiredSheet_,typeof d331P003bSessionUser_,
+      typeof d331P003bOneRowById_,typeof d331P003bReadRows_,typeof d331P003bGrant_,
+      typeof d331P005RequireSevenSheets_,typeof d331P002aHeaders_,
+      typeof d331P002aValidateSyntheticRow_,typeof d331N1bAuthorizeOffline_,
+      typeof d331P006EvaluateOffline_].some(function(type){return type!=='function';}))
+    d331P007Deny_();
+}
+
+// Private shared authorization. Call only while holding the participating writer lock.
+function d331P007Authorize_(sessionToken,eventId,spec,expectedRevision){
+  var expectedId=D331_P003B_APPROVED_DEV_SPREADSHEET_ID_;
+  var configured=PropertiesService.getScriptProperties()
+    .getProperty('DATABASE_SPREADSHEET_ID');
+  if(configured!==expectedId)d331P007Deny_();
+  var ss=SpreadsheetApp.openById(expectedId);
+  if(!ss||ss.getId()!==expectedId)d331P007Deny_();
+  var main=d331P003bGetRequiredSheet_(ss,'MainData',
+    MAIN_HEADERS.concat(EVENT_META_HEADERS,[EVENT_OWNER_HEADER]));
+  var users=d331P003bGetRequiredSheet_(ss,'UserAccounts',D331_P003B_USER_HEADERS_);
+  var areas=d331P003bGetRequiredSheet_(ss,'AreaMaster',D331_P003B_AREA_HEADERS_);
+  var tables=d331P005RequireSevenSheets_(ss);
+  var user=d331P003bSessionUser_(sessionToken,users);
+  var event=d331P003bOneRowById_(main,31,39,eventId,100000);
+  var areaRows=d331P003bReadRows_(areas,10,10000);
+  var now=new Date().toISOString();
+  var grant=d331P003bGrant_(tables.D331AccessGrants,user.userId,eventId,
+    spec.capability,now,D331_P003B_APPROVED_POLICY_REVISION_);
+  var auth=d331N1bAuthorizeOffline_(user,event,areaRows,{
+    approved:true,userId:grant.UserID,capabilities:[grant.Capability],
+    allowedAreaIds:[grant.AreaID],allowedEventIds:[grant.EventID]
+  },D331_P003B_APPROVED_DISEASE_LABELS_,spec.capability,true,
+    expectedRevision===undefined?event[31]:expectedRevision);
+  if(auth.areaId!==grant.AreaID)d331P007Deny_();
+
+  return {tables:tables,user:user,auth:auth,now:now};
+}
+
 function d331P007Operate_(sessionToken,eventId,command){
   // Every dependent gate is disabled in the canonical source and must be
   // separately approved for real Development execution.
-  if(D331_G1A_ENABLED!==true || D331_P003B_ENABLED_!==true ||
-     D331_P007_ENABLED_!==true)d331P007Deny_();
+  d331P007RequireReady_();
   var spec=d331P007Command_(eventId,command);
   var lock=null,acquired=false;
   try{
-    var expectedId=D331_P003B_APPROVED_DEV_SPREADSHEET_ID_;
-    if(typeof expectedId!=='string'||!/^[A-Za-z0-9_-]{20,160}$/.test(expectedId)||
-       !Array.isArray(D331_P003B_APPROVED_DISEASE_LABELS_)||
-       !D331_P003B_APPROVED_DISEASE_LABELS_.length||
-       !D331_P003B_APPROVED_POLICY_REVISION_)d331P007Deny_();
     lock=LockService.getScriptLock();
     if(!lock||!lock.tryLock(15000))d331P007Deny_();
     acquired=true;
-    var configured=PropertiesService.getScriptProperties()
-      .getProperty('DATABASE_SPREADSHEET_ID');
-    if(configured!==expectedId)d331P007Deny_();
-    var ss=SpreadsheetApp.openById(expectedId);
-    if(!ss||ss.getId()!==expectedId)d331P007Deny_();
-    var main=d331P003bGetRequiredSheet_(ss,'MainData',
-      MAIN_HEADERS.concat(EVENT_META_HEADERS,[EVENT_OWNER_HEADER]));
-    var users=d331P003bGetRequiredSheet_(ss,'UserAccounts',D331_P003B_USER_HEADERS_);
-    var areas=d331P003bGetRequiredSheet_(ss,'AreaMaster',D331_P003B_AREA_HEADERS_);
-    var tables=d331P005RequireSevenSheets_(ss);
-    var user=d331P003bSessionUser_(sessionToken,users);
-    var event=d331P003bOneRowById_(main,31,39,eventId,100000);
-    var areaRows=d331P003bReadRows_(areas,10,10000);
-    var now=new Date().toISOString();
-    var grant=d331P003bGrant_(tables.D331AccessGrants,user.userId,eventId,
-      spec.capability,now,D331_P003B_APPROVED_POLICY_REVISION_);
-    var auth=d331N1bAuthorizeOffline_(user,event,areaRows,{
-      approved:true,userId:grant.UserID,capabilities:[grant.Capability],
-      allowedAreaIds:[grant.AreaID],allowedEventIds:[grant.EventID]
-    },D331_P003B_APPROVED_DISEASE_LABELS_,spec.capability,true,
-      command.expectedEventRevision);
-    if(auth.areaId!==grant.AreaID)d331P007Deny_();
+    var context=d331P007Authorize_(sessionToken,eventId,spec,command.expectedEventRevision);
+    var tables=context.tables,user=context.user,auth=context.auth,now=context.now;
 
     // Build canonical digest independent of incoming payload key order.
     var keys=Object.keys(command.payload).sort(),pairs=keys.map(function(k){
@@ -265,6 +287,10 @@ function d331P007Operate_(sessionToken,eventId,command){
          !d331P007Id_(saved.EntityID))d331P007Deny_();
       return {status:'REPLAYED',kind:command.kind,entityId:saved.EntityID};
     }
+    // A fresh request ID cannot bypass an interrupted Case write for this Event.
+    if(command.kind==='case'&&ledgerRows.some(function(r){
+      return r[1]===eventId&&r[3]===spec.capability&&r[5]==='PENDING';
+    }))d331P007Deny_();
 
     // Validate all domain records and FK snapshot BEFORE the first write.
     var all=Object.create(null);
@@ -315,5 +341,31 @@ function d331P007Operate_(sessionToken,eventId,command){
     return {status:command.mode==='create'?'CREATED':'UPDATED',
       kind:command.kind,entityId:prepared.id,revision:prepared.revision};
   }catch(e){d331P007Deny_();}
+  finally{if(acquired)lock.releaseLock();}
+}
+
+// Status is authorized against current session/grants, never an old request's authority.
+function d331P007CaseWriteStatus_(sessionToken,eventId,requestId){
+  d331P007RequireReady_();
+  if(!d331P007Id_(eventId)||!d331P007Id_(requestId))d331P007Deny_();
+  var lock=null,acquired=false;
+  try{
+    lock=LockService.getScriptLock();
+    if(!lock||!lock.tryLock(15000))d331P007Deny_();
+    acquired=true;
+    var spec=D331_P007_KIND_.case;
+    var context=d331P007Authorize_(sessionToken,eventId,spec);
+    var rows=d331P007Read_(context.tables.DengueRequestLedger,'DengueRequestLedger');
+    var found=rows.filter(function(r){return r[0]===requestId;});
+    if(!found.length)return {status:'NOT_FOUND'};
+    if(found.length!==1)d331P007Deny_();
+    var saved=d331P007Object_('DengueRequestLedger',found[0]);
+    if(saved.EventID!==eventId||saved.PrincipalID!==context.user.userId||
+       saved.Operation!==spec.capability)d331P007Deny_();
+    if(saved.Phase==='PENDING')return {status:'PENDING'};
+    if(saved.Phase!=='COMMITTED'||saved.EntityType!=='CASE'||
+       !d331P007Id_(saved.EntityID))d331P007Deny_();
+    return {status:'COMMITTED',caseId:saved.EntityID};
+  }catch(ignore){d331P007Deny_();}
   finally{if(acquired)lock.releaseLock();}
 }

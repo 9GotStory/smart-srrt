@@ -116,6 +116,7 @@
 
   function updateAuthBox(){
     if(typeof d331F02CaseRead_!=='undefined')d331F02CaseRead_.refresh();
+    if(typeof d331F02CaseWrite_!=='undefined')d331F02CaseWrite_.refresh();
     if(typeof d331P024RecordsMockBridge_!=='undefined')
       d331P024RecordsMockBridge_.reconcile();
     const box=el('authBox');
