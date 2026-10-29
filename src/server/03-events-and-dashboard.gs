@@ -27,6 +27,39 @@ function getDashboardData(sessionToken, filter) {
   return enrichEventAttachments_(enrichEventOwners_(getFilteredEventRows_(filter || {})));
 }
 
+// F02-R source interface only. Default Native26 has no registered Case reader.
+function listDengueCasesForEvent(sessionToken, eventId) {
+  try {
+    if (typeof D331_G1A_ENABLED === 'undefined' || D331_G1A_ENABLED !== true ||
+        typeof d331P022b2ListCasesForEvent_ !== 'function') throw new Error();
+    // Authentication, binding, grants and all policy flags belong to the
+    // existing private reader, never to caller-supplied role/context objects.
+    var value = d331P022b2ListCasesForEvent_(sessionToken, eventId);
+    if (!value || Object.keys(value).sort().join('|') !==
+        'areaId|canEnable|canWrite|cases|clinicalPolicyApproved|eventId|revision|slaAssessment|status' ||
+        value.status !== 'READ_ONLY' || value.eventId !== eventId ||
+        !d331IsUuid_(value.eventId) || value.eventId !== value.eventId.toLowerCase() ||
+        !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+        typeof value.areaId !== 'string' || !value.areaId.trim() ||
+        value.slaAssessment !== 'NOT_EVALUATED' || value.clinicalPolicyApproved !== false ||
+        value.canWrite !== false || value.canEnable !== false ||
+        !Array.isArray(value.cases) || value.cases.length > 100) throw new Error();
+    var seen = Object.create(null);
+    var cases = value.cases.map(function(item) {
+      if (!item || Object.keys(item).sort().join('|') !== 'caseId|caseRevision|caseStatus' ||
+          typeof item.caseId !== 'string' || !d331IsUuid_(item.caseId) ||
+          item.caseId !== item.caseId.toLowerCase() || seen[item.caseId] ||
+          !Number.isSafeInteger(item.caseRevision) || item.caseRevision < 1 ||
+          item.caseStatus !== 'ACTIVE') throw new Error();
+      seen[item.caseId] = true;
+      return {caseId:item.caseId, caseRevision:item.caseRevision, caseStatus:item.caseStatus};
+    });
+    return {contractVersion:'D331_CASE_LIST_V1', status:'READ_ONLY',
+      eventId:value.eventId, revision:value.revision, areaId:value.areaId, cases:cases,
+      slaAssessment:'NOT_EVALUATED', clinicalPolicyApproved:false, canWrite:false, canEnable:false};
+  } catch (ignore) { throw new Error('D331_UNAVAILABLE'); }
+}
+
 function getPublicDashboardData(filter) {
   return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
 }
