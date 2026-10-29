@@ -98,7 +98,7 @@ Product backlog และข้อกำหนดที่เหลืออย�
 
 ทะเบียนล่าสุดระบุ existing **DEV Web App v20**, owner-reported **mock-only UAT 8/8** และไม่มี Production environment; เป็น dated owner evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Current Script↔Deployment↔Workbook binding ยังไม่ re-attest ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
 
-การอนุมัติรอบนี้ครอบคลุม Documentation Alignment และ Draft PR เท่านั้น ยังไม่เริ่ม F01/P0-31B. หลัง PO ตรวจรับเอกสาร จึงเสนอแผน feature นั้นก่อนสร้าง/ปรับ Issue; ไม่มีการอนุมัติ Merge/Deploy/Migration/ข้อมูลจริงจาก green CI
+**F01 / P0-31B source/offline completion — 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged ที่ `f8418c200564da7b9ef9370d350ad890b6a910ca`, post-merge CI ผ่าน และ #257/#258/#259 CLOSED/completed; ดู [F01 evidence](docs/implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records). งานถัดไปรอ PO เลือกและอนุมัติแผนเฉพาะ feature ตาม workflow; source/offline completion ไม่ใช่ Browser UAT, Deploy, Migration หรือสิทธิ์ข้อมูลจริง และ D331 ยังคง OFF
 
 ## เริ่มอ่านที่นี่
 

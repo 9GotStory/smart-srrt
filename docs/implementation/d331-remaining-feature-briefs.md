@@ -36,7 +36,7 @@ These IDs are **document-local backlog labels**, **not GitHub Issue numbers**. M
 
 | ID | Feature | Current state | Expected capability | Dependence / gate |
 | --- | --- | --- | --- | --- |
-| **F01 / P0-31B** | Case→Plan mock UI and lifecycle | T1 composed UI plus T2 registered Records/Auth integration implemented with S1–S3 offline tests; exact Case/Plan mirrors, standalone partials unregistered | Existing Records disclosure offers synthetic Case→Plan preview with shared reset/session/disclosure fences | T2 exact-HEAD CI, independent review and separate PO merge gate remain; live data/deploy HOLD |
+| **F01 / P0-31B** | Case→Plan mock UI and lifecycle | T1 composed UI plus T2 registered Records/Auth integration implemented with S1–S3 offline tests; exact Case/Plan mirrors, standalone partials unregistered | Existing Records disclosure offers synthetic Case→Plan preview with shared reset/session/disclosure fences | Source/offline complete: #261 merged, exact post-merge CI PASS and #257/#258/#259 CLOSED/completed on 29 October 2026; live data/deploy HOLD |
 | **F02** | Event→Dengue Case real workflow | Case list/add/edit mocked; private reader/CRUD candidates OFF | Authenticated, Event-linked Case read and eventually mutation with proper revision/status | D2/P1/P2, Security, verified DEV binding; separate read/write gates |
 | **F03** | Plans / investigation workflow | Synthetic Plan model exists; no live Plans workflow | Plan per authorized Case/Event, responsible staff, status and revision | Depends on Case domain decisions and permitted backend access |
 | **F04** | Control Actions | Source/schema candidates only | Log planned/in-progress/completed control activities, results, dates and evidence | Plan linkage, bounded rights and validations |
@@ -67,7 +67,9 @@ The bridge exposes `reconcile()` for observed session/context changes and `dispo
 
 **T1 start gate satisfied:** [PR #260](https://github.com/9GotStory/smart-srrt/pull/260) was independently reviewed at `2515b3395396ed7a67cf9f2957e55f9b0ced9dd7`, separately PO-approved and merged to `a46c2c18cac8423db2d23350a58b004b137b1863`; [post-merge CI](https://github.com/9GotStory/smart-srrt/actions/runs/39746229741) passed at that exact SHA before T2 started.
 
-**Incomplete / not verified:** F01 source and S1–S3 automated offline integration are implemented. T2 exact-HEAD CI, separate independent review, PO merge approval and post-merge verification are later gates; parent [#257](https://github.com/9GotStory/smart-srrt/issues/257) remains open pending them. Fake-DOM/VM evidence is not Browser UAT, deployed observation, real-data or clinical acceptance. Deployment and data/clinical authorization remain separate HOLD gates.
+**F01 source/offline completion — 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) was independently reviewed at exact HEAD `39ed9409f7e8dc82a03adbbc33cfa571a45af8f3` against base `a46c2c18cac8423db2d23350a58b004b137b1863`, with Standards/Spec PASS and zero findings; the PO supplied the separate non-author ChatGPT review report and separately approved Merge. [Exact-head CI #40787548022](https://github.com/9GotStory/smart-srrt/actions/runs/40787548022) passed. Squash merge `f8418c200564da7b9ef9370d350ad890b6a910ca` has the approved base as its sole parent and the identical reviewed tree. [Post-merge main CI #40791741358](https://github.com/9GotStory/smart-srrt/actions/runs/40791741358) completed SUCCESS at that exact merge SHA. [Parent #257](https://github.com/9GotStory/smart-srrt/issues/257) and T1/T2 [#258](https://github.com/9GotStory/smart-srrt/issues/258)/[#259](https://github.com/9GotStory/smart-srrt/issues/259) are CLOSED/completed for the approved synthetic source/offline acceptance criteria.
+
+**Still not verified / authorized:** Fake-DOM/VM evidence is not Browser UAT, deployed observation, real-data or clinical acceptance. D331 remains OFF and clinical NOT_EVALUATED; deployment, migration and data/privacy/security/binding gates remain separate HOLD gates. Broader #215/#238/#248 and separate Draft #253 are not closed or approved by F01 completion.
 
 **Planning gate:** Source-only and local/synthetic tests are permissible; any registration of new HTML in the Native package or actual DEV deployment needs its own reviewed change/authorization.
 
@@ -168,19 +170,19 @@ Use existing [#238](https://github.com/9GotStory/smart-srrt/issues/238), [#248](
 
 1. Read this document; inspect current `main`, applicable `AGENTS.md`, `README.md`, existing source and the relevant GitHub Issue/PR. Reconcile later changes; this document is a dated snapshot, not a perpetual truth.
 2. List the **actually installed** Matt Pocock Skills. Select the relevant skill(s), e.g. `codebase-design` for a codebase boundary or `domain-modeling` for case/plan semantics. **Do not assume uninstalled skill names or automatically invoke every skill**.
-3. Take exactly **one** feature brief at a time, starting with **F01/P0-31B**. Produce a proposed scoped implementation plan containing: current code evidence, intended user workflow, source/data boundaries, smallest coherent changes, acceptance/negative tests, dependencies/blocked decisions, CI verification, and the specific approval needed for the next action.
+3. Take exactly **one PO-selected** feature brief at a time. F01/P0-31B is source/offline complete; obtain the PO's next-feature selection before starting F02–F08. Produce a proposed scoped implementation plan containing: current code evidence, intended user workflow, source/data boundaries, smallest coherent changes, acceptance/negative tests, dependencies/blocked decisions, CI verification, and the specific approval needed for the next action.
 4. Explicitly separate **source-only/mock work that can progress now** from **live data and clinical steps blocked by human policy**. If a gate is blocked, do not invent permission or unnecessary substitute infrastructure; prepare only permitted mock/tests and identify the precise decision needed.
 5. **Stop after presenting the plan for Product Owner review. Do not implement, create GitHub Issues, push, merge, deploy, read/write real Sheets or create grants in the same step.** First reconcile existing Issues to avoid duplicates.
 6. **After the Product Owner approves that feature's plan**, create or update **one** scoped GitHub Issue with the agreed implementation scope, acceptance/negative tests, dependencies and explicit approval gates. Then implement that Issue with TDD and create a Draft PR for ChatGPT independent review of exact SHA/diff/CI. Merge and deployment require separate authorization.
-7. When a feature is complete, update its brief with **actual evidence** and move to the next feature; no giant multi-feature PR and no standing authorization.
+7. When a feature is complete, update its brief with **actual evidence** and obtain the PO's next-feature selection; no giant multi-feature PR and no standing authorization.
 
-### Suggested initial Codex instruction (copy verbatim)
+### Suggested Codex instruction for the next PO-selected feature
 
 ```text
 Project: Smart SRRT / 9GotStory/smart-srrt.
 Read docs/implementation/d331-remaining-feature-briefs.md, the repo's AGENTS.md/README.md where available, and current main/source history.
-Use the actually installed Matt Pocock Skills to PLAN F01 / P0-31B only. Select relevant skills rather than invoking every skill.
-Produce a bounded, implementation-ready plan with evidence-backed current state, user workflow, minimal scope, source/test impact, negative cases (especially Case reset/reseed -> Plan stale state, logout, close, queued saves), precise acceptance criteria, CI, and all approval gates.
+F01 / P0-31B is complete for synthetic source/offline delivery. Use the actually installed Matt Pocock Skills to PLAN only the next feature explicitly selected by the Product Owner. If no feature is selected, request that selection before starting. Select relevant skills rather than invoking every skill.
+Produce a bounded, implementation-ready plan with evidence-backed current state, user workflow, minimal scope, source/test impact, feature-specific negative cases, precise acceptance criteria, CI, and all approval gates. Reuse completed F01 behavior and retain its lifecycle/session regressions where relevant.
 Keep D331 OFF; use synthetic/offline data only. Do not edit files, commit, create a GitHub Issue or PR, enable any flag, read/write Google Sheets or deploy yet. Wait for Product Owner approval of the plan; then create/update a scoped GitHub Issue before implementation.
 ```
 
