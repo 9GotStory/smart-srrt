@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {readOrderedClientScripts} from './helpers/native-client.mjs';
 
 const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const EVENT='00000000-0000-4000-8000-000000002300';
@@ -17,7 +18,7 @@ class Element {
   focus(){this.ownerDocument.activeElement=this;}
 }
 function harness(){
-  const doc={activeElement:null,createElement(tag){return new Element(tag,doc);}};
+  const doc={readyState:'loading',activeElement:null,createElement(tag){return new Element(tag,doc);}};
   const root=new Element('div',doc),ctx=vm.createContext({Promise,Date});
   for(const path of ['03m-client-d331-mvp01-offline.html','03n-client-d331-case-plan-offline.html']){
     const script=read('src/web/'+path).match(/<script>\n([\s\S]*?)\n<\/script>/)[1];
@@ -253,5 +254,327 @@ test('P0-31B invalid visible edits disable Save without replacing fields or savi
     caseSave.fire('click');await settle();
     assert.equal(h.controller.snapshot().cases.cases[0].caseRevision,1);
     h.button('ยกเลิก').fire('click');
+  }
+});
+
+function nativeHarness(role='Admin'){
+  const elements=new Map(),calls=[];
+  // DOM boundary: attribute records arrive in a microtask, before toggle tasks.
+  const observers=new Set();
+  class MutationObserver {
+    constructor(callback){this.callback=callback;this.records=[];this.target=null;this.scheduled=false;}
+    observe(target,options){this.target=target;this.options=options;observers.add(this);}
+    takeRecords(){return this.records.splice(0);}
+    disconnect(){observers.delete(this);this.records=[];this.target=null;}
+    enqueue(target,oldValue){
+      if(this.target!==target||!this.options.attributes||
+         !this.options.attributeFilter.includes('open'))return;
+      this.records.push({type:'attributes',target,attributeName:'open',
+        oldValue:this.options.attributeOldValue?oldValue:null});
+      if(this.scheduled)return;
+      this.scheduled=true;
+      queueMicrotask(()=>{
+        this.scheduled=false;const records=this.takeRecords();
+        if(records.length)this.callback(records,this);
+      });
+    }
+  }
+  const doc={readyState:'loading',activeElement:null,createElement(tag){return new Element(tag,doc);},
+    getElementById(id){
+      if(!elements.has(id)){
+        const node=new Element('div',doc);node.id=id;node.value='';node.style={};node.dataset={};
+        node.classList={add(){},remove(){},toggle(){},contains(){return false;}};
+        node.options=[];node.getAttribute=key=>node.attrs[key]||'';
+        node.removeAttribute=key=>delete node.attrs[key];node.querySelector=()=>null;
+        elements.set(id,node);
+      }
+      return elements.get(id);
+    },querySelectorAll(){return[];},querySelector(){return null;},addEventListener(){},
+    documentElement:{style:{setProperty(){}}}};
+  const ctx=vm.createContext({Promise,Date,document:doc,console,MutationObserver,
+    localStorage:{getItem(){return null;},setItem(){},removeItem(){}},
+    setTimeout(){},clearTimeout(){},setInterval(){return 1;},clearInterval(){}});
+  for(const {path,code} of readOrderedClientScripts()){
+    const script=path==='src/web/04-browser-app.html'?code.replace(/^\s*boot\(\);\s*$/m,''):code;
+    new vm.Script(script,{filename:path}).runInContext(ctx,{timeout:2500});
+  }
+  const run=script=>vm.runInContext(script,ctx);
+  ctx.gs=(...args)=>{calls.push(args);return Promise.resolve(null);};
+  ctx.loadDashboard=async()=>{};ctx.destroyDashboardCharts=()=>{};ctx.toast=()=>{};
+  run('token="TEST-NATIVE-SESSION";currentUser={role:'+JSON.stringify(role)+',name:"Synthetic",email:"test@example.invalid"};');
+  const root=doc.getElementById('d331-p018-preview'),region=doc.getElementById('d331-p024-region');
+  let opened=false;
+  Object.defineProperty(root,'open',{get:()=>opened,set(value){
+    const oldValue=opened?'':null;opened=!!value;
+    if(!opened&&oldValue===null)return;
+    for(const observer of observers)observer.enqueue(root,oldValue);
+  }});
+  root.open=false;region.hidden=true;
+  function nodes(predicate){
+    const found=[];function walk(n){if(predicate(n))found.push(n);n.children.forEach(walk);}walk(region);return found;
+  }
+  const button=label=>nodes(n=>n.tagName==='button'&&n.textContent===label)[0];
+  const field=label=>nodes(n=>n.attrs['aria-label']===label)[0];
+  const open=value=>{root.open=value;root.fire('toggle');};
+  const text=()=>nodes(()=>true).map(n=>n.textContent).join(' ');
+  const episode=value=>{const input=field('EpisodeKey จำลอง');input.value=value;input.fire('input');};
+  return {ctx,run,doc,root,region,nodes,button,field,open,text,episode,calls};
+}
+
+test('P0-31B S3 coalesced disclosure close/reopen starts from a fresh seed without saved Plans',async()=>{
+  const h=nativeHarness();h.run('renderTables()');h.open(true);await settle();
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-40');
+  h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+  assert.match(h.text(),/TEST-EP-40/);
+  const previous=h.region.children[0];
+  h.root.open=false;h.root.open=true;
+  await settle();h.root.fire('toggle');await settle();
+  assert.notEqual(h.region.children[0],previous,'close/reopen creates a new workspace');
+  assert.match(h.text(),/ยังไม่มี Plan ตัวอย่าง/);
+  assert.doesNotMatch(h.text(),/TEST-EP-40/);
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+  assert.equal(h.calls.length,0);
+});
+
+test('P0-31B S3 coalesced disclosure close/reopen denies queued Case and Plan before observer delivery',async()=>{
+  for(const type of ['Case','Plan']){
+    const h=nativeHarness();let controller;
+    const bridge=h.ctx.d331P023OfflineCaseWorkspace_.createRecordsBridge({
+      root:h.root,region:h.region,
+      session:()=>h.run('({token,user:currentUser,allowed:!!token&&!!roleCanRecord()})'),
+      mountView:(root,options)=>{controller=h.ctx.d331P023OfflineCaseWorkspace_.mountComposed(root,options);return controller;}
+    });
+    bridge.connect();h.open(true);await settle();
+    if(type==='Plan'){
+      h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-41');
+    }else h.button('แก้ไขตัวอย่าง').fire('click');
+    const previous=controller;
+    const retained=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');
+    retained.fire('click');h.root.open=false;h.root.open=true;
+    assert.throws(()=>previous.snapshot(),/SYNTHETIC_ONLY/,'old state is invalid before queued observer or save work');
+    await settle();h.root.fire('toggle');
+    const fresh=h.region.children[0];retained.fire('click');await settle();
+    assert.equal(h.region.children[0],fresh,'retained controls cannot repaint the new lifetime');
+    assert.equal(controller.snapshot().plans.plans.length,0);
+    assert.equal(controller.snapshot().cases.cases[0].caseRevision,1);
+    assert.equal(h.calls.length,0);bridge.dispose();
+  }
+});
+
+test('P0-31B S3 actual registered Records uses composed Plan flow only for existing authorized roles',async()=>{
+  for(const role of ['Staff','Admin','Manager','Super Admin']){
+    const h=nativeHarness(role);h.run('renderTables()');
+    assert.equal(h.region.children.length,0,'no startup mount');
+    h.open(true);
+    if(role==='Staff'){
+      assert.equal(h.region.children.length,0);assert.equal(h.root.open,false);continue;
+    }
+    assert.ok(h.button('สร้าง Plan ตัวอย่าง'));
+    h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-21');
+    assert.equal(h.doc.activeElement,h.field('EpisodeKey จำลอง'));
+    h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+    assert.match(h.text(),/TEST-EP-21/);assert.match(h.text(),/OPEN/);
+    assert.equal(h.nodes(n=>n.tagName==='tbody')[1].children.length,1);
+    assert.equal(h.calls.length,0);
+  }
+  const guest=nativeHarness();guest.run('token="";currentUser=null;renderTables()');guest.open(true);
+  assert.equal(guest.region.children.length,0);
+});
+
+test('P0-31B S3 auth reconciliation clears both drafts immediately and fences queued Case/Plan after identity or permission change',async()=>{
+  for(const kind of ['token','token-return','account','account-return','userReplacement','userId','email','allowed-role','permission','loss-return']){
+    for(const type of ['Case','Plan']){
+      const h=nativeHarness();h.run('renderTables()');h.open(true);
+      if(type==='Plan'){
+        h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-22');
+      }else{
+        h.button('เพิ่ม Case ตัวอย่าง').fire('click');
+        const date=h.field('วันที่เริ่มป่วยจำลอง');date.value='2026-10-22';date.fire('input');
+      }
+      const originalUser=h.run('currentUser'),originalToken=h.run('token');
+      const oldSave=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');oldSave.fire('click');
+      if(kind==='token'||kind==='token-return')h.run('token="TEST-NEW-TOKEN"');
+      if(kind==='account'||kind==='account-return')h.run('currentUser={role:"Admin",name:"Different synthetic account"}');
+      if(kind==='userId')h.run('currentUser.userId="TEST-OTHER-USER-ID"');
+      if(kind==='email')h.run('currentUser.email="different@example.invalid"');
+      if(kind==='allowed-role')h.run('currentUser.role="Manager"');
+      if(kind==='userReplacement')h.run('currentUser={...currentUser}');
+      if(kind==='permission'||kind==='loss-return')h.run('currentUser.role="Staff"');
+      h.run('updateAuthBox()');
+      assert.equal(h.region.children.length,0,kind+' '+type+' clears synchronously');
+      assert.equal(h.root.open,false);
+      if(kind==='token-return'){h.ctx.restoredToken=originalToken;h.run('token=restoredToken;updateAuthBox()');}
+      if(kind==='account-return'){h.ctx.restoredUser=originalUser;h.run('currentUser=restoredUser;updateAuthBox()');}
+      if(kind==='loss-return')h.run('currentUser.role="Admin";updateAuthBox()');
+      if(kind==='permission')h.run('currentUser.role="Admin";updateAuthBox()');
+      h.open(true);const fresh=h.region.children[0];
+      oldSave.fire('click');await settle();
+      assert.equal(h.region.children[0],fresh,kind+' old completion does not repaint');
+      assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children.length,1);
+      assert.equal(h.nodes(n=>n.tagName==='tbody').length,1);
+      assert.doesNotMatch(h.text(),/TEST-EP-22/);
+      assert.equal(h.calls.length,0);
+    }
+  }
+});
+
+test('P0-31B S3 precommit fence sees closed disclosure and unreconciled token or permission loss',async()=>{
+  for(const kind of ['close','token','permission']){
+    for(const type of ['Case','Plan']){
+      const h=nativeHarness();h.run('renderTables()');h.open(true);
+      if(type==='Plan'){
+        h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-23');
+      }else{
+        h.button('แก้ไขตัวอย่าง').fire('click');
+        const field=h.field('Classification จำลอง');field.value='CONFIRMED';field.fire('input');
+      }
+      h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง').fire('click');
+      if(kind==='close')h.root.open=false;
+      if(kind==='token'||kind==='token-return')h.run('token="TEST-CHANGED-WITHOUT-REFRESH"');
+      if(kind==='permission')h.run('currentUser.role="Staff"');
+      await settle();
+      assert.equal(h.region.children.length,0,kind+' '+type+' must clear before commit');
+      h.run('currentUser.role="Admin";updateAuthBox()');h.open(true);
+      assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+      assert.equal(h.nodes(n=>n.tagName==='tbody').length,1);
+    }
+  }
+});
+
+test('P0-31B S3 logout invalidates pending saves synchronously before its existing RPC completes',async()=>{
+  for(const type of ['Case','Plan']){
+    const h=nativeHarness();h.run('renderTables()');h.open(true);
+    if(type==='Plan'){
+      h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-24');
+    }else h.button('แก้ไขตัวอย่าง').fire('click');
+    const retained=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');retained.fire('click');
+    const logout=h.run('doLogout()');
+    assert.equal(h.region.children.length,0);assert.equal(h.root.open,false);
+    h.run('token="TEST-NEXT-SESSION";currentUser={role:"Admin"};updateAuthBox()');
+    h.open(true);const fresh=h.region.children[0];retained.fire('click');
+    await settle();await logout;
+    assert.equal(h.region.children[0],fresh);
+    assert.equal(h.nodes(n=>n.tagName==='tbody').length,1);
+    assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+    assert.equal(h.calls.filter(args=>args[0]==='logout').length,1);
+    assert.equal(h.calls.some(args=>/Dengue|Case|Plan/i.test(args[0])),false);
+  }
+});
+
+test('P0-31B S3 filtering preserves draft and fields while close/reopen resets both models and rejects old handlers',async()=>{
+  const h=nativeHarness();h.run('renderTables()');h.open(true);
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-25');
+  const input=h.field('EpisodeKey จำลอง');
+  h.root.open=true;await settle(); // Same-value attribute writes are not a close.
+  h.run('el("recordSearch").value="synthetic filter";renderTables();resetRecordFilters();renderTables()');
+  assert.equal(h.field('EpisodeKey จำลอง'),input);assert.equal(input.value,'TEST-EP-25');
+  assert.equal(h.root.listeners.toggle.length,2,'one existing count-preview and one Case/Plan bridge listener');
+  const save=h.button('บันทึก Plan ตัวอย่าง');save.fire('click');
+  h.open(false);assert.equal(h.region.children.length,0);
+  h.open(true);const fresh=h.region.children[0];save.fire('click');await settle();
+  assert.equal(h.region.children[0],fresh);
+  assert.match(h.text(),/ยังไม่มี Plan ตัวอย่าง/);
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-26');
+  h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+  h.button('แก้ไขตัวอย่าง').fire('click');
+  const classification=h.field('Classification จำลอง');classification.value='CONFIRMED';classification.fire('input');
+  h.button('บันทึกแบบจำลอง').fire('click');await settle();
+  assert.match(h.text(),/TEST-EP-26/,'ordinary Case edits retain Plan linkage');
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'2');
+  h.button('ล้างตัวอย่าง').fire('click');assert.doesNotMatch(h.text(),/TEST-EP-26/);
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+});
+
+test('P0-31B S3 registered bridge disposes models before commit on observed synthetic context changes and return',async()=>{
+  for(const type of ['Case','Plan']){
+    for(const context of [null,'REAL-EVENT-IS-NOT-A-SYNTHETIC-CONTEXT','return']){
+      const h=nativeHarness();let event=EVENT,controller;
+      const bridge=h.ctx.d331P023OfflineCaseWorkspace_.createRecordsBridge({
+        root:h.root,region:h.region,
+        session:()=>({token:'TEST-SYNTHETIC-SESSION',user:h.ctx.syntheticUser,allowed:true}),
+        syntheticEvent:()=>event,
+        mountView:(root,options)=>{controller=h.ctx.d331P023OfflineCaseWorkspace_.mountComposed(root,options);return controller;}
+      });
+      h.ctx.syntheticUser={role:'Admin'};
+      bridge.connect();h.open(true);
+      const previous=controller;
+      if(type==='Plan'){
+        h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-27');
+      }else h.button('แก้ไขตัวอย่าง').fire('click');
+      const save=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');save.fire('click');
+      event=context==='return'?'FOREIGN-SYNTHETIC-CONTEXT':context;
+      if(context==='return'){bridge.reconcile();event=EVENT;}
+      await settle();
+      assert.equal(h.region.children.length,0);
+      assert.throws(()=>previous.snapshot(),/SYNTHETIC_ONLY/,'disposed models cannot expose or resurrect old state');
+      event=EVENT;h.open(true);const fresh=h.region.children[0];save.fire('click');previous.reset();previous.dispose();await settle();
+      assert.equal(h.region.children[0],fresh);
+      assert.equal(controller.snapshot().plans.plans.length,0);
+      assert.equal(controller.snapshot().cases.cases[0].caseRevision,1);
+      bridge.dispose();h.open(false);h.open(true);
+      assert.equal(h.region.children.length,0,'disposed bridge listeners cannot remount');
+    }
+  }
+});
+
+test('P0-31B S3 actual Records reset during queued Case/Plan save invalidates reused seed identities and old buttons',async()=>{
+  for(const type of ['Case','Plan']){
+    const h=nativeHarness();h.run('renderTables()');h.open(true);
+    if(type==='Plan'){
+      h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-28');
+    }else h.button('แก้ไขตัวอย่าง').fire('click');
+    const save=h.button(type==='Plan'?'บันทึก Plan ตัวอย่าง':'บันทึกแบบจำลอง');save.fire('click');
+    h.button('ล้างตัวอย่าง').fire('click');const fresh=h.region.children[0];
+    save.fire('click');await settle();
+    assert.equal(h.region.children[0],fresh);
+    assert.equal(h.nodes(n=>n.tagName==='tbody')[0].children[0].children[1].textContent,'1');
+    assert.match(h.text(),/ยังไม่มี Plan ตัวอย่าง/);assert.doesNotMatch(h.text(),/TEST-EP-28/);
+  }
+});
+
+test('P0-31B S3 Native Plan validation/cancel/duplicate/busy states retain bounded errors and accessible controls',async()=>{
+  const h=nativeHarness();h.run('renderTables()');h.open(true);
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');
+  assert.match(h.text(),new RegExp(EVENT));assert.match(h.text(),new RegExp(CASE));
+  h.episode('PRIVATE INVALID CONTENT');
+  assert.equal(h.button('บันทึก Plan ตัวอย่าง').disabled,true);
+  assert.match(h.text(),/EpisodeKey ไม่ถูกต้อง/);assert.doesNotMatch(h.text(),/PRIVATE INVALID CONTENT/);
+  h.button('ยกเลิก Plan').fire('click');
+  assert.equal(h.doc.activeElement,h.button('สร้าง Plan ตัวอย่าง'));
+  assert.match(h.text(),/ยังไม่มี Plan ตัวอย่าง/);
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-29');
+  const save=h.button('บันทึก Plan ตัวอย่าง');save.fire('click');save.fire('click');
+  assert.equal(h.region.children[0].attrs['aria-busy'],'true');
+  assert.equal(h.button('เพิ่ม Case ตัวอย่าง').disabled,true);await settle();
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[1].children.length,1);
+  h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-29');
+  h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+  assert.equal(h.nodes(n=>n.tagName==='tbody')[1].children.length,1);
+  assert.match(h.text(),/ไม่สามารถดำเนินการตัวอย่างได้/);
+  assert.equal(h.nodes(n=>n.attrs.role==='status'&&n.attrs['aria-live']==='polite').length,1);
+  assert.equal(h.calls.length,0);
+});
+
+test('P0-31B S3 registered session bridge disposes model snapshots synchronously before queued commit',async()=>{
+  for(const type of ['Case','Plan']){
+    const h=nativeHarness();let controller;
+    const bridge=h.ctx.d331P023OfflineCaseWorkspace_.createRecordsBridge({
+      root:h.root,region:h.region,
+      session:()=>h.run('({token,user:currentUser,allowed:!!token&&!!roleCanRecord()})'),
+      mountView:(root,options)=>{controller=h.ctx.d331P023OfflineCaseWorkspace_.mountComposed(root,options);return controller;}
+    });
+    bridge.connect();h.open(true);
+    h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-30');
+    h.button('บันทึก Plan ตัวอย่าง').fire('click');await settle();
+    assert.equal(controller.snapshot().plans.plans.length,1);
+    if(type==='Case')h.button('แก้ไขตัวอย่าง').fire('click');
+    else {h.button('สร้าง Plan ตัวอย่าง').fire('click');h.episode('TEST-EP-31');}
+    h.button(type==='Case'?'บันทึกแบบจำลอง':'บันทึก Plan ตัวอย่าง').fire('click');
+    const previous=controller;
+    h.run('currentUser.role="Staff"');bridge.reconcile();
+    assert.throws(()=>previous.snapshot(),/SYNTHETIC_ONLY/,'state is disposed synchronously, not only hidden');
+    h.run('currentUser.role="Admin"');h.open(true);await settle();
+    assert.equal(controller.snapshot().plans.plans.length,0);
+    assert.equal(controller.snapshot().cases.cases[0].caseRevision,1);
   }
 });

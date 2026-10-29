@@ -8,6 +8,7 @@ const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const native=read('src/web/03h-client-event-records.html');
 const nativeStyles=read('src/web/01-styles.html');
 const canonical=read('src/web/03m-client-d331-mvp01-offline.html');
+const canonicalPlan=read('src/web/03n-client-d331-case-plan-offline.html');
 const layout=read('src/web/02-app-layout.html');
 const records=read('src/web/03h-client-event-records.html');
 const reader=read('src/dengue/15-p0-22b2-case-read-integration.gs');
@@ -73,6 +74,11 @@ test('P0-25 registered style/script are exact mirrors of separate canonical offl
  assert.equal(typeof canonicalJs,'string');
  assert.equal(extract(nativeStyles,cssMark,'\n\n/* UX-R1 Dashboard UI */'),canonicalCss);
  assert.equal(extract(native,jsMark,'\n</script>'),canonicalJs);
+ const planJs=canonicalPlan.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
+ assert.equal(typeof planJs,'string');
+ assert.equal(extract(native,'// P0-31B: exact Plan mirror begins.\n','\n// P0-31B: exact Plan mirror ends.'),planJs);
+ assert.equal(GAS_HTML_SOURCES.some(x=>x.includes('03n-client-d331-case-plan-offline')),false);
+ assert.doesNotMatch(planJs,/google\.script|SpreadsheetApp|PropertiesService|fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|allData|setValues?\s*\(|appendRow\s*\(/i);
  assert.doesNotMatch(canonicalJs,/google\.script|SpreadsheetApp|PropertiesService|fetch\s*\(|XMLHttpRequest|WebSocket|localStorage|sessionStorage|allData|setValues?\s*\(|appendRow\s*\(/i);
  assert.match(canonicalJs,/SYNTHETIC_ONLY/);
  assert.match(canonicalJs,/NOT_EVALUATED/);
@@ -94,7 +100,7 @@ test('P0-25 only explicit authenticated Records preview opening shows local synt
  assert.equal(h.region.hidden,false);
  assert.ok(h.button('เพิ่ม Case ตัวอย่าง'));
  assert.ok(h.button('แก้ไขตัวอย่าง'));
- assert.equal(h.button('สร้าง Plan ตัวอย่าง'),undefined,'T1 retains the Native Records Case-only view');
+ assert.ok(h.button('สร้าง Plan ตัวอย่าง'),'T2 composes the exact Plan model into existing Records');
  assert.equal(h.nodes(n=>n.tagName==='table').length,1);
  assert.equal(h.nodes(n=>n.textContent.includes('ตัวอย่างเท่านั้น · D331 OFF')).length,1);
  assert.equal(h.nodes(n=>n.textContent.includes('NOT_EVALUATED')).length,1);

@@ -1,4 +1,4 @@
-<!-- P0-31A: UNREGISTERED synthetic Case -> Plan model. No Native packaging, real UI, RPC or Google IO. -->
+<!-- P0-31A: UNREGISTERED standalone Case -> Plan model; exact script mirror in existing Records. Synthetic-only, no RPC or Google IO. -->
 <script>
 /**
  * P0-31A: Browser-memory-only Plan draft built on existing P0-23 synthetic Case model.
@@ -9,34 +9,34 @@ var d331P031aOfflineCasePlan_=(function(){
   var EVENT='00000000-0000-4000-8000-000000002300';
   var CASE_RE=/^00000000-0000-4000-8000-0000000023(?:0[1-9]|[1-9][0-9])$/;
   var EPISODE_RE=/^TEST-EP-[0-9]{1,3}$/;
-  function deny(){throw new Error('D331_P031A_SYNTHETIC_ONLY');}
+  function d331P031aDeny_(){throw new Error('D331_P031A_SYNTHETIC_ONLY');}
   function validCases(source){
     if(!source||typeof source.snapshot!=='function'||
-       typeof source.reset!=='function'||typeof source.resetGeneration!=='function')deny();
+       typeof source.reset!=='function'||typeof source.resetGeneration!=='function')d331P031aDeny_();
     var snapshot=source.snapshot();
     if(!snapshot||snapshot.kind!=='SYNTHETIC_ONLY'||
        snapshot.eventId!==EVENT||snapshot.canEnable!==false||
        snapshot.canWrite!==false||snapshot.clinicalPolicyApproved!==false||
        snapshot.slaAssessment!=='NOT_EVALUATED'||
        !Number.isSafeInteger(source.resetGeneration())||source.resetGeneration()<0||
-       !Array.isArray(snapshot.cases)||snapshot.cases.length>99)deny();
+       !Array.isArray(snapshot.cases)||snapshot.cases.length>99)d331P031aDeny_();
     var ids=Object.create(null);
     snapshot.cases.forEach(function(row){
       if(!row||!CASE_RE.test(row.caseId)||
          !['ACTIVE','VOID'].includes(row.caseStatus)||
          !Number.isSafeInteger(row.caseRevision)||row.caseRevision<1||
-         Object.prototype.hasOwnProperty.call(ids,row.caseId))deny();
+         Object.prototype.hasOwnProperty.call(ids,row.caseId))d331P031aDeny_();
       ids[row.caseId]=true;
     });
     return snapshot;
   }
-  function createModel(source){
+  function createPlanModel_(source){
     validCases(source);var sourceGeneration=source.resetGeneration();
     var plans=[],draft=null,busy=false,epoch=0,nextPlan=1,disposed=false;
-    function guard(){if(disposed)deny();}
+    function guard(){if(disposed)d331P031aDeny_();}
     function current(){
       guard();var state;
-      try{state=validCases(source);}catch(_){dispose();deny();}
+      try{state=validCases(source);}catch(_){dispose();d331P031aDeny_();}
       if(source.resetGeneration()!==sourceGeneration){
         epoch++;plans=[];draft=null;busy=false;nextPlan=1;
         sourceGeneration=source.resetGeneration();
@@ -61,21 +61,21 @@ var d331P031aOfflineCasePlan_=(function(){
     }
     function beginPlan(eventId,caseId){
       current();if(busy||draft||eventId!==EVENT||typeof caseId!=='string'||
-         !CASE_RE.test(caseId)||!activeCase(caseId))deny();
+         !CASE_RE.test(caseId)||!activeCase(caseId))d331P031aDeny_();
       draft={triggerCaseId:caseId,episodeKey:''};return snapshot();
     }
     function setEpisodeKey(value){
       current();if(busy||!draft||typeof value!=='string'||
-        (value!==''&&!EPISODE_RE.test(value)))deny();
+        (value!==''&&!EPISODE_RE.test(value)))d331P031aDeny_();
       draft.episodeKey=value;return snapshot();
     }
-    function cancel(){current();if(busy)deny();draft=null;return snapshot();}
+    function cancel(){current();if(busy)d331P031aDeny_();draft=null;return snapshot();}
     function save(){
       current();if(busy)return Promise.resolve({status:'BUSY'});
       if(!draft||!EPISODE_RE.test(draft.episodeKey)||
          !activeCase(draft.triggerCaseId)||nextPlan>99||
          plans.some(function(p){return p.triggerCaseId===draft.triggerCaseId&&
-           p.episodeKey===draft.episodeKey;}))deny();
+           p.episodeKey===draft.episodeKey;}))d331P031aDeny_();
       var candidate={triggerCaseId:draft.triggerCaseId,episodeKey:draft.episodeKey};
       busy=true;var ticket=++epoch;
       return Promise.resolve().then(function(){
@@ -106,6 +106,6 @@ var d331P031aOfflineCasePlan_=(function(){
     return Object.freeze({snapshot:snapshot,beginPlan:beginPlan,
       setEpisodeKey:setEpisodeKey,cancel:cancel,save:save,reset:reset,dispose:dispose});
   }
-  return Object.freeze({createModel:createModel});
+  return Object.freeze({createModel:createPlanModel_});
 })();
 </script>
