@@ -17,6 +17,10 @@
       else buttons.push(`<button class="btn gray" onclick='closeEventFlow(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ปิดเหตุการณ์</button>`);
       buttons.push(`<button class="btn red" onclick='deleteEvent(${JSON.stringify(r.eventId||"")},${Number(r.revision||1)})'>ยกเลิก</button>`);
     }
+    if(typeof d331F02CaseRead_!=='undefined'){
+      const readAction=d331F02CaseRead_.action(r&&r.eventId);
+      if(readAction)buttons.push(readAction);
+    }
     return buttons.join(' ')||'-'
   }
   function closeEventFlow(eventId,revision){
@@ -121,6 +125,7 @@
   }
 
   function renderTables(){
+    if(typeof d331F02CaseRead_!=='undefined')d331F02CaseRead_.refresh();
     if(!currentUser)d331P020PreviewBridge_.reset();
     if(!currentUser&&typeof d331P024RecordsMockBridge_!=='undefined')
       d331P024RecordsMockBridge_.reset();
@@ -333,6 +338,123 @@
     openEventActionDialog('void',eventId,revision)
   }
   // P0-20: mock-only bridge to the P0-19 count DTO. No real event/RPC access.
+// F02-R: separate read-only candidate; never promote the synthetic F01 models.
+var D331_F02_CASE_READ_AVAILABLE_ = false;
+var d331F02CaseRead_ = (function(){
+  var owner=null,pending=null,cases=[],status='UNAVAILABLE',root=null,view=null,returnFocus=null,observer=null;
+  var uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  function current(eventId){
+    if(D331_F02_CASE_READ_AVAILABLE_!==true||!token||!currentUser||!roleCanRecord()||
+       typeof eventId!=='string'||!uuid.test(eventId))return null;
+    var rows=allData.filter(function(r){return r.eventId===eventId;});
+    if(rows.length!==1||rows[0].recordStatus!=='active'||
+       !Number.isSafeInteger(rows[0].revision)||rows[0].revision<1)return null;
+    return {eventId:eventId,revision:rows[0].revision,token:token,user:currentUser,
+      id:currentUser.userId,email:currentUser.email,subject:currentUser.id,role:currentUser.role};
+  }
+  function same(a,b){
+    return !!a&&!!b&&Object.keys(a).every(function(k){return a[k]===b[k];});
+  }
+  function f02Node(tag,text){var n=root.ownerDocument.createElement(tag);n.textContent=text||'';return n;}
+  function bind(){
+    if(root)return;
+    if(typeof MutationObserver!=='function')return;
+    root=el('d331-f02-region');if(!root)return;
+    var title=f02Node('summary','Case ของเหตุการณ์ · อ่านอย่างเดียว');
+    title.className='srrt-d331-preview__toggle';
+    var context=f02Node('p'),message=f02Node('p'),list=f02Node('ul'),back=f02Node('button','ปิดรายการ Case');
+    message.setAttribute('role','status');message.setAttribute('aria-live','polite');
+    list.setAttribute('aria-label','รายการ Case ของเหตุการณ์');
+    list.style.overflowWrap='anywhere';context.style.overflowWrap='anywhere';
+    back.type='button';back.className='btn light';back.addEventListener('click',close);
+    root.replaceChildren(title,context,message,list,back);
+    view={context:context,message:message,list:list,back:back};
+    root.addEventListener('toggle',refresh);
+    observer=new MutationObserver(consume);
+    observer.observe(root,{attributes:true,attributeFilter:['open'],attributeOldValue:true});
+  }
+  function f02Render(){
+    if(!root||!view)return;
+    root.hidden=!owner;root.setAttribute('aria-busy',status==='LOADING'?'true':'false');
+    view.context.textContent=owner?'เหตุการณ์ '+owner.eventId+' · Revision '+owner.revision:'';
+    view.message.textContent={UNAVAILABLE:'ยังไม่เปิดการอ่าน Case ของเหตุการณ์',
+      LOADING:'กำลังโหลดรายการ Case',EMPTY:'ไม่มี Case ในเหตุการณ์นี้',
+      READY:'รายการ Case แบบอ่านอย่างเดียว · ยังไม่ประเมินเกณฑ์เวลา 3-3-1',
+      ERROR:'ไม่สามารถยืนยันรายการ Case ได้ กรุณาตรวจสอบเหตุการณ์และสิทธิ์ก่อนลองใหม่'}[status];
+    view.list.replaceChildren();
+    cases.forEach(function(c){view.list.appendChild(f02Node('li',
+      c.caseId+' · Revision '+c.caseRevision+' · '+c.caseStatus));});
+  }
+  function clear(){owner=null;pending=null;cases=[];status='UNAVAILABLE';returnFocus=null;f02Render();}
+  function close(){
+    var target=returnFocus;
+    clear();if(root)root.open=false;
+    if(target&&target.isConnected!==false&&typeof target.focus==='function')target.focus();
+  }
+  function consume(records){
+    for(var i=0;i<records.length;i++){
+      var nextOpen=i+1<records.length?records[i+1].oldValue!==null:root.open;
+      if(records[i].oldValue!==null&&!nextOpen){clear();break;}
+    }
+  }
+  function refresh(){
+    if(observer)consume(observer.takeRecords());
+    if(owner&&(!root.open||root.isConnected===false||!same(owner,current(owner.eventId)))){
+      clear();root.open=false;
+    }
+  }
+  function dispose(){
+    clear();if(!root)return;
+    root.open=false;root.removeEventListener('toggle',refresh);
+    view.back.removeEventListener('click',close);
+    if(observer)observer.disconnect();
+    observer=null;root=null;view=null;
+  }
+  function f02Validate(value,expected){
+    if(!value||Object.keys(value).sort().join('|')!==
+       'areaId|canEnable|canWrite|cases|clinicalPolicyApproved|contractVersion|eventId|revision|slaAssessment|status'||
+       value.contractVersion!=='D331_CASE_LIST_V1'||value.status!=='READ_ONLY'||
+       value.eventId!==expected.eventId||value.revision!==expected.revision||
+       typeof value.areaId!=='string'||!value.areaId.trim()||
+       value.canWrite!==false||value.canEnable!==false||value.clinicalPolicyApproved!==false||
+       value.slaAssessment!=='NOT_EVALUATED'||!Array.isArray(value.cases)||value.cases.length>100)throw new Error();
+    var seen=Object.create(null);
+    return value.cases.map(function(c){
+      if(!c||Object.keys(c).sort().join('|')!=='caseId|caseRevision|caseStatus'||
+         typeof c.caseId!=='string'||!uuid.test(c.caseId)||seen[c.caseId]||
+         !Number.isSafeInteger(c.caseRevision)||c.caseRevision<1||c.caseStatus!=='ACTIVE')throw new Error();
+      seen[c.caseId]=true;
+      return {caseId:c.caseId,caseRevision:c.caseRevision,caseStatus:c.caseStatus};
+    });
+  }
+  function select(eventId,opener){
+    refresh();var next=current(eventId);
+    if(!next){close();return;}
+    if(pending&&same(owner,next))return;
+    bind();if(!root||root.isConnected===false)return;
+    owner=next;cases=[];status='LOADING';root.open=true;returnFocus=opener||null;
+    var ticket={context:next};pending=ticket;f02Render();view.back.focus();
+    function active(){refresh();return pending===ticket&&same(owner,next);}
+    function fail(error){
+      if(!active())return;
+      pending=null;cases=[];
+      status=error&&error.message==='D331_UNAVAILABLE'?'UNAVAILABLE':'ERROR';f02Render();
+    }
+    try{
+      Promise.resolve(gs('listDengueCasesForEvent',next.token,next.eventId)).then(function(value){
+        if(!active())return;
+        try{cases=f02Validate(value,next);pending=null;status=cases.length?'READY':'EMPTY';f02Render();}
+        catch(ignore){fail();}
+      },fail);
+    }catch(ignore){fail();}
+  }
+  return Object.freeze({select:select,refresh:refresh,close:close,dispose:dispose,
+    action:function(eventId){return current(eventId)&&typeof MutationObserver==='function'
+      ?'<button type="button" class="btn light" onclick="d331F02CaseRead_.select(\''+eventId+'\',this)">ดู Case</button>':'';},
+    snapshot:function(){refresh();return {status:status,eventId:owner?owner.eventId:null,
+      cases:cases.map(function(c){return {caseId:c.caseId,caseRevision:c.caseRevision,caseStatus:c.caseStatus};})};}});
+})();
+
   var d331P020PreviewBridge_=(function(){
     var keys=['cases','plans','actions','surveys','followups'];
     var mockEvent='e0000000-0000-4000-8000-000000000020';

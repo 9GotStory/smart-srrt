@@ -103,6 +103,13 @@
       <p id="recordResultSummary" class="srrt-record-result" role="status" aria-live="polite"></p>
       <div class="table-wrap srrt-record-table-wrap" role="region" tabindex="0" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์" style="margin-top:14px"><table class="srrt-record-table" aria-label="ตารางบันทึกและแก้ไขข้อมูลเหตุการณ์"><thead><tr><th>วันรับแจ้ง</th><th>โรค/เหตุการณ์</th><th>หมู่บ้าน/พื้นที่</th><th>สถานะเหตุการณ์</th><th>การตรวจสอบ</th><th>เข้าเกณฑ์สอบสวน</th><th>การสอบสวน</th><th>ความเสี่ยง</th><th>ผู้รับผิดชอบ</th><th>ผู้บันทึก</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody id="recordBody"></tbody></table></div>
 
+      <!-- F02-R read-only candidate. Separate from the synthetic Case/Plan preview. -->
+      <details id="d331-f02-region" class="srrt-d331-preview" hidden
+               aria-label="Case ของเหตุการณ์แบบอ่านอย่างเดียว" aria-busy="false">
+        <summary class="srrt-d331-preview__toggle">Case ของเหตุการณ์ · อ่านอย่างเดียว</summary>
+        <p role="status">ยังไม่เปิดการอ่าน Case ของเหตุการณ์</p>
+      </details>
+
       <!-- P0-18 Slice B: entirely static design preview, NOT an event workspace.
            No event binding, input fields, real RPC, mutation, or D331 enablement. -->
       <details id="d331-p018-preview" class="srrt-d331-preview">

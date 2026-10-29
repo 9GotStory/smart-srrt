@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {readOrderedClientScripts} from './helpers/native-client.mjs';
 
 const paths=[
  '../src/server/00-bootstrap.gs',
+ '../src/server/03-events-and-dashboard.gs',
  '../src/dengue/00-g1a-foundation.gs',
  '../src/dengue/03-n1b1-trusted-event-contract.gs',
  '../src/dengue/07-p0-02a-mvp-schema-contract.gs',
@@ -157,6 +159,16 @@ function assertDeny(opts={},beforeDomain=false){
  return x;
 }
 
+test('F02-R public interface denies before services when OFF or dependencies are absent',()=>{
+ const x=setup({baseFlag:false});
+ assert.equal(typeof x.ctx.listDengueCasesForEvent,'function');
+ assert.throws(()=>x.ctx.listDengueCasesForEvent(TOKEN,EVENT),/^Error: D331_UNAVAILABLE$/);
+ assert.equal(x.trace.service,0);
+ const native=vm.createContext({D331_G1A_ENABLED:true});
+ vm.runInContext(sources[1],native);
+ assert.throws(()=>native.listDengueCasesForEvent(TOKEN,EVENT),/^Error: D331_UNAVAILABLE$/);
+});
+
 test('P0-22B2 is source-flag OFF and unregistered in native runtime',()=>{
  const x=setup();
  assert.deepEqual(x.originalFlags,{
@@ -167,6 +179,69 @@ test('P0-22B2 is source-flag OFF and unregistered in native runtime',()=>{
  const src=sources.at(-1).replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
  assert.doesNotMatch(src,/function\s+listDengueCasesForEvent\(/);
  assert.doesNotMatch(src,/getDb_\(|getUserByToken_\(|\.setValues?\s*\(|\.appendRow\s*\(|\.insertSheet\s*\(|\.setProperty\s*\(/);
+});
+
+test('F02-R public interface serializes the existing authorized reader without clinical fields',()=>{
+ const x=setup();
+ const out=plain(x.ctx.listDengueCasesForEvent(TOKEN,EVENT));
+ assert.deepEqual(out,{
+  contractVersion:'D331_CASE_LIST_V1',status:'READ_ONLY',
+  eventId:EVENT,revision:3,areaId:'area-A',
+  cases:[{caseId:CASE,caseRevision:1,caseStatus:'ACTIVE'}],
+  slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
+  canWrite:false,canEnable:false
+ });
+ assert.deepEqual(plain(setup({cases:[]}).ctx.listDengueCasesForEvent(TOKEN,EVENT).cases),[]);
+ assert.equal(x.trace.writes,0);
+ for(const secret of ['TEST_ONLY_HASH','TEST_UNIT_A','SYNTHETIC_AUTHOR','SYNTHETIC-GRANT',CASE2])
+  assert.ok(!JSON.stringify(out).includes(secret));
+});
+
+test('F02-R public interface retains reader policy, identity, grant and row denials',()=>{
+ for(const opts of [
+  {baseFlag:false},{backendFlag:false},{readerFlag:false},{revocationFlag:false},{fields:[]},
+  {approvedDb:''},{policy:''},{diseases:[]},{dbProperty:'WRONG_BINDING'},
+  {session:'legacy-email@example.invalid'},{sessionToken:'bad'},
+  {userRows:[userRow(),userRow()]},{userRows:[Object.assign(userRow(),{5:'disabled'})]},
+  {mainRows:[eventRow(),eventRow()]},{mainRows:[eventRow('closed')]},{mainRows:[eventRow('void')]},
+  {areaRows:[Object.assign(areaRow(),{7:false})]},{grants:[]},
+  {cases:[caseRow(CASE,EVENT,'VOID')]},{cases:[caseRow(),caseRow(CASE,OTHER)]},
+  {caseRowMutation:{eventId:OTHER}},{badHeader:'DengueCases'}
+ ]){
+  const x=setup(opts);
+  assert.throws(()=>x.ctx.listDengueCasesForEvent(opts.sessionToken??TOKEN,EVENT),/^Error: D331_UNAVAILABLE$/);
+  assert.equal(x.trace.writes,0);
+ }
+});
+
+test('F02-R S3 actual authorized server wire result reaches the actual registered Records controller',async()=>{
+ const user=userRow();user[4]='Admin';const server=setup({userRows:[user]});
+ const elements=new Map();
+ const doc={readyState:'loading',activeElement:null,querySelectorAll:()=>[],querySelector:()=>null,
+  addEventListener(){},documentElement:{style:{setProperty(){}}},
+  createElement(tag){return {tagName:tag,ownerDocument:doc,children:[],attrs:{},style:{},
+   textContent:'',hidden:true,appendChild(n){this.children.push(n);return n;},
+   replaceChildren(...ns){this.children=ns;},setAttribute(k,v){this.attrs[k]=v;},
+   addEventListener(){},removeEventListener(){},focus(){doc.activeElement=this;}};},
+  getElementById(id){if(!elements.has(id))elements.set(id,this.createElement('div'));return elements.get(id);}};
+ const client=vm.createContext({document:doc,Promise,Date,
+  MutationObserver:class {observe(){}takeRecords(){return [];}disconnect(){}},
+  localStorage:{getItem(){return null;}},setTimeout(){},clearTimeout(){},setInterval(){},clearInterval(){}});
+ for(const {path,code} of readOrderedClientScripts())
+  vm.runInContext(path==='src/web/04-browser-app.html'?code.replace(/^\s*boot\(\);\s*$/m,''):code,client,{filename:path});
+ const requests=[];
+ client.gs=(name,token,event)=>{
+  requests.push(name);assert.equal(name,'listDengueCasesForEvent');
+  return Promise.resolve(plain(server.ctx.listDengueCasesForEvent(token,event)));
+ };
+ vm.runInContext('token='+JSON.stringify(TOKEN)+';currentUser={userId:"user-1",role:"Admin",email:"nobody@example.invalid"};'+
+  'allData=[{eventId:'+JSON.stringify(EVENT)+',revision:3,recordStatus:"active"}];D331_F02_CASE_READ_AVAILABLE_=true;',client);
+ client.d331F02CaseRead_.select(EVENT);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(client.d331F02CaseRead_.snapshot().status,'READY');
+ assert.deepEqual(plain(client.d331F02CaseRead_.snapshot().cases),[
+  {caseId:CASE,caseRevision:1,caseStatus:'ACTIVE'}]);
+ assert.deepEqual(requests,['listDengueCasesForEvent']);assert.equal(server.trace.writes,0);
 });
 
 test('P0-22B2 default and missing source approvals block before services',()=>{
