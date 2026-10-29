@@ -101,6 +101,7 @@
   }
   function resetAdminPrivate(){
     resetAdminFormState();
+    if(typeof settings!=='undefined'&&settings)delete settings.GEMINI_API_KEY;
     ++adminEpoch;++areaReadSeq;++userReadSeq;
     for(const key of Object.keys(adminReadVersions))++adminReadVersions[key];
     for(const id of Object.values(adminReadStatusIds)){const node=el(id);if(node){node.textContent='';node.hidden=true;if(typeof node.setAttribute==='function')node.setAttribute('aria-busy','false')}}
@@ -111,7 +112,7 @@
       const node=el(id);if(node)node.innerHTML=''
     }
     if(typeof settingFields!=='undefined')for(const key of settingFields){
-      const node=el('set_'+key);if(node)node.value=''
+      const node=el('set_'+key);if(node){node.value='';if(key==='GEMINI_API_KEY')node.placeholder=''}
     }
     for(const id of ['uPassword','userSearch','areaSearch','masterSearch','cUrl','logoFile','areaImportFile']){
       const node=el(id);if(node)node.value=''
@@ -212,18 +213,39 @@
   async function loadSettings(){
     const ctx=adminContext();if(!ctx)return;const read=adminReadBegin('settings',ctx);
     try{
-      const response=await gs('getSystemSettings',ctx.token);if(!adminReadCurrent(read))return;const rows=requireAdminRows_(response,'การตั้งค่าระบบ'),m={};rows.forEach(r=>m[r.key]=r.value);settings={...settings,...m};
-      settingFields.forEach(k=>{const x=el('set_'+k);if(x)x.value=m[k]??''});el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src;
+      const response=await gs('getSystemSettings',ctx.token);if(!adminReadCurrent(read))return;const rows=requireAdminRows_(response,'การตั้งค่าระบบ'),m={};
+      let keyConfigured;
+      rows.forEach(r=>{
+        if(r.key==='GEMINI_API_KEY')keyConfigured=typeof r.isConfigured==='boolean'?r.isConfigured:undefined;
+        else m[r.key]=r.value;
+      });
+      settings={...settings,...m};delete settings.GEMINI_API_KEY;
+      settingFields.forEach(k=>{
+        const x=el('set_'+k);if(!x)return;
+        if(k==='GEMINI_API_KEY'){
+          x.value='';
+          x.placeholder=keyConfigured===true?'ตั้งค่าแล้ว · เว้นว่างเพื่อรักษาค่าเดิม':
+            keyConfigured===false?'ยังไม่ได้ตั้งค่า · กรอกค่าใหม่':'ไม่สามารถยืนยันสถานะ · เว้นว่างเพื่อรักษาค่าเดิม';
+        }else x.value=m[k]??'';
+      });el('adminLogoPreview').src=m.LOGO_URL||el('logoImg').src;
       adminReadFinish(read,rows.length?'ready':'empty',rows.length?'โหลดการตั้งค่าแล้ว':'ยังไม่มีค่าการตั้งค่า')
     }catch(e){if(adminReadFinish(read,'error','โหลดการตั้งค่าไม่สำเร็จ'))toast(e.message||e)}
   }
   async function saveSettings(){
     return runAdminFormSave('settings',async ctx=>{
-      const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}));
+      const arr=settingFields.map(k=>({key:k,value:el('set_'+k).value,description:''}))
+        .filter(item=>item.key!=='GEMINI_API_KEY'||item.value.trim()!=='');
       ctx.writeDispatched=true;
       const message=await gs('saveSystemSettings',ctx.token,arr);
       ctx.writeConfirmed=true;
       if(!adminCurrent(ctx))return;
+      const replacement=arr.find(item=>item.key==='GEMINI_API_KEY');
+      if(replacement){
+        const input=el('set_GEMINI_API_KEY');
+        if(input.value===replacement.value)input.value='';
+        input.placeholder='ตั้งค่าแล้ว · เว้นว่างเพื่อรักษาค่าเดิม';
+      }
+      delete settings.GEMINI_API_KEY;
       toast(message);
       const b=await gs('getAppBoot',ctx.token);
       if(!adminCurrent(ctx))return;

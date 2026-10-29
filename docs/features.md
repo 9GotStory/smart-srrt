@@ -214,6 +214,8 @@ GS-S2 เปลี่ยน user-update audit เป็น allowlisted change me
 
 `getAppBoot` ส่งเฉพาะ Public Settings ที่ Allowlist; ไม่ส่ง `GEMINI_API_KEY` กลับสู่ Public Boot. `saveSystemSettings` ป้องกันไม่ให้ Generic Editor เปลี่ยน System/Database/Archive IDs และ Retention บางค่า; การตั้งค่าของผู้ดูแลต้องเก็บเป็นความลับและจำกัดการเข้าถึง Apps Script/Sheet
 
+**R-07 Implemented in Source / Verified by Automated Tests — 29 October 2026 ([#263](https://github.com/9GotStory/smart-srrt/issues/263)):** `getSystemSettings` ยังคงตรวจ `settings` permission แต่ secret row คืน `value:''` และ `isConfigured` Boolean เท่านั้น; สถานะนี้ไม่ยืนยันว่า key ใช้งานได้. Browser ใช้ช่องกรอกแบบ write-only ไม่ prefill หรือเก็บ stored key ใน shared settings แม้ได้รับ legacy response. Ordinary save ที่ไม่ส่ง key หรือส่ง blank/whitespace รักษาค่าเดิม; nonblank replacement บันทึกค่าที่ส่งจริงโดยไม่ trim, invalid type/duplicate secret row ถูกปฏิเสธก่อน writes และไม่มี clear operation. Secret-write I/O failure คืน generic unknown outcome; ไม่เพิ่ม automatic retry. ไม่เปลี่ยน permission, schema, RPC names หรือ server-only Gemini access; ยังไม่มี Browser UAT, deployment หรือ actual-key/exposure verification จากงานนี้
+
 ### 6.6 Export และ Dashboard Image
 
 Dashboard มีปุ่ม `บันทึกรูปภาพ`; หลังล็อกอินมีรายการเหตุการณ์และปุ่ม `Excel` ฝั่ง Browser และ `Export จากระบบ` ฝั่ง Server. `exportData(sessionToken, format)` ต้องมี `export` และ **สร้าง Google Spreadsheet ใหม่พร้อม URL** ไม่ใช่การส่งไฟล์ XLSX binary กลับจาก Server โดยตรง; ค่า `format` เป็นข้อมูลตอบกลับเท่านั้น
@@ -410,6 +412,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 - **Backend RPC / Function:** `getInstallationStatus`, `repairInstallation`, `getSystemSettings`, `saveSystemSettings`, `uploadLogo`, `installSmartSRRT`, `setupDatabase`
 - **Source:** [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`04-admin-and-audit.gs`](../src/server/04-admin-and-audit.gs), [`03-events-and-dashboard.gs`](../src/server/03-events-and-dashboard.gs)
 - **Tests/Contract:** [`p4-governance-current.test.mjs`](../tests/p4-governance-current.test.mjs), [`p6-release-preflight.test.mjs`](../tests/p6-release-preflight.test.mjs) (ไฟล์ทดสอบที่เกี่ยวข้อง; ตรวจยืนยันเฉพาะ Assertions ที่มีจริง ไม่เท่ากับยืนยันทุก RPC หรือ Live E2E)
+- **R-07 source/offline tests:** [actual settings RPC/auth/Sheet VM](../tests/ux-r1-p8-02-admin-null-rpc.test.mjs), [actual Admin load/reset/session guards](../tests/ux-r1-p6-02-admin-safety.test.mjs), [actual save/payload/unknown/race behavior](../tests/ux-r1-p6-03-admin-forms.test.mjs). Synthetic/offline evidence เท่านั้น; confirmed save ล้าง submitted input โดยรักษา later draft และ callback ของ session เก่าไม่ repaint/ล้าง form ใหม่
 - **สัมพันธ์กับ/ข้อจำกัด:** F03/F19/F23; ไม่อนุญาต live install/repair/migration จากเอกสารนี้
 - **สถานะหลักฐาน:** Source=merged in main; Automated=มี Tests ตามลิงก์ (main CI success); Runtime=Not independently verified per feature.
 

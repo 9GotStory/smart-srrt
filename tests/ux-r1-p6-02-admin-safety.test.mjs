@@ -164,3 +164,51 @@ test('P6-02 existing Admin high-impact RPC and G33 logout boundaries stay owned 
   assert.match(source,/gs\('importAreas',ctx.token,mapped.slice\(i,i\+200\)\)/);
   assert.doesNotMatch(source,/autoRepair|autoArchive/);
 });
+
+test('R-07 Admin load uses only Boolean configuration metadata and never maps stored or legacy secrets',async()=>{
+  for(const [isConfigured,status] of [[true,/ตั้งค่าแล้ว/],[false,/ยังไม่ได้ตั้งค่า/],[undefined,/ไม่สามารถยืนยัน/],['true',/ไม่สามารถยืนยัน/]]){
+    const h=fixture();signIn(h);
+    vm.runInContext('settings={GEMINI_API_KEY:"SYNTHETIC_CACHED_SECRET"}',h.context);
+    h.context.gs=()=>Promise.resolve([
+      {key:'APP_NAME',value:'Synthetic name'},
+      {key:'GEMINI_API_KEY',value:'SYNTHETIC_LEGACY_RAW_SECRET',isConfigured}
+    ]);
+    await vm.runInContext('loadSettings()',h.context);
+    assert.equal(h.el('set_GEMINI_API_KEY').value,'');
+    assert.match(h.el('set_GEMINI_API_KEY').placeholder,status);
+    assert.equal(vm.runInContext('Object.hasOwn(settings,"GEMINI_API_KEY")',h.context),false);
+    assert.doesNotMatch(vm.runInContext('JSON.stringify(settings)',h.context),/SYNTHETIC.*SECRET/);
+    assert.equal(h.el('set_APP_NAME').value,'Synthetic name');
+    assert.equal(h.messages.length,0);
+  }
+});
+
+test('R-07 private reset removes secret input, configured hint and any legacy cached secret',async()=>{
+  const h=fixture();signIn(h);
+  h.context.gs=()=>Promise.resolve([{key:'GEMINI_API_KEY',value:'',isConfigured:true}]);
+  await vm.runInContext('loadSettings()',h.context);
+  h.el('set_GEMINI_API_KEY').value='SYNTHETIC_TYPED_SECRET';
+  vm.runInContext('settings.GEMINI_API_KEY="SYNTHETIC_CACHED_SECRET"',h.context);
+  logout(h);
+  assert.equal(h.el('set_GEMINI_API_KEY').value,'');
+  assert.equal(h.el('set_GEMINI_API_KEY').placeholder,'');
+  assert.equal(vm.runInContext('Object.hasOwn(settings,"GEMINI_API_KEY")',h.context),false);
+});
+
+test('R-07 stale settings responses cannot restore configuration hints or overwrite the new session draft',async()=>{
+  for(const changeSession of [false,true]){
+    const h=fixture();signIn(h);
+    const old=deferred();let requests=0;
+    h.context.gs=()=>++requests===1?old.promise:Promise.resolve([{key:'GEMINI_API_KEY',value:'',isConfigured:false}]);
+    const pending=vm.runInContext('loadSettings()',h.context);
+    if(changeSession){logout(h);signIn(h,'Manager','B')}
+    await vm.runInContext('loadSettings()',h.context);
+    h.el('set_GEMINI_API_KEY').value='SYNTHETIC_NEW_SESSION_DRAFT';
+    old.resolve([{key:'GEMINI_API_KEY',value:'SYNTHETIC_OLD_RESPONSE',isConfigured:true}]);
+    await pending;
+    assert.equal(h.el('set_GEMINI_API_KEY').value,'SYNTHETIC_NEW_SESSION_DRAFT');
+    assert.match(h.el('set_GEMINI_API_KEY').placeholder,/ยังไม่ได้ตั้งค่า/);
+    assert.equal(vm.runInContext('Object.hasOwn(settings,"GEMINI_API_KEY")',h.context),false);
+    assert.equal(h.messages.length,0);
+  }
+});

@@ -92,16 +92,37 @@ function saveContent(sessionToken, item) {
 function getSystemSettings(sessionToken) {
   requireAuth_(sessionToken, 'settings');
   var rows = getSheet_(CONFIG.SHEETS.SETTINGS).getDataRange().getValues().slice(1);
-  return adminRpcSafeRows_(rows.map(function(r){return {key:r[0], value:r[1], description:r[2], updatedAt:r[3], updatedBy:r[4]};}));
+  return adminRpcSafeRows_(rows.map(function(r){
+    var item = {key:r[0], value:r[1], description:r[2], updatedAt:r[3], updatedBy:r[4]};
+    if (String(r[0]) === 'GEMINI_API_KEY') {
+      item.value = '';
+      item.description = 'Gemini API Key';
+      item.isConfigured = String(r[1] == null ? '' : r[1]).trim() !== '';
+    }
+    return item;
+  }));
 }
 
 function saveSystemSettings(sessionToken, settingsArray) {
   var user = requireAuth_(sessionToken, 'settings');
+  if (!Array.isArray(settingsArray)) throw new Error('รายการตั้งค่าไม่ถูกต้อง');
+  var secretSeen = false;
+  settingsArray.forEach(function(s) {
+    if (!s || String(s.key) !== 'GEMINI_API_KEY') return;
+    if (secretSeen || typeof s.value !== 'string') throw new Error('ข้อมูล Gemini API Key ไม่ถูกต้อง');
+    secretSeen = true;
+  });
   var sheet = getSheet_(CONFIG.SHEETS.SETTINGS);
   var blockedKeys = ['DATABASE_SPREADSHEET_ID','MAIN_SHEET_ID','SYSTEM_FOLDER_ID','LOGO_FOLDER_ID','LOGO_FILE_ID','ATTACHMENT_FOLDER_ID','AUDIT_ARCHIVE_SPREADSHEET_ID','AUDIT_RETENTION_DAYS','INSTALL_VERSION','SCHEMA_VERSION'];
   settingsArray.forEach(function(s) {
     if (!s.key || blockedKeys.indexOf(String(s.key)) >= 0) return;
-    upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
+    if (String(s.key) === 'GEMINI_API_KEY' && typeof s.value === 'string' && !s.value.trim()) return;
+    try {
+      upsertSettingAsUser_(sheet, String(s.key), s.value, s.description || '', user.email);
+    } catch (error) {
+      if (String(s.key) === 'GEMINI_API_KEY') throw new Error('ไม่สามารถยืนยันผลการบันทึก Gemini API Key');
+      throw error;
+    }
   });
   writeAudit_(user, 'UPDATE_SETTINGS', CONFIG.SHEETS.SETTINGS, 'web-admin', '', JSON.stringify(settingsArray.map(function(s){return s.key;})));
   return 'บันทึกการตั้งค่าระบบเรียบร้อยแล้ว';
