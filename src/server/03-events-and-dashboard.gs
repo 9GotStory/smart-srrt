@@ -60,6 +60,45 @@ function listDengueCasesForEvent(sessionToken, eventId) {
   } catch (ignore) { throw new Error('D331_UNAVAILABLE'); }
 }
 
+// F02-W declarations stay denied in Native26: the private writer is unregistered.
+function saveDengueCase(sessionToken, eventId, command) {
+  try {
+    if(typeof D331_G1A_ENABLED==='undefined'||D331_G1A_ENABLED!==true||
+       typeof d331P007Operate_!=='function')throw new Error();
+    if(!command||typeof command!=='object'||Array.isArray(command)||
+       Object.keys(command).some(function(k){return ['mode','requestId',
+         'expectedEventRevision','payload','entityId','expectedEntityRevision'].indexOf(k)<0;})||
+       !command.payload||Object.keys(command.payload).some(function(k){
+         return ['Classification','OnsetLocalDate','ReportingUnit','ReceivingUnit'].indexOf(k)<0||
+           typeof command.payload[k]!=='string'||/^[=+@-]/.test(command.payload[k]);
+       }))throw new Error();
+    var input={kind:'case'};
+    Object.keys(command).forEach(function(k){input[k]=command[k];});
+    var value=d331P007Operate_(sessionToken,eventId,input);
+    if(!value||value.kind!=='case'||['CREATED','UPDATED','REPLAYED'].indexOf(value.status)<0||
+       !d331P007Id_(value.entityId)||
+       (value.status!=='REPLAYED'&&(!Number.isSafeInteger(value.revision)||value.revision<1)))
+      throw new Error();
+    var result={contractVersion:'D331_CASE_WRITE_V1',eventId:eventId,
+      requestId:command.requestId,status:value.status,caseId:value.entityId};
+    if(value.status!=='REPLAYED')result.revision=value.revision;
+    return result;
+  }catch(ignore){throw new Error('D331_WRITE_UNAVAILABLE');}
+}
+function getDengueCaseWriteStatus(sessionToken, eventId, requestId) {
+  try {
+    if(typeof D331_G1A_ENABLED==='undefined'||D331_G1A_ENABLED!==true||
+       typeof d331P007CaseWriteStatus_!=='function')throw new Error();
+    var value=d331P007CaseWriteStatus_(sessionToken,eventId,requestId);
+    if(!value||['NOT_FOUND','PENDING','COMMITTED','UNKNOWN'].indexOf(value.status)<0||
+       (value.status==='COMMITTED'&&!d331P007Id_(value.caseId)))throw new Error();
+    var result={contractVersion:'D331_CASE_WRITE_RECEIPT_V1',eventId:eventId,
+      requestId:requestId,status:value.status};
+    if(value.status==='COMMITTED')result.caseId=value.caseId;
+    return result;
+  }catch(ignore){throw new Error('D331_WRITE_UNAVAILABLE');}
+}
+
 function getPublicDashboardData(filter) {
   return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
 }

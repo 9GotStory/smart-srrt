@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createHash} from 'node:crypto';
+import {readOrderedClientScripts} from './helpers/native-client.mjs';
 
 const paths=[
  '../src/server/00-bootstrap.gs',
@@ -12,7 +13,8 @@ const paths=[
  '../src/dengue/09-p0-03b-dev-readonly-adapter.gs',
  '../src/dengue/10-p0-05-v2-schema-compat.gs',
  '../src/dengue/11-p0-06-offline-workflow-engine.gs',
- '../src/dengue/12-p0-07-guarded-dev-crud.gs'
+ '../src/dengue/12-p0-07-guarded-dev-crud.gs',
+ '../src/server/03-events-and-dashboard.gs'
 ];
 const sources=paths.map(p=>fs.readFileSync(new URL(p,import.meta.url),'utf8'));
 const uid=n=>n.toString(16).padStart(8,'0')+'-1111-4111-8111-111111111111';
@@ -169,11 +171,11 @@ function seedChain(s){
 test('P0-07 production source stays private/unregistered/flags disabled',()=>{
  const manifest=fs.readFileSync(new URL('../tools/native-sources.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(manifest,/12-p0-07-guarded-dev-crud/);
- assert.match(sources.at(-1),/D331_P007_ENABLED_ = false/);
+ assert.match(sources.at(-2),/D331_P007_ENABLED_ = false/);
  assert.match(sources[1],/D331_G1A_ENABLED = false/);
  assert.match(sources[4],/D331_P003B_ENABLED_ = false/);
- assert.match(sources.at(-1),/LockService.getScriptLock\(\)/);
- assert.doesNotMatch(sources.at(-1),/\.deleteRow\(|deleteSheet\(|getDb_\(/);
+ assert.match(sources.at(-2),/LockService.getScriptLock\(\)/);
+ assert.doesNotMatch(sources.at(-2),/\.deleteRow\(|deleteSheet\(|getDb_\(/);
 });
 test('feature OFF stops before any Google service / lock access',()=>{
  const x=setup({writeFlag:false});
@@ -330,4 +332,180 @@ test('no user-supplied role, grants, due clock policy or hard delete operations'
  deny(()=>s.run('followup','create',{
    PlanID:uid(11),CheckpointKey:'DAY_3'}));
  assert.equal(s.trace.writes.length,0);
+});
+
+test('F02-W public source interfaces deny OFF before any services',()=>{
+ const s=setup({featureFlag:false});
+ assert.equal(typeof s.ctx.saveDengueCase,'function');
+ assert.equal(typeof s.ctx.getDengueCaseWriteStatus,'function');
+ assert.throws(()=>s.ctx.saveDengueCase(TOKEN,EVENT,{}),/D331_WRITE_UNAVAILABLE/);
+ assert.throws(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(450)),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.locks,0);assert.equal(s.trace.opens,0);
+});
+test('F02-W unresolved PENDING Case intent also blocks a different request ID',()=>{
+ for(const opts of [{failDomain:'DengueCases'},{failCommit:true}]){
+  const s=setup(opts);
+  deny(()=>s.run('case','create',basicCase(),{requestId:uid(451)}));
+  const n=s.trace.writes.length;
+  deny(()=>s.run('case','create',basicCase(),{requestId:uid(452)}));
+  assert.equal(s.trace.writes.length,n);
+ }
+});
+const plain=value=>JSON.parse(JSON.stringify(value));
+const caseCommand=(more={})=>({mode:'create',requestId:uid(460),expectedEventRevision:3,
+ payload:{Classification:'SUSPECTED',ReportingUnit:'SYNTHETIC_UNIT'},...more});
+test('F02-W actual save/create, explicit patch, replay and authorized receipt disclose only identity',()=>{
+ const s=setup(),c=caseCommand();
+ const first=plain(s.ctx.saveDengueCase(TOKEN,EVENT,c));
+ assert.deepEqual(first,{contractVersion:'D331_CASE_WRITE_V1',eventId:EVENT,requestId:c.requestId,
+  status:'CREATED',caseId:uid(101),revision:1});
+ const replay=plain(s.ctx.saveDengueCase(TOKEN,EVENT,c));
+ assert.deepEqual(replay,{contractVersion:'D331_CASE_WRITE_V1',eventId:EVENT,requestId:c.requestId,
+  status:'REPLAYED',caseId:first.caseId});
+ const patch=caseCommand({mode:'update',requestId:uid(461),entityId:first.caseId,
+  expectedEntityRevision:1,payload:{Classification:'PROBABLE'}});
+ assert.equal(s.ctx.saveDengueCase(TOKEN,EVENT,patch).revision,2);
+ const row=s.ctx.d331P007Object_('DengueCases',s.sheets.DengueCases.grid[1]);
+ assert.equal(row.ReportingUnit,'SYNTHETIC_UNIT');
+ const before=s.trace.writes.length;
+ assert.deepEqual(plain(s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,c.requestId)),{
+  contractVersion:'D331_CASE_WRITE_RECEIPT_V1',eventId:EVENT,requestId:c.requestId,
+  status:'COMMITTED',caseId:first.caseId});
+ assert.deepEqual(plain(s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(462))),{
+  contractVersion:'D331_CASE_WRITE_RECEIPT_V1',eventId:EVENT,requestId:uid(462),status:'NOT_FOUND'});
+ assert.equal(s.trace.writes.length,before);
+});
+
+test('F02-W public command excludes other domains/status/identity, bad values and stale/no-op writes',()=>{
+ const s=setup(),first=s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());
+ const n=s.trace.writes.length;
+ for(const cmd of [caseCommand({kind:'plan'}),caseCommand({role:'Admin'}),
+  caseCommand({payload:{CaseStatus:'VOID'}}),caseCommand({payload:{EventID:EVENT}}),
+  caseCommand({payload:{CaseID:uid(33)}}),caseCommand({payload:{CreatedByUserID:'user-1'}}),
+  caseCommand({payload:{Classification:'=1+1'}}),caseCommand({payload:{ReportingUnit:'-1+1'}}),
+  caseCommand({payload:{ReportingUnit:5}}),caseCommand({payload:{Classification:'NOPE'}}),
+  caseCommand({payload:{OnsetLocalDate:'2026-02-30'}}),caseCommand({payload:{ReceivingUnit:'x'.repeat(257)}}),
+  caseCommand({payload:{ReportingUnit:' leading'}}),caseCommand({payload:{}}),
+  caseCommand({mode:'delete'}),caseCommand({expectedEventRevision:4}),
+  caseCommand({mode:'update',entityId:first.caseId,expectedEntityRevision:2,payload:{Classification:'PROBABLE'}}),
+  caseCommand({mode:'update',entityId:first.caseId,expectedEntityRevision:1,payload:{Classification:'SUSPECTED'}})]){
+  deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,{...cmd,requestId:uid(480)}));
+  assert.equal(s.trace.writes.length,n);
+ }
+});
+function changeGrant(s,key,value){const h=Array.from(s.ctx.d331P002aHeaders_('D331AccessGrants'));
+ s.sheets.D331AccessGrants.grid[1][h.indexOf(key)]=value;}
+test('F02-W both operations reauthorize current session/user/Event/Area/grant and binding',()=>{
+ const changes=[s=>{s.ctx.CacheService.getScriptCache=()=>({get:()=>null});},
+  s=>{s.sheets.UserAccounts.grid[1][3]='CHANGED_HASH';},
+  s=>{s.sheets.UserAccounts.grid[1][5]='inactive';},
+  s=>{s.sheets.UserAccounts.grid.push(s.sheets.UserAccounts.grid[1].slice());},
+  s=>{s.sheets.MainData.grid.push(s.sheets.MainData.grid[1].slice());},
+  s=>{s.sheets.MainData.grid[1][32]='closed';},s=>{s.sheets.MainData.grid[1][32]='void';},
+  s=>{s.sheets.MainData.grid[1][5]='UNAPPROVED_DISEASE';},
+  s=>{s.sheets.AreaMaster.grid[1][7]=false;},
+  s=>{s.sheets.AreaMaster.grid.push(s.sheets.AreaMaster.grid[1].slice());},
+  s=>{s.sheets.D331AccessGrants.grid.splice(1);},
+  s=>{s.sheets.D331AccessGrants.grid.push(s.sheets.D331AccessGrants.grid[1].slice());},
+  s=>changeGrant(s,'State','REVOKED'),s=>changeGrant(s,'ExpiresAtUTC','2020-01-01T00:00:00.000Z'),
+  s=>changeGrant(s,'ApprovedByUserID','user-1'),s=>changeGrant(s,'PolicyRevision','OTHER'),
+  s=>changeGrant(s,'AreaID','area-B'),s=>changeGrant(s,'EventID',uid(7)),
+  s=>{s.ctx.PropertiesService.getScriptProperties=()=>({getProperty:()=>null});}];
+ for(const change of changes){
+  const s=setup();s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());change(s);
+  const n=s.trace.writes.length;
+  deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({requestId:uid(481)})));
+  deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460)));
+  assert.equal(s.trace.writes.length,n);
+ }
+});
+test('F02-W receipt lookup rejects foreign owner/Event/capability, duplicate or malformed ledger',()=>{
+ for(const [index,value] of [[1,uid(8)],[2,'user-2'],[3,'dengue.plan.write'],[6,'PLAN'],[7,'bad-id'],[5,'BOGUS']]){
+  const s=setup();s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());
+  s.sheets.DengueRequestLedger.grid[1][index]=value;
+  deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460)));
+ }
+ const s=setup();s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());
+ s.sheets.DengueRequestLedger.grid.push(s.sheets.DengueRequestLedger.grid[1].slice());
+ deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460)));
+ for(const id of ['',null,{},'bad-id',uid(460).toUpperCase()])
+  deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,id));
+});
+test('F02-W interrupted server writes expose only PENDING and retain Event barrier',()=>{
+ for(const opts of [{failDomain:'DengueCases'},{failCommit:true}]){
+  const s=setup(opts);deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand()));
+  assert.deepEqual(plain(s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460))),{
+   contractVersion:'D331_CASE_WRITE_RECEIPT_V1',eventId:EVENT,requestId:uid(460),status:'PENDING'});
+  const n=s.trace.writes.length;deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({requestId:uid(482)})));
+  assert.equal(s.trace.writes.length,n);
+ }
+});
+
+
+// S3 uses the same actual writer fixture and manifest-loaded client. Only DOM/RPC I/O is synthetic.
+function writeClient(){
+ const nodes=new Map(),requests=[];
+ const doc={readyState:'loading',createElement:tag=>makeNode(tag),
+  getElementById:id=>{if(!nodes.has(id))nodes.set(id,makeNode('div'));return nodes.get(id);},
+  querySelectorAll:()=>[],querySelector:()=>null,addEventListener(){},documentElement:{style:{setProperty(){}}}};
+ function makeNode(tag){return {tagName:tag,ownerDocument:doc,children:[],hidden:true,value:'',style:{},
+  textContent:'',attrs:{},listeners:{},classList:{add(){},remove(){},toggle(){}},
+  appendChild(n){this.children.push(n);return n;},replaceChildren(...n){this.children=n;},
+  setAttribute(k,v){this.attrs[k]=String(v);},getAttribute(k){return this.attrs[k]??null;},removeAttribute(k){delete this.attrs[k];},
+  addEventListener(k,fn){(this.listeners[k]??=[]).push(fn);},removeEventListener(){},
+  fire(k){for(const fn of this.listeners[k]||[])fn();},focus(){doc.activeElement=this;}};}
+ const ctx=vm.createContext({document:doc,Promise,Date,crypto:{randomUUID:()=>uid(499)},
+  MutationObserver:class {observe(){} takeRecords(){return [];} disconnect(){}},
+  localStorage:{getItem(){return null;},setItem(){},removeItem(){}},
+  setTimeout(){},clearTimeout(){},setInterval(){},clearInterval(){}});
+ for(const {path,code} of readOrderedClientScripts())
+  vm.runInContext(path==='src/web/04-browser-app.html'?code.replace(/^\s*boot\(\);\s*$/m,''):code,ctx);
+ ctx.gs=(...args)=>new Promise((resolve,reject)=>requests.push({args,resolve,reject}));
+ vm.runInContext('token='+JSON.stringify(TOKEN)+';currentUser={userId:"user-1",role:"Admin"};'+
+  'allData='+JSON.stringify([{eventId:EVENT,revision:3,recordStatus:'active'}])+';'+
+  'D331_F02_CASE_READ_AVAILABLE_=true;D331_F02_CASE_WRITE_AVAILABLE_=true;',ctx);
+ const root=doc.getElementById('d331-f02-write-region');
+ function walk(n){return [n,...n.children.flatMap(walk)];}
+ return {ctx,requests,click(label){const n=walk(root).find(n=>n.tagName==='button'&&n.textContent===label);
+   assert.ok(n,label);assert.ok(!n.disabled);n.fire('click');},
+  fill(id,value){const n=walk(root).find(n=>n.id===id);assert.ok(n);n.value=value;n.fire('input');},
+  text:()=>walk(root).map(n=>n.textContent).join('|')};
+}
+test('F02-W S3 serialized actual server save/status/read results cross the registered client boundary',async()=>{
+ for(const opts of [{},{failCommit:true},{failDomain:'DengueCases'}]){
+  const s=setup(opts);
+  vm.runInContext(fs.readFileSync(new URL('../src/dengue/15-p0-22b2-case-read-integration.gs',import.meta.url),'utf8'),s.ctx);
+  s.ctx.D331_P022B2_ENABLED_=true;s.ctx.D331_P022B2_REVOCATION_APPROVED_=true;
+  s.ctx.D331_P022B2_APPROVED_FIELDS_=['CaseID','CaseRevision','CaseStatus'];
+  const grant=grantRow(s.ctx,'dengue.case.read',20);s.sheets.D331AccessGrants.grid.push(grant);
+  const h=writeClient(),settle=()=>new Promise(resolve=>setImmediate(resolve));
+  async function respond(){const req=h.requests.at(-1),[name,...args]=req.args;
+   try{req.resolve(plain(s.ctx[name](...plain(args))));}catch(e){req.reject(new Error(e.message));}
+   await settle();}
+  h.ctx.d331F02CaseRead_.select(EVENT);await respond();
+  h.click('เพิ่ม Case');h.fill('d331-f02-Classification','SUSPECTED');h.click('บันทึก Case');await respond();
+  if(opts.failCommit||opts.failDomain){
+   assert.match(h.text(),/ยังไม่ทราบผล/);h.click('ตรวจสอบสถานะคำขอ');await respond();
+   assert.match(h.text(),/ยังไม่ทราบผล/);assert.doesNotMatch(h.text(),/PayloadDigest|TEST_ONLY_HASH/);
+  }else assert.match(h.text(),/ยืนยันการบันทึก/);
+  h.click('อ่านรายการ Case ใหม่');await respond();
+  const read=plain(h.ctx.d331F02CaseRead_.snapshot());
+  assert.equal(read.status,opts.failDomain?'EMPTY':'READY');
+  assert.equal(read.cases.length,opts.failDomain?0:1);
+  if(!opts.failDomain)assert.deepEqual(read.cases,[{caseId:uid(101),caseRevision:1,caseStatus:'ACTIVE'}]);
+  if(opts.failCommit||opts.failDomain)assert.match(h.text(),/ยังไม่ทราบผล/);
+  assert.equal(h.requests.filter(r=>r.args[0]==='saveDengueCase').length,1);
+ }
+});
+
+test('F02-W partial dependencies and missing approval pins deny before services',()=>{
+ for(const mutation of [s=>{s.ctx.d331P003bSessionUser_=undefined;},s=>{s.ctx.d331P005RequireSevenSheets_=undefined;},
+  s=>{s.ctx.d331N1bAuthorizeOffline_=undefined;},s=>{s.ctx.d331P002aValidateSyntheticRow_=undefined;},
+  s=>{s.ctx.D331_P003B_APPROVED_POLICY_REVISION_='';},s=>{s.ctx.D331_P003B_APPROVED_DISEASE_LABELS_=[];},
+  s=>{s.ctx.D331_P003B_APPROVED_DEV_SPREADSHEET_ID_='';},s=>{s.ctx.D331_P003B_ENABLED_=false;}]){
+  const s=setup();mutation(s);
+  deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand()));
+  deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460)));
+  assert.equal(s.trace.locks,0);assert.equal(s.trace.properties,0);assert.equal(s.trace.opens,0);
+ }
 });

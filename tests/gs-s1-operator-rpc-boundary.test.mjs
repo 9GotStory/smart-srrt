@@ -11,7 +11,7 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=name=>fs.readFileSync(path.join(ROOT,name),'utf8');
 const server=()=>GAS_SERVER_SOURCES.map(name=>({name,code:read(name)}));
 const GATED=["installSmartSRRT","setupDatabase","resetSuperAdminPassword","showDatabaseInfo","migrateG05EventOwner","migrateG11EventAttachments","migrateG21AuditRetention","migrateG29VisitLogs","migrateG17ReportRegistry","migrateP1EventIdentity","clearGeminiModelCache","listAvailableGeminiModels","testGeminiConnection","forceGeminiModelAuto","forceGeminiModelStable"];
-const EXPECTED_PUBLIC=["addRecord","archiveAuditLogs","archiveAuditLogsFromSheetMenu","assignEventOwner","cancelReportJob","clearGeminiModelCache","closeEvent","createReportJob","deleteArea","deleteRecord","dismissReportJob","doGet","downloadEventAttachment","exportData","forceGeminiModelAuto","forceGeminiModelStable","generateReportFromWeb","getAIReportReadiness","getAnalytics","getAppBoot","getAreaMaster","getAuditRetentionStatus","getCurrentReportJob","getDashboardData","getInstallationStatus","getMasterData","getMasterDataAdmin","getPublicDashboardData","getPublishedContent","getReportJobStatus","getReportSummariesForEvents","getSystemSettings","importAreas","include","installSmartSRRT","listAreas","listAssignableEventOwners","listAuditLogs","listAvailableGeminiModels","listContent","listDengueCasesForEvent","listEventAttachments","listReportsForEvent","listUsers","login","logout","migrateG05EventOwner","migrateG11EventAttachments","migrateG17ReportRegistry","migrateG21AuditRetention","migrateG29VisitLogs","migrateP1EventIdentity","onOpen","prepareReportRegeneration","registerUser","removeEventAttachment","reopenEvent","repairInstallation","resetSuperAdminPassword","runReportJob","saveArea","saveContent","saveMasterDataItem","saveSystemSettings","setupDatabase","showDatabaseInfo","testGeminiConnection","updateRecord","updateUser","uploadEventAttachment","uploadLogo"];
+const EXPECTED_PUBLIC=["addRecord","archiveAuditLogs","archiveAuditLogsFromSheetMenu","assignEventOwner","cancelReportJob","clearGeminiModelCache","closeEvent","createReportJob","deleteArea","deleteRecord","dismissReportJob","doGet","downloadEventAttachment","exportData","forceGeminiModelAuto","forceGeminiModelStable","generateReportFromWeb","getAIReportReadiness","getAnalytics","getAppBoot","getAreaMaster","getAuditRetentionStatus","getCurrentReportJob","getDashboardData","getDengueCaseWriteStatus","getInstallationStatus","getMasterData","getMasterDataAdmin","getPublicDashboardData","getPublishedContent","getReportJobStatus","getReportSummariesForEvents","getSystemSettings","importAreas","include","installSmartSRRT","listAreas","listAssignableEventOwners","listAuditLogs","listAvailableGeminiModels","listContent","listDengueCasesForEvent","listEventAttachments","listReportsForEvent","listUsers","login","logout","migrateG05EventOwner","migrateG11EventAttachments","migrateG17ReportRegistry","migrateG21AuditRetention","migrateG29VisitLogs","migrateP1EventIdentity","onOpen","prepareReportRegeneration","registerUser","removeEventAttachment","reopenEvent","repairInstallation","resetSuperAdminPassword","runReportJob","saveArea","saveContent","saveDengueCase","saveMasterDataItem","saveSystemSettings","setupDatabase","showDatabaseInfo","testGeminiConnection","updateRecord","updateUser","uploadEventAttachment","uploadLogo"];
 const DENIAL=/ไม่ได้กำหนดผู้ปฏิบัติการ|ไม่มีสิทธิ์ดำเนินการบำรุงรักษา/;
 
 function makeContext({configured='',active='',effective=''}={}){
@@ -125,4 +125,13 @@ test('GS-S1 intended public login, guest dashboard and protected application RPC
   }
   assert.equal(vm.runInContext('typeof requireTrustedOperator_',ctx),'function');
   assert.ok(!EXPECTED_PUBLIC.includes('requireTrustedOperator_'));
+});
+
+
+test('F02-W registered write/status RPCs deny default Native26 before services',()=>{
+  const {ctx,calls}=makeContext();
+  for(const name of ['saveDengueCase','getDengueCaseWriteStatus']){
+    assert.throws(()=>ctx[name]('synthetic-token','synthetic-event',{}),/D331_WRITE_UNAVAILABLE/);
+  }
+  assert.equal(calls.stage,0);assert.deepEqual(calls.properties,[]);
 });
