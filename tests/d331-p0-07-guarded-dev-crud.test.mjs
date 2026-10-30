@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createHash} from 'node:crypto';
+import {inspectF02DevPackage} from '../tools/d331-f02-dev-package.mjs';
 import {readOrderedClientScripts} from './helpers/native-client.mjs';
 
 const paths=[
@@ -26,18 +27,25 @@ const POLICY='TEST-POLICY-1';
 const NOW='2026-10-18T00:00:00.000Z';
 const TAG=createHash('sha256').update('TEST_ONLY_HASH').digest('hex');
 const kinds=['case','plan','action','survey','followup'];
-function scriptCtx(){
+function scriptCtx(options={}){
  const ctx=vm.createContext({});
- sources.forEach((s,i)=>vm.runInContext(s,ctx,{filename:paths[i]}));
+ if(options.devPackage){
+  const p=inspectF02DevPackage({version:1,environment:'DEVELOPMENT_ONLY',dataClass:'SYNTHETIC_ONLY',
+   sourceSha:'a'.repeat(40),scriptId:'SYNTHETIC_SCRIPT_ID_012345678901234',
+   deploymentId:'SYNTHETIC_DEPLOY_ID_012345678901234',spreadsheetId:DB,priorVersion:20,
+   diseaseLabels:['SYNTHETIC_DENGUE_ONLY'],policyRevision:'SYNTHETIC_F02_DEV_FIXTURE',
+   caseFields:['CaseID','CaseRevision','CaseStatus']});
+  for(const name of p.serverPushOrder)vm.runInContext(p.entries.get(name).toString(),ctx,{filename:name});
+ }else sources.forEach((s,i)=>vm.runInContext(s,ctx,{filename:paths[i]}));
  return ctx;
 }
-function grantRow(ctx,cap,i){
+function grantRow(ctx,cap,i,policy=POLICY){
  const obj={
    SchemaVersion:1,GrantID:'grant-'+i,UserID:'user-1',
    Capability:cap,AreaID:'area-A',EventID:EVENT,State:'ACTIVE',
    ValidFromUTC:'2025-01-01T00:00:00.000Z',
    ExpiresAtUTC:'2090-01-01T00:00:00.000Z',
-   GrantRevision:1,PolicyRevision:POLICY,
+   GrantRevision:1,PolicyRevision:policy,
    RequestedByUserID:'issuer-1',RequestedAtUTC:'2025-01-01T00:00:00.000Z',
    ApprovedByUserID:'approver-1',ApprovedAtUTC:'2025-01-02T00:00:00.000Z',
    IssuedByUserID:'issuer-1',IssuedAtUTC:'2025-01-02T00:00:00.000Z',
@@ -79,7 +87,7 @@ function mkSheet(name,headers,rows,trace,options){
  };
 }
 function setup(options={}){
- const ctx=scriptCtx();
+ const ctx=scriptCtx(options);
  const trace={locks:0,release:0,opens:0,properties:0,cache:0,
    reads:[],writes:[],uuids:0};
  const headers={
@@ -101,7 +109,8 @@ function setup(options={}){
    'TEST_ONLY_HASH','Staff','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
    '2','หมู่บ้านจำลอง','SYN-001',true,'','']],
-  D331AccessGrants:kinds.map((kind,i)=>grantRow(ctx,
+  D331AccessGrants:options.devPackage?['dengue.case.read','dengue.case.write'].map((cap,i)=>
+    grantRow(ctx,cap,i+1,'SYNTHETIC_F02_DEV_FIXTURE')):kinds.map((kind,i)=>grantRow(ctx,
     ctx.D331_P007_KIND_[kind].capability,i+1)),
   DengueRequestLedger:[],
   DengueCases:[],DenguePlans:[],DengueControlActions:[],
@@ -136,12 +145,14 @@ function setup(options={}){
   },
   getUuid:()=>{trace.uuids++;return uid(100+trace.uuids);}
  };
+ if(!options.devPackage){
  ctx.D331_G1A_ENABLED=options.featureFlag??true;
  ctx.D331_P003B_ENABLED_=options.readFlag??true;
  ctx.D331_P007_ENABLED_=options.writeFlag??true;
  ctx.D331_P003B_APPROVED_DEV_SPREADSHEET_ID_=options.approvedId??DB;
  ctx.D331_P003B_APPROVED_DISEASE_LABELS_=['SYNTHETIC_DENGUE_ONLY'];
  ctx.D331_P003B_APPROVED_POLICY_REVISION_=POLICY;
+ }
  return {ctx,trace,sheets,
   run:(kind,mode,payload={},more={})=>
     JSON.parse(JSON.stringify(ctx.d331P007Operate_(TOKEN,EVENT,{
@@ -506,5 +517,34 @@ test('F02-W partial dependencies and missing approval pins deny before services'
   deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand()));
   deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(460)));
   assert.equal(s.trace.locks,0);assert.equal(s.trace.properties,0);assert.equal(s.trace.opens,0);
+ }
+});
+
+
+test('F02 DEV S2 actual activated package reads/creates/PATCHes/status with narrow current grants',()=>{
+ const s=setup({devPackage:true});
+ const read=()=>plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT));
+ assert.equal(read().cases.length,0);
+ const created=plain(s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand()));
+ assert.equal(created.status,'CREATED');assert.equal(created.revision,1);
+ assert.deepEqual(read().cases,[{caseId:created.caseId,caseRevision:1,caseStatus:'ACTIVE'}]);
+ const updated=plain(s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(490),
+  entityId:created.caseId,expectedEntityRevision:1,payload:{Classification:'PROBABLE'}})));
+ assert.equal(updated.revision,2);assert.equal(read().cases[0].caseRevision,2);
+ const receipt=plain(s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(490)));
+ assert.deepEqual(receipt,{contractVersion:'D331_CASE_WRITE_RECEIPT_V1',eventId:EVENT,
+  requestId:uid(490),status:'COMMITTED',caseId:created.caseId});
+ const n=s.trace.writes.length;
+ deny(()=>s.run('plan','create',{TriggerCaseID:created.caseId,EpisodeKey:'EP1'}));
+ assert.equal(s.trace.writes.length,n);
+});
+test('F02 DEV S2 actual package denies binding drift and revoked grants for both read and write',()=>{
+ for(const change of [s=>{s.ctx.PropertiesService.getScriptProperties=()=>({getProperty:()=>null});},
+  s=>{s.sheets.D331AccessGrants.grid.splice(1);},s=>{s.sheets.MainData.grid[1][32]='closed';}]){
+  const s=setup({devPackage:true});change(s);
+  assert.throws(()=>s.ctx.listDengueCasesForEvent(TOKEN,EVENT),/D331_UNAVAILABLE/);
+  deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand()));
+  deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(490)));
+  assert.equal(s.trace.writes.length,0);
  }
 });
