@@ -7,10 +7,16 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {verifyP013PrivateSnapshot} from './d331-p0-13-release-gates.mjs';
 import {inspectNative33Candidate} from './d331-p0-11-native33-package.mjs';
+import {GAS_SERVER_SOURCES,GAS_HTML_SOURCES,gasIndexTemplate} from './build-apps-script-multifile.mjs';
+import {CANDIDATE_D331_DEPENDENCIES} from './d331-p0-10-runtime-readiness.mjs';
+import {compileNativeHtmlFragment} from './native-inline-vendor.mjs';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const no=()=>{throw Error('D331_F02_DEV_HOLD');};
 const exact=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const FIELDS=['CaseID','CaseRevision','CaseStatus'];
+// The previously reviewed and actually deployed F02 source. This recovery
+// frontier is intentionally bounded, not an arbitrary historical-code loader.
+const PREVIOUS_F02_SHA='6257851296e949e88777c4a8e86aa83c9d22a399';
 const PROFILE_KEYS=['version','environment','dataClass','sourceSha','scriptId','deploymentId',
  'spreadsheetId','priorVersion','diseaseLabels','policyRevision','caseFields'].sort();
 function validateProfile(p){
@@ -30,6 +36,11 @@ export function inspectF02DevPackage(profile){
   const entries=new Map(base.entries);
   const reader='15-p0-22b2-case-read-integration.gs';
   entries.set(reader,fs.readFileSync(path.join(ROOT,'src/dengue',reader)));
+  return activateF02Package(p,entries,base.serverPushOrder);
+ }catch{no();}
+}
+function activateF02Package(p,entries,baseOrder){
+  const reader='15-p0-22b2-case-read-integration.gs';
   function replace(name,before,after){
    const text=entries.get(name)?.toString('utf8');
    if(typeof text!=='string'||text.split(before).length!==2)no();
@@ -49,10 +60,31 @@ export function inspectF02DevPackage(profile){
   const client='03h-client-event-records.html';
   replace(client,'var D331_F02_CASE_READ_AVAILABLE_ = false;','var D331_F02_CASE_READ_AVAILABLE_ = true;');
   replace(client,'var D331_F02_CASE_WRITE_AVAILABLE_ = false;','var D331_F02_CASE_WRITE_AVAILABLE_ = true;');
-  const serverPushOrder=Object.freeze([...base.serverPushOrder,reader]);
+  const serverPushOrder=Object.freeze([...baseOrder,reader]);
   if(entries.size!==34||serverPushOrder.length!==16)no();
   return {entries,serverPushOrder,profile:p};
- }catch{no();}
+}
+
+function priorF02Package(p){
+ if(p.sourceSha!==PREVIOUS_F02_SHA)no();
+ function blob(name){
+  const r=spawnSync('git',['show',PREVIOUS_F02_SHA+':'+name],
+   {cwd:ROOT,timeout:10000,maxBuffer:2*1024*1024});
+  if(r.error||r.status!==0)no();return r.stdout;
+ }
+ // Reconstruction uses data from the pinned Git object and the unchanged
+ // native compiler/vendor contract. Never execute code from a backup.
+ for(const name of ['tools/native-sources.mjs','tools/build-apps-script-multifile.mjs',
+  'tools/native-inline-vendor.mjs','tools/build-chartjs-offline-asset.mjs','package.json','package-lock.json'])
+  if(!blob(name).equals(fs.readFileSync(path.join(ROOT,name))))no();
+ const server=[...GAS_SERVER_SOURCES,...CANDIDATE_D331_DEPENDENCIES];
+ const entries=new Map();
+ for(const name of [...server,...GAS_HTML_SOURCES,'src/dengue/15-p0-22b2-case-read-integration.gs']){
+  const bytes=blob(name);
+  entries.set(path.basename(name),name.endsWith('.html')?compileNativeHtmlFragment(name,bytes,ROOT):bytes);
+ }
+ entries.set('Index.html',Buffer.from(gasIndexTemplate()));
+ return activateF02Package(p,entries,server.map(n=>path.basename(n)));
 }
 
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -74,12 +106,78 @@ function boundProfile(profile,expected){
     keys.some(k=>expected[k]!==p[k]))no();
  return p;
 }
+function priorMetadata(work,p,metadata){
+ const read=name=>metadata?metadata[name]:privateFile(path.join(work,name));
+ const previous=validateProfile(JSON.parse(read('previous-profile.json')));
+ if(previous.sourceSha!==PREVIOUS_F02_SHA||previous.priorVersion!==20||p.priorVersion!==21||
+    ['scriptId','deploymentId','spreadsheetId','policyRevision','diseaseLabels','caseFields']
+     .some(k=>!exact(previous[k],p[k])))no();
+ const {entries}=priorF02Package(previous);
+ const manifest=read('previous-manifest.json');
+ if(JSON.parse(manifest).runtimeVersion!=='V8')no();
+ entries.set('appsscript.json',manifest);
+ const seal=JSON.parse(read('previous-seal.json'));
+ if(seal.sourceSha!==previous.sourceSha||seal.profileSha256!==digest(Buffer.from(JSON.stringify(previous)))||
+    !exact(Object.keys(seal.files).sort(),[...entries.keys()].sort()))no();
+ for(const [name,bytes] of entries)if(seal.files[name]!==digest(bytes))no();
+ return entries;
+}
+function checkSnapshotCopy(dir,entries,scriptId){
+ privateDirectory(dir);
+ if(!exact(fs.readdirSync(dir).sort(),[...entries.keys(),'.clasp.json'].sort()))no();
+ const config=JSON.parse(privateFile(path.join(dir,'.clasp.json')));
+ if(!exact(config,{scriptId,rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']}))no();
+ for(const [name,bytes] of entries)if(!privateFile(path.join(dir,name)).equals(bytes))no();
+}
+function prepareActiveSnapshot(work,p,previousWork){
+ privateDirectory(work);privateDirectory(previousWork);
+ if(fs.readdirSync(work).length)no();
+ const previous=validateProfile(JSON.parse(privateFile(path.join(previousWork,'f02-profile.json'))));
+ // Copy only bounded, validated prior-release evidence into the new snapshot.
+ const metadata={'previous-profile.json':Buffer.from(JSON.stringify(previous)),
+  'previous-manifest.json':privateFile(path.join(previousWork,'f02-stage/appsscript.json')),
+  'previous-seal.json':privateFile(path.join(previousWork,'f02-seal.json'))};
+ // Validate in memory first: no cloud read or partial snapshot on bad authority.
+ const entries=priorF02Package(previous).entries;
+ entries.set('appsscript.json',metadata['previous-manifest.json']);
+ if(!privateFile(path.join(previousWork,'remote/appsscript.json')).equals(metadata['previous-manifest.json'])||
+    privateFile(path.join(previousWork,'f02-release-attempt/state.txt')).toString().trim()!==
+      'SOURCE_AND_DEPLOYMENT_VERIFIED'||
+    JSON.parse(privateFile(path.join(previousWork,'f02-release-attempt/version.created.json'))).versionNumber!==p.priorVersion||
+    deploymentRows(privateFile(path.join(previousWork,'f02-release-attempt/deployments.after.txt')).toString())
+      .get(p.deploymentId)?.version!==String(p.priorVersion))no();
+ const previousStage=privateDirectory(path.join(previousWork,'f02-stage'));
+ if(!exact(fs.readdirSync(previousStage).sort(),[...entries.keys()].sort()))no();
+ for(const [name,bytes] of entries)if(!privateFile(path.join(previousStage,name)).equals(bytes))no();
+ // All identity/profile/seal checks precede the first remote command.
+ priorMetadata(work,p,metadata);
+ for(const [name,bytes] of Object.entries(metadata))fs.writeFileSync(path.join(work,name),bytes,{flag:'wx',mode:0o600});
+ fs.writeFileSync(path.join(work,'source-sha.txt'),p.sourceSha+'\n',{flag:'wx',mode:0o600});
+ fs.writeFileSync(path.join(work,'snapshot.claspignore'),'',{flag:'wx',mode:0o600});
+ for(const folder of ['remote','immutable-prior']){
+  fs.mkdirSync(path.join(work,folder),{mode:0o700});
+  fs.writeFileSync(path.join(work,folder,'.clasp.json'),JSON.stringify({scriptId:p.scriptId,
+   rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']}),{flag:'wx',mode:0o600});
+ }
+}
+function checkActiveSnapshot(work,p){
+ if(privateFile(path.join(work,'source-sha.txt')).toString().trim()!==p.sourceSha||
+    privateFile(path.join(work,'snapshot.claspignore')).length)no();
+ const entries=priorMetadata(work,p);
+ for(const folder of ['remote','immutable-prior'])checkSnapshotCopy(path.join(work,folder),entries,p.scriptId);
+ const rows=deploymentRows(privateFile(path.join(work,'deployments.before.txt')).toString());
+ if(rows.get(p.deploymentId)?.version!==String(p.priorVersion)||
+    !privateFile(path.join(work,'versions.before.txt')).length||
+    !privateFile(path.join(work,'deployments.before.txt')).equals(privateFile(path.join(work,'deployments.snapshot-after.txt')))||
+    !privateFile(path.join(work,'versions.before.txt')).equals(privateFile(path.join(work,'versions.snapshot-after.txt'))))no();
+}
 function verifyBackup(work,p){
  const remoteConfig=JSON.parse(privateFile(path.join(work,'remote/.clasp.json')));
  const expectedConfig={scriptId:p.scriptId,rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']};
  if(!exact(Object.keys(remoteConfig).sort(),Object.keys(expectedConfig).sort())||
     Object.keys(expectedConfig).some(k=>!exact(remoteConfig[k],expectedConfig[k])))no();
- verifyP013PrivateSnapshot({work,sourceSha:p.sourceSha,scriptId:p.scriptId,deploymentId:p.deploymentId});
+ if(fs.existsSync(path.join(work,'previous-profile.json')))checkActiveSnapshot(work,p);
+ else verifyP013PrivateSnapshot({work,sourceSha:p.sourceSha,scriptId:p.scriptId,deploymentId:p.deploymentId});
  verifyArchiveContents(work);
  const rows=deploymentRows(fs.readFileSync(path.join(work,'deployments.before.txt'),'utf8'));
  if(rows.get(p.deploymentId)?.version!==String(p.priorVersion))no();
@@ -89,17 +187,22 @@ function verifyArchiveContents(work){
  const archive=path.join(work,'rollback-source-and-metadata.tgz');
  const stat=fs.lstatSync(archive);
  if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid()||stat.size>32*1024*1024)no();
- const metadata=['deployments.before.txt','versions.before.txt','source-sha.txt'];
- const members=[...fs.readdirSync(path.join(work,'remote')).map(n=>'remote/'+n),...metadata];
+ if(privateFile(archive+'.sha256').toString().trim()!==digest(privateFile(archive))+
+   '  rollback-source-and-metadata.tgz')no();
+ const active=fs.existsSync(path.join(work,'previous-profile.json'));
+ const metadata=['deployments.before.txt','versions.before.txt','source-sha.txt',
+  ...(active?['previous-profile.json','previous-manifest.json','previous-seal.json']:[])];
+ const folders=active?['remote','immutable-prior']:['remote'];
+ const members=[...folders.flatMap(dir=>fs.readdirSync(path.join(work,dir)).map(n=>dir+'/'+n)),...metadata];
  const env={...process.env,LC_ALL:'C',TAR_OPTIONS:''};
  function tar(args,encoding){
   const r=spawnSync('tar',args,{encoding,env,timeout:10000,maxBuffer:2*1024*1024});
   if(r.error||r.status!==0)no();return r.stdout;
  }
  const names=tar(['-tzf',archive],'utf8').trim().split('\n');
- if(!exact(names.slice().sort(),['remote/',...members].sort()))no();
+ if(!exact(names.slice().sort(),[...folders.map(d=>d+'/'),...members].sort()))no();
  const types=tar(['-tvzf',archive],'utf8').trim().split('\n').map(line=>line[0]);
- if(types.length!==names.length||types.some((t,i)=>t!==(names[i]==='remote/'?'d':'-')))no();
+ if(types.length!==names.length||types.some((t,i)=>t!==(folders.some(d=>names[i]===d+'/')?'d':'-')))no();
  for(const member of members){
   const bytes=privateFile(path.join(work,member));
   if(!tar(['-xOzf',archive,'--',member],undefined).equals(bytes))no();
@@ -176,6 +279,27 @@ function cli(){
  const expected={sourceSha:env.SMART_SRRT_APPROVED_SOURCE_SHA,scriptId:env.SMART_SRRT_SCRIPT_ID,
   deploymentId:env.SMART_SRRT_DEPLOYMENT_ID,spreadsheetId:env.SMART_SRRT_F02_SPREADSHEET_ID,
   priorVersion:Number(env.SMART_SRRT_F02_PRIOR_VERSION)};
+ if(mode==='--snapshot-input'||mode==='--snapshot-seal'){
+  privateDirectory(work);
+  const p=boundProfile(JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE)),expected);
+  if(mode==='--snapshot-input'){
+   prepareActiveSnapshot(work,p,env.SMART_SRRT_F02_PREVIOUS_WORK);
+   console.log('F02_DEV=SNAPSHOT_INPUT_VALIDATED; REMOTE_WRITES=NO');return;
+  }
+  checkActiveSnapshot(work,p);
+  const archive='rollback-source-and-metadata.tgz';
+  if(fs.existsSync(path.join(work,archive))||fs.existsSync(path.join(work,archive+'.sha256')))no();
+  const r=spawnSync('tar',['-czf',path.join(work,archive),'-C',work,'--','remote','immutable-prior',
+   'deployments.before.txt','versions.before.txt','source-sha.txt',
+   'previous-profile.json','previous-manifest.json','previous-seal.json'],
+   {env:{...process.env,TAR_OPTIONS:'',LC_ALL:'C'},timeout:10000,maxBuffer:1024*1024});
+  if(r.error||r.status!==0)no();
+  fs.chmodSync(path.join(work,archive),0o600);
+  fs.writeFileSync(path.join(work,archive+'.sha256'),digest(privateFile(path.join(work,archive)))+'  '+archive+'\n',
+   {flag:'wx',mode:0o600});
+  verifyBackup(work,p);
+  console.log('F02_DEV=ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED; REMOTE_WRITES=NO');return;
+ }
  if(mode==='--prepare'){
   const profile=JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE));
   prepareF02DevStage({work,profile,expected});

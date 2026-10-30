@@ -113,11 +113,13 @@ function d331P007Row_(sheet,obj){
 function d331P007Read_(sheet,sheetName){
   var rows=d331P003bReadRows_(sheet,d331P002aHeaders_(sheetName).length,
     D331_P007_LIMIT_);
-  rows.forEach(function(row){
-    try{d331P002aValidateSyntheticRow_(sheetName,row);}
+  return rows.map(function(row){
+    try{
+      if(sheetName==='DengueCases')return d331P005DecodeCaseRow_(sheet,row);
+      d331P002aValidateSyntheticRow_(sheetName,row);return row;
+    }
     catch(e){d331P007Deny_();}
   });
-  return rows;
 }
 function d331P007Digest_(canonical){
   var bytes=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
@@ -219,7 +221,7 @@ function d331P007RequireReady_(){
      !D331_P003B_APPROVED_POLICY_REVISION_||
      [typeof d331IsUuid_,typeof d331P003bGetRequiredSheet_,typeof d331P003bSessionUser_,
       typeof d331P003bOneRowById_,typeof d331P003bReadRows_,typeof d331P003bGrant_,
-      typeof d331P005RequireSevenSheets_,typeof d331P002aHeaders_,
+      typeof d331P005RequireSevenSheets_,typeof d331P005DecodeCaseRow_,typeof d331P002aHeaders_,
       typeof d331P002aValidateSyntheticRow_,typeof d331N1bAuthorizeOffline_,
       typeof d331P006EvaluateOffline_].some(function(type){return type!=='function';}))
     d331P007Deny_();

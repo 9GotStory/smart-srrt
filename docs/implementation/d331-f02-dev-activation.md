@@ -1,7 +1,7 @@
 # F02 synthetic-only Development activation
 
 Date: 30 October 2026. Source baseline: `main@7c6b7618ae45f22b6a6ffa45c76d726dad89d088`.
-Status: **source candidate; not deployed or observed in the browser**. Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238).
+Status: **original synthetic DEV Version21 deployed at `6257851296e949e88777c4a8e86aa83c9d22a399`; browser UAT FAIL on Case date round-trip. The repair remains a source candidate, not deployed.** Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238).
 
 The PO requested enabling F02 in the existing Development environment, confirmed that all Event/health content is synthetic, and approved the eight-path implementation scope and S1–S3. This authorizes pursuing a bounded synthetic DEV exercise; it is not real-patient privacy/clinical approval. Source Merge remains a separate PO gate. Do not ask again whether the settled target is Production or whether the agreed data is synthetic.
 
@@ -19,7 +19,7 @@ Activation does not issue rights: every read/write/status operation still checks
 
 Use the existing target inventory in #189; never publish identifiers, account emails, credentials or raw inventories. Preserve original manifest/OAuth/execute/access settings. The old P0-11 read-only preflight must first produce a **fresh** private snapshot at the exact approved source SHA, including archive/checksum, local extraction drill, source and deployment/version inventories. The earlier Version20 backup is historical evidence and cannot be reused across a later source SHA.
 
-The new wrapper `tools/deploy-d331-f02-dev.sh` accepts only `--prepare`, `--verify`, and `--deploy`. It requires the tested clasp 3.4.1, actual tool checkout, clean main/origin/main and exact source SHA. Prepare/verify require the read-only flag; deploy requires the SHA-bound DEV execution flag. The implementation does not add rollback/create-project/create-deployment/delete/login modes.
+The new wrapper `tools/deploy-d331-f02-dev.sh` accepts `--snapshot`, `--prepare`, `--verify`, and `--deploy`. It requires the tested clasp 3.4.1, actual tool checkout, clean main/origin/main and exact source SHA. Snapshot/prepare/verify require the read-only flag; deploy requires the SHA-bound DEV execution flag. The implementation does not add rollback/create-project/create-deployment/delete/login modes.
 
 Set these privately, with actual existing values rather than the placeholders:
 
@@ -57,7 +57,7 @@ The CLI interaction was checked against installed clasp 3.4.1 source and its [ve
 
 The wrapper changes source/deployment only; it does not provision accounts, grants, Events or Case rows. Prepare a bounded fixture in the existing workbook after checking headers, target, ownership and duplicates. Reuse a suitable explicit test account/Event or add clearly identified synthetic fixtures; do not replace existing resources or borrow credentials. Issue only `dengue.case.read` and `dengue.case.write` for the test Event/Area, synthetic policy revision and an explicit expiry. No five-domain blanket grant. Restricted setup evidence must identify what was added without publishing IDs or secrets.
 
-The server must prove the current Script Property binding through its ordinary fail-closed checks. Then exercise login/Records, empty/read, create, selected-field PATCH/optional clear, receipt/fresh read, stale revision, denied/expired/revoked grant and logout; verify the original Dashboard/Records/report/library smoke paths. Do not induce a real interrupted write merely to test PENDING without a separately bounded reconciliation procedure; interruption behavior is covered offline. No patient data or Gemini call is needed.
+Use an Admin test account for Records: existing RBAC excludes Staff, and D331 grants do not alter that role policy. The server must prove the current Script Property binding through its ordinary fail-closed checks. Then exercise login/Records, empty/read, create, selected-field PATCH/optional clear, receipt/fresh read, stale revision, denied/expired/revoked grant and logout; verify the original Dashboard/Records/report/library smoke paths. Do not induce a real interrupted write merely to test PENDING without a separately bounded reconciliation procedure; interruption behavior is covered offline. No patient data or Gemini call is needed.
 
 S1 tests actual assembled package/profile/private stage. S2 reuses the existing GAS I/O fixture and actual authorization/credential helpers with assembled package source for read/create/PATCH/status and denials. S3 executes the actual shell wrapper against synthetic git/clasp/filesystem I/O, including drift, unsafe copied config, inherited ignore/project overrides, actual selected-file omission, immutable-version checks, unknown mutation phases and refusal to repeat. Full Native26 tests/contracts/parity remain required.
 
@@ -65,4 +65,25 @@ S1 tests actual assembled package/profile/private stage. S2 reuses the existing 
 
 Before implementation, a read-only operator check found the original deployment at Version20; source/manifest backup SHA256 and local restore drill passed without cloud mutation or Sheet row reads. This is dated metadata/source evidence, not browser acceptance of the new candidate.
 
-At this source-candidate stage, **F02 DEV deployment and browser exercise are NOT VERIFIED**. Source code, synthetic tests, exact-HEAD CI/review, source Merge, actual deployed version and browser results must be recorded separately in #238. Real-data D2/P1/P2/S1/S2/C1/C2 decisions remain distinct; the synthetic exercise does not close them or start F03–F08.
+The initial release completed the original Version20 → Version21 update with pushed/immutable source and deployment inventory readbacks. Playwright CLI 0.1.22/Chrome verified login, the pinned runtime binding, an empty Case list and one UI create at Revision1/COMMITTED. Fresh list then failed because Sheets stored the onset date as a DATE cell while the logical validator requires a string. Two read-only browser RPC probes reproduced this while the same session confirmed COMMITTED. Dashboard/Records/report/library navigation and logout/old-token denial passed. No PATCH, duplicate create, PENDING, manual row rewrite, Gemini call or rollback followed. **Version21 UAT is FAIL**, with redacted receipts in #238. **The date repair has not been deployed or observed in DEV.** Source code, synthetic tests, exact-HEAD CI/review, source Merge, actual deployed version and browser results must be recorded separately in #238. Real-data D2/P1/P2/S1/S2/C1/C2 decisions remain distinct; the synthetic exercise does not close them or start F03–F08.
+
+
+## Approved date round-trip repair and active-package backup
+
+The PO approved ten source/test/tool/doc paths and S1–S3 after the Version21 finding. An internal Case storage decoder is shared by authorized reader detail reads and guarded writer Case snapshots. Only a valid service Date in OnsetLocalDate is decoded to `yyyy-MM-dd` using the pinned parent workbook's time zone. Canonical strings/optional empty remain unchanged; numeric serials, invalid dates, wrong parent or absent time zone deny. Other fields and the pure logical schema stay strict. Decoding copies rows and performs no write: the existing committed date can be read and PATCHed without a data repair or schema migration. Actual package tests model date conversion after appendRow/setValues, omitted PATCH fields, UTC day boundaries and denials.
+
+The legacy P0-11 snapshot applies to the initial OFF Native33 activation. For the now-active **Version21**, use the new read-only `--snapshot` mode in a new, empty, private directory. Set `SMART_SRRT_F02_PREVIOUS_WORK` to the retained successful Version21 release workspace; use a new input profile with `priorVersion=21` and the newly reviewed/merged source SHA. This frontier is deliberately bounded to previous source `6257851296e949e88777c4a8e86aa83c9d22a399` (its profile has priorVersion20). A different prior release requires another reviewed frontier. P0-11/P0-13 validators are unchanged.
+
+Before any cloud read, the previous profile/targets, successful state, created Version21, deployment receipt, sealed stage and original manifest must reconcile. The tool reconstructs all 34 previous source files from that exact local Git object using the unchanged native compiler/manifest/vendor contract; it never executes backup code. That Git object and pinned dependencies must be available locally. It then pulls mutable source and immutable Version21 with explicit project/ignore flags, compares both to the reconstructed package and original manifest, and verifies deployment/version inventories before and after. The source-bound archive contains both copies and prior profile/manifest/seal; checksum and every archived member's restored bytes are verified without extracting paths. Drift, reuse or unsafe/mismatched evidence fails before any push.
+
+```bash
+# Existing target values, previous successful workspace, new empty backup directory,
+# candidate input profile and exact approved merged source SHA are set privately.
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --snapshot
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --prepare
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --verify
+# Existing separately authorized synthetic DEV intent; SHA-bound flag set privately.
+bash tools/deploy-d331-f02-dev.sh --deploy
+```
+
+The already-authorized bounded Playwright retest follows exact-HEAD review/CI, separate PO source Merge, post-merge CI and fresh backup/update. First read the existing committed synthetic Case, then selected-field PATCH/fresh revision/receipt and negative permission/revision/logout checks. Do not work around the failure with duplicate creates or manual row edits. Record browser UI versus browser-invoked RPC checks separately; clinical policy remains NOT_EVALUATED.

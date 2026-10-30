@@ -57,7 +57,11 @@ function grantRow(ctx,cap,i,policy=POLICY){
 }
 function mkSheet(name,headers,rows,trace,options){
  const grid=[headers.slice(),...rows.map(r=>r.slice())];
+ const stored=(value,column)=>options.coerceCaseDates&&name==='DengueCases'&&column===5&&
+   typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)
+   ?new Date(value+'T00:00:00+07:00'):value;
  return {name,grid,
+  getParent(){return {getId:()=>DB,getSpreadsheetTimeZone:()=>options.timeZone??'Asia/Bangkok'};},
   getLastColumn(){return grid[0].length;},
   getLastRow(){return grid.length;},
   getRange(row,col,height,width){
@@ -71,7 +75,7 @@ function mkSheet(name,headers,rows,trace,options){
       assert.equal(matrix.length,height);
       assert.ok(matrix.every(r=>r.length===width));
       for(let i=0;i<matrix.length;i++){
-       for(let j=0;j<width;j++)grid[row+i-1][col+j-1]=matrix[i][j];
+       for(let j=0;j<width;j++)grid[row+i-1][col+j-1]=stored(matrix[i][j],col+j-1);
       }
       trace.writes.push({sheet:name,type:'setValues'});
     }
@@ -81,7 +85,7 @@ function mkSheet(name,headers,rows,trace,options){
     if(options.failDomain&&name===options.failDomain)
       throw Error('Simulated post-ledger domain failure');
     assert.equal(row.length,headers.length);
-    grid.push(row.slice());
+    grid.push(row.map(stored));
     trace.writes.push({sheet:name,type:'appendRow'});
   }
  };
@@ -139,6 +143,12 @@ function setup(options={}){
   return {tryLock:()=>!options.lockFails,releaseLock:()=>{trace.release++;}};
  }};
  ctx.Utilities={DigestAlgorithm:{SHA_256:'SHA_256'},Charset:{UTF_8:'UTF_8'},
+  formatDate:(date,timeZone,pattern)=>{
+   assert.equal(pattern,'yyyy-MM-dd');
+   const p=new Intl.DateTimeFormat('en',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'})
+    .formatToParts(date);const value=type=>p.find(x=>x.type===type).value;
+   return value('year')+'-'+value('month')+'-'+value('day');
+  },
   computeDigest:(alg,s)=>{
     assert.equal(alg,'SHA_256');
     return [...createHash('sha256').update(s).digest()];
@@ -510,6 +520,7 @@ test('F02-W S3 serialized actual server save/status/read results cross the regis
 
 test('F02-W partial dependencies and missing approval pins deny before services',()=>{
  for(const mutation of [s=>{s.ctx.d331P003bSessionUser_=undefined;},s=>{s.ctx.d331P005RequireSevenSheets_=undefined;},
+  s=>{s.ctx.d331P005DecodeCaseRow_=undefined;},
   s=>{s.ctx.d331N1bAuthorizeOffline_=undefined;},s=>{s.ctx.d331P002aValidateSyntheticRow_=undefined;},
   s=>{s.ctx.D331_P003B_APPROVED_POLICY_REVISION_='';},s=>{s.ctx.D331_P003B_APPROVED_DISEASE_LABELS_=[];},
   s=>{s.ctx.D331_P003B_APPROVED_DEV_SPREADSHEET_ID_='';},s=>{s.ctx.D331_P003B_ENABLED_=false;}]){
@@ -547,4 +558,34 @@ test('F02 DEV S2 actual package denies binding drift and revoked grants for both
   deny(()=>s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(490)));
   assert.equal(s.trace.writes.length,0);
  }
+});
+
+test('F02 DEV create/read/PATCH round-trips Sheets Date onset without rewriting the committed row',()=>{
+ const s=setup({devPackage:true,coerceCaseDates:true});
+ const command=caseCommand({payload:{Classification:'SUSPECTED',OnsetLocalDate:'2026-10-29',
+  ReportingUnit:'SYNTHETIC_A',ReceivingUnit:'SYNTHETIC_B'}});
+ const created=plain(s.ctx.saveDengueCase(TOKEN,EVENT,command));
+ assert.equal(created.revision,1);
+ assert.equal(Object.prototype.toString.call(s.sheets.DengueCases.grid[1][5]),'[object Date]');
+ const before=s.trace.writes.length;
+ assert.deepEqual(plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT)).cases,
+  [{caseId:created.caseId,caseRevision:1,caseStatus:'ACTIVE'}]);
+ assert.equal(s.trace.writes.length,before);
+ const updated=plain(s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(491),
+  entityId:created.caseId,expectedEntityRevision:1,payload:{ReportingUnit:'SYNTHETIC_PATCHED'}})));
+ assert.equal(updated.revision,2);
+ assert.equal(plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT)).cases[0].caseRevision,2);
+ assert.equal(s.sheets.DengueCases.grid[1][5].toISOString(),'2026-10-28T17:00:00.000Z');
+ assert.equal(s.sheets.DengueCases.grid[1][4],'SUSPECTED');
+ assert.equal(s.sheets.DengueCases.grid[1][10],'SYNTHETIC_B');
+ assert.equal(plain(s.ctx.getDengueCaseWriteStatus(TOKEN,EVENT,uid(491))).status,'COMMITTED');
+ assert.equal(s.sheets.DengueRequestLedger.grid.length,3);
+ const writes=s.trace.writes.length;
+ deny(()=>s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(492),
+  entityId:created.caseId,expectedEntityRevision:1,payload:{ReportingUnit:'STALE'}})));
+ assert.equal(s.trace.writes.length,writes);
+ const cleared=plain(s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(493),
+  entityId:created.caseId,expectedEntityRevision:2,payload:{OnsetLocalDate:''}})));
+ assert.equal(cleared.revision,3);assert.equal(s.sheets.DengueCases.grid[1][5],'');
+ assert.equal(plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT)).cases[0].caseRevision,3);
 });

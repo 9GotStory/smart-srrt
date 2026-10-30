@@ -5,7 +5,7 @@ umask 077
 stop(){ echo "F02_DEV=HOLD; REASON=$1" >&2; exit 1; }
 [[ $# -eq 1 ]] || stop EXACT_ONE_MODE_REQUIRED
 MODE="$1"
-[[ "$MODE" == --prepare || "$MODE" == --verify || "$MODE" == --deploy ]] || stop UNSUPPORTED_MODE
+[[ "$MODE" == --snapshot || "$MODE" == --prepare || "$MODE" == --verify || "$MODE" == --deploy ]] || stop UNSUPPORTED_MODE
 SOURCE_SHA="${SMART_SRRT_APPROVED_SOURCE_SHA:-}"
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || stop SOURCE_SHA_REQUIRED
 if [[ "$MODE" == --deploy ]];then
@@ -32,6 +32,18 @@ for cmd in git node "$CLASP" diff cmp mkdir cp;do command -v "$cmd" >/dev/null |
 git fetch --quiet origin main || stop REMOTE_MAIN_UNAVAILABLE
 [[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" && "$(git rev-parse origin/main)" == "$SOURCE_SHA" ]] || stop SOURCE_SHA_MISMATCH
 GATE="$TOOL_ROOT/tools/d331-f02-dev-package.mjs"
+if [[ "$MODE" == --snapshot ]];then
+ node "$GATE" --snapshot-input || stop PRIOR_RELEASE_EVIDENCE_INVALID_NO_CLOUD_READ
+ snapshot_at(){ local project="$1";shift; "$CLASP" --project "$project" --ignore "$WORK/snapshot.claspignore" "$@"; }
+ (cd "$WORK/remote" && snapshot_at "$WORK/remote/.clasp.json" pull >"$WORK/snapshot-pull.log" 2>&1 &&
+  snapshot_at "$WORK/remote/.clasp.json" list-deployments >"$WORK/deployments.before.txt" 2>"$WORK/deployments.err" &&
+  snapshot_at "$WORK/remote/.clasp.json" list-versions >"$WORK/versions.before.txt" 2>"$WORK/versions.err") || stop SNAPSHOT_READ_FAILED_NO_WRITE
+ (cd "$WORK/immutable-prior" && snapshot_at "$WORK/immutable-prior/.clasp.json" pull --versionNumber "$SMART_SRRT_F02_PRIOR_VERSION" >"$WORK/snapshot-immutable-pull.log" 2>&1 &&
+  snapshot_at "$WORK/immutable-prior/.clasp.json" list-deployments >"$WORK/deployments.snapshot-after.txt" 2>"$WORK/deployments.snapshot-after.err" &&
+  snapshot_at "$WORK/immutable-prior/.clasp.json" list-versions >"$WORK/versions.snapshot-after.txt" 2>"$WORK/versions.snapshot-after.err") || stop IMMUTABLE_SNAPSHOT_READ_FAILED_NO_WRITE
+ node "$GATE" --snapshot-seal || stop ACTIVE_SNAPSHOT_INVALID_NO_WRITE
+ exit 0
+fi
 if [[ "$MODE" == --prepare || "$MODE" == --verify ]];then
  node "$GATE" "$MODE" || stop PRIVATE_STAGE_INVALID
  exit 0
