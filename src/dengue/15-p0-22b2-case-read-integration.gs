@@ -83,8 +83,7 @@ function d331P022b2ListCasesForEvent_(sessionToken,eventId) {
       var found=sheet.getRange(hit.row,1,1,16).getValues();
       if (!Array.isArray(found)||found.length!==1||
           !Array.isArray(found[0])||found[0].length!==16)d331P022b2Deny_();
-      var row=found[0];
-      d331P002aValidateSyntheticRow_('DengueCases',row);
+      var row=d331P005DecodeCaseRow_(sheet,found[0]);
       // VOID disclosure semantics remain unapproved: DENY the request.
       if (row[0]!==hit.caseId || row[1]!==ctx.eventId ||
           row[3]!=='ACTIVE') d331P022b2Deny_();

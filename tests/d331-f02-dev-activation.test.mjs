@@ -67,6 +67,7 @@ function snapshot(){
  const archive='rollback-source-and-metadata.tgz';
  const r=spawnSync('tar',['-czf',path.join(work,archive),'-C',work,'remote','deployments.before.txt','versions.before.txt','source-sha.txt'],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);
+ fs.chmodSync(path.join(work,archive),0o600);
  const hash=createHash('sha256').update(fs.readFileSync(path.join(work,archive))).digest('hex');
  fs.writeFileSync(path.join(work,archive+'.sha256'),hash+'  '+archive+'\n',{mode:0o600});
  return {work,remote,cleanup:()=>fs.rmSync(work,{recursive:true,force:true})};
@@ -124,6 +125,7 @@ case "$*" in
  'remote get-url origin') echo https://github.com/9GotStory/smart-srrt.git;;
  'fetch --quiet origin main') :;;
  'rev-parse HEAD'|'rev-parse origin/main') echo ${SHA};;
+ 'show 6257851296e949e88777c4a8e86aa83c9d22a399:'*) cat '${ROOT}/'"\${2#*:}";;
  *) exit 97;;
 esac
 `,{mode:0o700});
@@ -136,24 +138,31 @@ const ig=a.indexOf('--ignore');const ignore=ig<0?null:a[ig+1];if(ig>=0)a.splice(
 fs.appendFileSync(process.env.F02_TEST_CALLS,JSON.stringify({args:a,project,ignore,cwd:process.cwd()})+'\\n');
 if(a[0]==='--version'){console.log(process.env.F02_TEST_CLASP_VERSION||'3.4.1');process.exit(0);}
 const mode=process.env.F02_TEST_FAILURE;
+const active=process.env.F02_TEST_ACTIVE_REMOTE;
 if(a[0]==='pull'){
- let from=path.join(w,'remote');
+ let from=active||path.join(w,'remote');
  if(process.cwd().includes('post-push')||process.cwd().includes('immutable'))from=path.join(w,'f02-stage');
+ if(process.cwd().includes('immutable-prior'))from=active||from;
  for(const n of fs.readdirSync(from)){if(n!=='.clasp.json')fs.copyFileSync(path.join(from,n),path.join(process.cwd(),n));}
  if(mode==='remote-drift'&&process.cwd().endsWith('fresh'))fs.appendFileSync('00-bootstrap.gs','//drift');
  if(mode==='pushed-drift'&&process.cwd().endsWith('post-push'))fs.appendFileSync('00-bootstrap.gs','//drift');
  if(mode==='immutable-drift'&&process.cwd().endsWith('immutable'))fs.appendFileSync('00-bootstrap.gs','//drift');
+ if(mode==='prior-source-drift'&&process.cwd().endsWith('remote'))fs.appendFileSync('00-bootstrap.gs','//drift');
+ if(mode==='prior-immutable-drift'&&process.cwd().endsWith('immutable-prior'))fs.appendFileSync('00-bootstrap.gs','//drift');
  process.exit(0);
 }
 if(a[0]==='list-deployments'){
- let text=fs.readFileSync(path.join(w,'deployments.before.txt'),'utf8');
- if(fs.existsSync(path.join(w,'updated.flag')))text=text.replace('@20 - Existing synthetic DEV','@21 - F02 synthetic DEV');
+ let text=fs.readFileSync(process.env.F02_TEST_INVENTORY||path.join(w,'deployments.before.txt'),'utf8');
+ if(mode==='snapshot-inventory-drift'&&process.cwd().endsWith('immutable-prior'))text=text.replace('@21','@22');
+ if(fs.existsSync(path.join(w,'updated.flag')))text=active?
+  text.replace('@21 - Existing synthetic DEV','@22 - F02 synthetic DEV'):
+  text.replace('@20 - Existing synthetic DEV','@21 - F02 synthetic DEV');
  if(mode==='deployment-drift'&&process.cwd().endsWith('fresh'))text=text.replace('@20','@19');
  if(mode==='pre-update-drift'&&process.cwd().endsWith('immutable')&&!fs.existsSync(path.join(w,'updated.flag')))text=text.replace('@20','@19');
  if(mode==='wrong-post-version'&&fs.existsSync(path.join(w,'updated.flag')))text=text.replace('@21','@22');
  process.stdout.write(text);process.exit(0);
 }
-if(a[0]==='list-versions'){process.stdout.write(fs.readFileSync(path.join(w,'versions.before.txt'),'utf8'));process.exit(0);}
+if(a[0]==='list-versions'){process.stdout.write(process.env.F02_TEST_ACTIVE_REMOTE?'21 - Previous F02 DEV\\n':fs.readFileSync(path.join(w,'versions.before.txt'),'utf8'));process.exit(0);}
 if(a.includes('push')){process.exit(mode==='push-unknown'?8:0);}
 if(a[0]==='--json'&&a[1]==='show-file-status'){
  let filesToPush=fs.readdirSync(path.join(w,'f02-stage')).map(n=>'f02-stage/'+n);
@@ -162,7 +171,7 @@ if(a[0]==='--json'&&a[1]==='show-file-status'){
 }
 if(a[0]==='--json'&&a[1]==='create-version'){
  if(mode==='version-unknown')process.exit(8);
- console.log(JSON.stringify({versionNumber:mode==='invalid-version'?20:21}));process.exit(0);
+ console.log(JSON.stringify({versionNumber:mode==='invalid-version'?20:active?22:21}));process.exit(0);
 }
 if(a[0]==='update-deployment'){
  if(mode==='update-unknown')process.exit(8);
@@ -177,7 +186,7 @@ process.exit(97);
   SMART_SRRT_F02_PRIVATE_BACKUP_DIR:f.work,SMART_SRRT_F02_PROFILE:profilePath,
   SMART_SRRT_F02_PRIOR_VERSION:'20',SMART_SRRT_F02_DEV_APPROVED_SHA:SHA,
   SMART_SRRT_F02_READONLY_APPROVED:'YES',F02_TEST_CALLS:calls};
- return {...f,run:(mode,more={})=>spawnSync('bash',[path.join(ROOT,'tools/deploy-d331-f02-dev.sh'),mode],
+ return {...f,env,run:(mode,more={})=>spawnSync('bash',[path.join(ROOT,'tools/deploy-d331-f02-dev.sh'),mode],
   {encoding:'utf8',timeout:60000,env:{...env,...more}}),
   calls:()=>fs.existsSync(calls)?fs.readFileSync(calls,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
 }
@@ -296,4 +305,74 @@ test('F02 DEV pins effective CLI project/ignore and checks selected files before
   const selected=calls.findIndex(c=>c.args.includes('show-file-status'));
   const push=calls.findIndex(c=>c.args[0]==='push');assert.ok(selected>=0&&selected<push);
  }finally{f.cleanup();}
+});
+
+test('F02 active-package snapshot mode requires prior sealed release evidence and never mutates cloud',()=>{
+ const f=operatorFixture();try{
+  const r=f.run('--snapshot');
+  assert.notEqual(r.status,0);assert.doesNotMatch(r.stderr,/UNSUPPORTED_MODE/);
+  assert.ok(f.calls().every(c=>c.args[0]==='--version'));
+ }finally{f.cleanup();}
+});
+
+async function activeOperatorFixture(){
+ const {prepareF02DevStage}=await import(MODULE),f=operatorFixture();
+ const previous=profile({sourceSha:'6257851296e949e88777c4a8e86aa83c9d22a399'});
+ fs.writeFileSync(path.join(f.work,'source-sha.txt'),previous.sourceSha+'\n');
+ const archive='rollback-source-and-metadata.tgz';
+ assert.equal(spawnSync('tar',['-czf',path.join(f.work,archive),'-C',f.work,
+  'remote','deployments.before.txt','versions.before.txt','source-sha.txt']).status,0);
+ fs.chmodSync(path.join(f.work,archive),0o600);
+ fs.writeFileSync(path.join(f.work,archive+'.sha256'),
+  createHash('sha256').update(fs.readFileSync(path.join(f.work,archive))).digest('hex')+'  '+archive+'\n');
+ prepareF02DevStage({work:f.work,profile:previous,expected:expected(previous)});
+ const attempt=path.join(f.work,'f02-release-attempt');fs.mkdirSync(attempt,{mode:0o700});
+ const inventory=fs.readFileSync(path.join(f.work,'deployments.before.txt'),'utf8').replace('@20','@21');
+ for(const [name,text] of Object.entries({'state.txt':'SOURCE_AND_DEPLOYMENT_VERIFIED\n',
+  'version.created.json':'{"versionNumber":21}', 'deployments.after.txt':inventory}))
+  fs.writeFileSync(path.join(attempt,name),text,{mode:0o600});
+ const work=fs.mkdtempSync(path.join(os.tmpdir(),'srrt-f02-active-'));fs.chmodSync(work,0o700);
+ const input=path.join(f.work,'next-profile.json');
+ fs.writeFileSync(input,JSON.stringify(profile({priorVersion:21})),{mode:0o600});
+ const extra={SMART_SRRT_F02_PRIVATE_BACKUP_DIR:work,SMART_SRRT_F02_PROFILE:input,
+  SMART_SRRT_F02_PRIOR_VERSION:'21',SMART_SRRT_F02_PREVIOUS_WORK:f.work,
+  F02_TEST_ACTIVE_REMOTE:path.join(f.work,'f02-stage'),F02_TEST_INVENTORY:path.join(attempt,'deployments.after.txt')};
+ return {work,previousWork:f.work,run:(mode,more={})=>f.run(mode,{...extra,...more}),calls:f.calls,
+  cleanup:()=>{fs.rmSync(work,{recursive:true,force:true});f.cleanup();}};
+}
+test('F02 active previous package is freshly backed up and the next exact candidate updates only its existing deployment',async()=>{
+ const f=await activeOperatorFixture();try{
+  const r=f.run('--snapshot');assert.equal(r.status,0,r.stderr);
+  assert.match(r.stdout,/ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED/);
+  assert.ok(f.calls().every(c=>!['push','create-version','update-deployment'].includes(c.args[0])));
+  assert.ok(f.calls().filter(c=>c.args[0]!=='--version').every(c=>c.project&&c.ignore===path.join(f.work,'snapshot.claspignore')));
+  const pulls=f.calls().filter(c=>c.args[0]==='pull');assert.equal(pulls.length,2);
+  assert.deepEqual(pulls[1].args,['pull','--versionNumber','21']);
+  assert.equal(f.run('--prepare').status,0);
+  const deploy=f.run('--deploy');assert.equal(deploy.status,0,deploy.stderr);
+  assert.match(deploy.stdout,/DEPLOYMENT_VERSION=22/);
+  assert.equal(f.calls().filter(c=>c.args[0]==='push').length,1);
+  const update=f.calls().find(c=>c.args[0]==='update-deployment');
+  assert.equal(update.args[1],DEPLOY);assert.equal(update.args[update.args.indexOf('--versionNumber')+1],'22');
+ }finally{f.cleanup();}
+});
+test('F02 active snapshot refuses wrong prior evidence, live/immutable drift and later archive tampering without cloud mutation',async()=>{
+ for(const failure of ['prior-profile','prior-seal','prior-source-drift','prior-immutable-drift','snapshot-inventory-drift','archive-drift']){
+  const f=await activeOperatorFixture();try{
+   if(failure==='prior-profile'){
+    const file=path.join(f.previousWork,'f02-profile.json'),p=JSON.parse(fs.readFileSync(file));
+    p.sourceSha='b'.repeat(40);fs.writeFileSync(file,JSON.stringify(p));
+   }
+   if(failure==='prior-seal')fs.writeFileSync(path.join(f.previousWork,'f02-seal.json'),'{}');
+   const r=f.run('--snapshot',{F02_TEST_FAILURE:failure});
+   if(failure==='archive-drift'){
+    assert.equal(r.status,0,r.stderr);
+    fs.appendFileSync(path.join(f.work,'rollback-source-and-metadata.tgz'),'tampered');
+    assert.notEqual(f.run('--prepare').status,0);
+   }else assert.notEqual(r.status,0,failure);
+   const calls=f.calls();assert.ok(calls.every(c=>!c.args.some(a=>['push','create-version','update-deployment'].includes(a))));
+   if(failure.startsWith('prior-')&&!failure.endsWith('drift'))assert.ok(calls.every(c=>c.args[0]==='--version'));
+   assert.equal(fs.existsSync(path.join(f.work,'f02-stage')),false);
+  }finally{f.cleanup();}
+ }
 });

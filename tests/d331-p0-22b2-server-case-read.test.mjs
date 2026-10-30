@@ -97,6 +97,8 @@ function setup(opts={}){
   if(name===opts.missingSheet)continue;
   const rows=[h,...(data[name]??[])];
   tables[name]={
+   getParent(){return {getId:()=>opts.parentId??DB,
+    getSpreadsheetTimeZone:()=>opts.timeZone??'Asia/Bangkok'};},
    getLastRow(){return rows.length;},
    getLastColumn(){return rows.reduce((n,r)=>Math.max(n,r.length),0);},
    getRange(row,col,height,width){
@@ -131,6 +133,12 @@ function setup(opts={}){
  ctx.SpreadsheetApp={openById(id){
   trace.service++;trace.opens++;assert.equal(id,DB);return ss;
  }};
+ ctx.Utilities={formatDate:(date,timeZone,pattern)=>{
+  assert.equal(pattern,'yyyy-MM-dd');
+  const p=new Intl.DateTimeFormat('en',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'})
+   .formatToParts(date);const value=type=>p.find(x=>x.type===type).value;
+  return value('year')+'-'+value('month')+'-'+value('day');
+ }};
  ctx.CacheService={getScriptCache(){trace.service++;return {get(key){
   trace.cache++;assert.equal(key,'srrt_session_'+TOKEN);
   return Object.hasOwn(opts,'session')?opts.session:JSON.stringify({v:2,id:'user-1',tag:TAG});
@@ -150,6 +158,26 @@ function setup(opts={}){
    opts.sessionToken??TOKEN,opts.eventId??EVENT)};
 }
 const plain=x=>JSON.parse(JSON.stringify(x));
+test('Case reader decodes service Date in the pinned workbook calendar and never rewrites storage',()=>{
+ for(const [instant,timeZone] of [['1899-12-31T23:30:00.000Z','Asia/Bangkok'],
+  ['2101-01-01T00:30:00.000Z','America/Los_Angeles']]){
+  const row=caseRow();row[5]=new Date(instant);
+  const x=setup({cases:[row],timeZone});
+  assert.deepEqual(plain(x.read()).cases,[{caseId:CASE,caseRevision:1,caseStatus:'ACTIVE'}]);
+  assert.equal(row[5].toISOString(),instant);assert.equal(x.trace.writes,0);
+  assert.throws(()=>x.ctx.d331P002aValidateSyntheticRow_('DengueCases',row),/INVALID:OnsetLocalDate/);
+ }
+});
+test('Case reader keeps numeric/invalid dates, wrong parent and missing timezone fail closed',()=>{
+ for(const value of [46324,new Date(NaN),'2026-02-30']){
+  const row=caseRow();row[5]=value;assertDeny({cases:[row]});
+ }
+ const row=caseRow();row[5]=new Date('2026-10-28T17:00:00.000Z');
+ assertDeny({cases:[row],parentId:DB+'WRONG'});
+ assertDeny({cases:[row],timeZone:''});
+ assertDeny({cases:[row],timeZone:'Unknown/Invalid'});
+ const empty=caseRow();empty[5]='';assert.equal(setup({cases:[empty]}).read().cases.length,1);
+});
 function assertDeny(opts={},beforeDomain=false){
  const x=setup(opts);
  assert.throws(x.read,/^Error: D331_UNAVAILABLE$/);

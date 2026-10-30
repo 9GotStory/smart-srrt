@@ -3,7 +3,8 @@
  * Uses the existing Smart SRRT Google Sheets object supplied by the
  * still-DISABLED P0-03B adapter. NEVER register or call as a public RPC.
  *
- * Header row reads ONLY. No data rows, grants, patient records, writes or DDL.
+ * Header gate reads row 1 only; the internal Case decoder below receives
+ * already-authorized service rows. No grants, writes or DDL.
  * Exact populated last column is checked; unused physical grid columns
  * are permitted because getMaxColumns() is NOT a schema width.
  */
@@ -32,4 +33,25 @@ function d331P005RequireSevenSheets_(spreadsheet) {
     result[name] = d331P003bGetRequiredSheet_(spreadsheet,name,headers);
   });
   return result;
+}
+
+// Internal storage adapter, called only after the existing authorization/header
+// gates. A Sheets Date is a physical value, never a logical API input. Decode
+// only Case onset in the pinned workbook's calendar; do not edit stored rows.
+function d331P005DecodeCaseRow_(sheet,row) {
+  if (!Array.isArray(row)||row.length!==16) d331P003bDeny_();
+  var decoded=row.slice(),value=decoded[5];
+  if (Object.prototype.toString.call(value)==='[object Date]') {
+    if (!Number.isFinite(value.getTime())||!sheet||
+        typeof sheet.getParent!=='function') d331P003bDeny_();
+    var parent=sheet.getParent();
+    if (!parent||parent.getId()!==D331_P003B_APPROVED_DEV_SPREADSHEET_ID_||
+        typeof parent.getSpreadsheetTimeZone!=='function') d331P003bDeny_();
+    var zone=parent.getSpreadsheetTimeZone();
+    if (typeof zone!=='string'||!zone||zone!==zone.trim()) d331P003bDeny_();
+    decoded[5]=Utilities.formatDate(value,zone,'yyyy-MM-dd');
+  }
+  // Keep canonical strings, empties and all other logical fields strict.
+  d331P002aValidateSyntheticRow_('DengueCases',decoded);
+  return decoded;
 }
