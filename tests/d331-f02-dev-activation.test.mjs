@@ -57,7 +57,7 @@ function snapshot(){
  const p=inspectNative33Candidate();
  for(const [name,bytes] of p.entries)fs.writeFileSync(path.join(remote,name),bytes,{mode:0o600});
  fs.writeFileSync(path.join(remote,'appsscript.json'),'{"runtimeVersion":"V8","timeZone":"Asia/Bangkok"}\n',{mode:0o600});
- fs.writeFileSync(path.join(remote,'.clasp.json'),JSON.stringify({scriptId:SCRIPT,rootDir:'.'}),{mode:0o600});
+ fs.writeFileSync(path.join(remote,'.clasp.json'),JSON.stringify({scriptId:SCRIPT,rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']}),{mode:0o600});
  preparePrivateStage(work,{manifestFrom:path.join(remote,'appsscript.json')});
  const order=JSON.parse(fs.readFileSync(path.join(work,'file-push-order.json')));
  fs.writeFileSync(path.join(work,'.clasp.json'),JSON.stringify({scriptId:SCRIPT,rootDir:'stage',filePushOrder:order}),{mode:0o600});
@@ -92,6 +92,7 @@ test('F02 DEV stage rejects changed target/SHA/version, source/manifest/config d
   f=>fs.writeFileSync(path.join(f.work,'f02-stage/extra.gs'),'x'),
   f=>fs.writeFileSync(path.join(f.work,'f02.clasp.json'),'{}'),
   f=>fs.chmodSync(path.join(f.work,'f02-profile.json'),0o644),
+  f=>fs.writeFileSync(path.join(f.work,'f02.claspignore'),'**/03-events-and-dashboard.gs'),
   f=>fs.appendFileSync(path.join(f.work,'rollback-source-and-metadata.tgz'),'tamper'),
   f=>{fs.unlinkSync(path.join(f.work,'f02-stage/00-bootstrap.gs'));fs.symlinkSync(path.join(f.remote,'00-bootstrap.gs'),path.join(f.work,'f02-stage/00-bootstrap.gs'));}
  ];
@@ -131,8 +132,9 @@ esac
 const fs=require('node:fs'),path=require('node:path');
 const a=process.argv.slice(2),w=process.env.SMART_SRRT_F02_PRIVATE_BACKUP_DIR;
 const at=a.indexOf('--project');const project=at<0?null:a[at+1];if(at>=0)a.splice(at,2);
-fs.appendFileSync(process.env.F02_TEST_CALLS,JSON.stringify({args:a,project,cwd:process.cwd()})+'\\n');
-if(a[0]==='--version'){console.log('3.4.1');process.exit(0);}
+const ig=a.indexOf('--ignore');const ignore=ig<0?null:a[ig+1];if(ig>=0)a.splice(ig,2);
+fs.appendFileSync(process.env.F02_TEST_CALLS,JSON.stringify({args:a,project,ignore,cwd:process.cwd()})+'\\n');
+if(a[0]==='--version'){console.log(process.env.F02_TEST_CLASP_VERSION||'3.4.1');process.exit(0);}
 const mode=process.env.F02_TEST_FAILURE;
 if(a[0]==='pull'){
  let from=path.join(w,'remote');
@@ -153,6 +155,11 @@ if(a[0]==='list-deployments'){
 }
 if(a[0]==='list-versions'){process.stdout.write(fs.readFileSync(path.join(w,'versions.before.txt'),'utf8'));process.exit(0);}
 if(a.includes('push')){process.exit(mode==='push-unknown'?8:0);}
+if(a[0]==='--json'&&a[1]==='show-file-status'){
+ let filesToPush=fs.readdirSync(path.join(w,'f02-stage')).map(n=>'f02-stage/'+n);
+ if(mode==='selected-missing')filesToPush=filesToPush.filter(n=>!n.endsWith('/03-events-and-dashboard.gs'));
+ console.log(JSON.stringify({filesToPush,untrackedFiles:[]}));process.exit(0);
+}
 if(a[0]==='--json'&&a[1]==='create-version'){
  if(mode==='version-unknown')process.exit(8);
  console.log(JSON.stringify({versionNumber:mode==='invalid-version'?20:21}));process.exit(0);
@@ -171,7 +178,7 @@ process.exit(97);
   SMART_SRRT_F02_PRIOR_VERSION:'20',SMART_SRRT_F02_DEV_APPROVED_SHA:SHA,
   SMART_SRRT_F02_READONLY_APPROVED:'YES',F02_TEST_CALLS:calls};
  return {...f,run:(mode,more={})=>spawnSync('bash',[path.join(ROOT,'tools/deploy-d331-f02-dev.sh'),mode],
-  {encoding:'utf8',timeout:30000,env:{...env,...more}}),
+  {encoding:'utf8',timeout:60000,env:{...env,...more}}),
   calls:()=>fs.existsSync(calls)?fs.readFileSync(calls,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
 }
 test('F02 DEV S3 actual wrapper prepares, checks drift, pushes, verifies immutable source and updates existing version',()=>{
@@ -199,7 +206,7 @@ test('F02 DEV S3 actual wrapper prepares, checks drift, pushes, verifies immutab
 });
 
 test('F02 DEV S3 refusal before push and uncertain mutation phases never trigger a retry or rollback',()=>{
- const cases=[['remote-drift',0,0],['deployment-drift',0,0],['push-unknown',1,0],
+ const cases=[['selected-missing',0,0],['remote-drift',0,0],['deployment-drift',0,0],['push-unknown',1,0],
   ['pushed-drift',1,0],['version-unknown',1,0],['immutable-drift',1,0],
   ['pre-update-drift',1,0],['invalid-version',1,0],['update-unknown',1,1],['wrong-post-version',1,1]];
  for(const [failure,pushes,updates] of cases){const f=operatorFixture();try{
@@ -219,7 +226,7 @@ test('F02 DEV S3 refusal before push and uncertain mutation phases never trigger
 test('F02 DEV S3 exact authorization, source SHA and prior version are required before cloud I/O',()=>{
  for(const extra of [{SMART_SRRT_F02_READONLY_APPROVED:''},
   {SMART_SRRT_APPROVED_SOURCE_SHA:'b'.repeat(40)}, {SMART_SRRT_F02_PRIOR_VERSION:'0'},
-  {SMART_SRRT_F02_SPREADSHEET_ID:SCRIPT}]){
+  {SMART_SRRT_F02_SPREADSHEET_ID:SCRIPT},{F02_TEST_CLASP_VERSION:'3.4.2'}]){
   const f=operatorFixture();try{
    const r=f.run('--prepare',extra);assert.notEqual(r.status,0);
    assert.ok(f.calls().every(c=>c.args[0]==='--version'));
@@ -247,4 +254,46 @@ test('F02 DEV adds no public server declarations and keeps unrelated bytes canon
   .replace('var D331_F02_CASE_READ_AVAILABLE_ = false;','var D331_F02_CASE_READ_AVAILABLE_ = true;')
   .replace('var D331_F02_CASE_WRITE_AVAILABLE_ = false;','var D331_F02_CASE_WRITE_AVAILABLE_ = true;');
  assert.equal(client,canonical); // only the two approved availability declarations change
+});
+
+
+test('F02 DEV refuses corrupted copied clasp config before any cloud read or stage creation',async()=>{
+ const {prepareF02DevStage}=await import(MODULE);
+ for(const patch of [{scriptId:DB},{rootDir:'../../outside'},
+  {scriptExtensions:['.js']},{rootDir:'/tmp'},{filePushOrder:['outside.gs']}]){
+  const f=operatorFixture();try{
+   const config=JSON.parse(fs.readFileSync(path.join(f.remote,'.clasp.json')));
+   fs.writeFileSync(path.join(f.remote,'.clasp.json'),JSON.stringify({...config,...patch}));
+   hold(()=>prepareF02DevStage({work:f.work,profile:profile(),expected:expected(profile())}));
+   const r=f.run('--prepare');assert.notEqual(r.status,0);
+   assert.ok(f.calls().every(c=>c.args[0]==='--version'));
+   assert.equal(fs.existsSync(path.join(f.work,'f02-stage')),false);
+  }finally{f.cleanup();}
+ }
+});
+
+test('F02 DEV rejects backup files that no longer match the checksummed rollback archive',async()=>{
+ const {prepareF02DevStage}=await import(MODULE);
+ for(const change of [
+  f=>fs.appendFileSync(path.join(f.remote,'00-bootstrap.gs'),'//unsealed backup drift'),
+  f=>fs.appendFileSync(path.join(f.work,'versions.before.txt'),'unsealed version metadata'),
+  f=>fs.writeFileSync(path.join(f.remote,'appsscript.json'),'{"runtimeVersion":"V8","timeZone":"UTC"}')
+ ]){
+  const f=snapshot();try{change(f);
+   hold(()=>prepareF02DevStage({work:f.work,profile:profile(),expected:expected(profile())}));
+  }finally{f.cleanup();}
+ }
+});
+
+test('F02 DEV pins effective CLI project/ignore and checks selected files before push',()=>{
+ const f=operatorFixture();try{
+  assert.equal(f.run('--prepare').status,0);
+  fs.writeFileSync(path.join(f.work,'.claspignore'),'**/03-events-and-dashboard.gs\n');
+  const r=f.run('--deploy',{clasp_config_project:'/tmp/SYNTHETIC_WRONG_PROJECT.json',clasp_config_ignore:'/tmp/SYNTHETIC_WRONG_IGNORE'});
+  assert.equal(r.status,0,r.stderr);
+  const calls=f.calls().filter(c=>c.args[0]!=='--version');
+  assert.ok(calls.every(c=>c.project&&c.ignore===path.join(f.work,'f02.claspignore')));
+  const selected=calls.findIndex(c=>c.args.includes('show-file-status'));
+  const push=calls.findIndex(c=>c.args[0]==='push');assert.ok(selected>=0&&selected<push);
+ }finally{f.cleanup();}
 });

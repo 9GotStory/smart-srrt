@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {verifyP013PrivateSnapshot} from './d331-p0-13-release-gates.mjs';
 import {inspectNative33Candidate} from './d331-p0-11-native33-package.mjs';
@@ -74,15 +75,41 @@ function boundProfile(profile,expected){
  return p;
 }
 function verifyBackup(work,p){
+ const remoteConfig=JSON.parse(privateFile(path.join(work,'remote/.clasp.json')));
+ const expectedConfig={scriptId:p.scriptId,rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']};
+ if(!exact(Object.keys(remoteConfig).sort(),Object.keys(expectedConfig).sort())||
+    Object.keys(expectedConfig).some(k=>!exact(remoteConfig[k],expectedConfig[k])))no();
  verifyP013PrivateSnapshot({work,sourceSha:p.sourceSha,scriptId:p.scriptId,deploymentId:p.deploymentId});
+ verifyArchiveContents(work);
  const rows=deploymentRows(fs.readFileSync(path.join(work,'deployments.before.txt'),'utf8'));
  if(rows.get(p.deploymentId)?.version!==String(p.priorVersion))no();
+}
+// Read archive members to stdout only; never extract untrusted paths into the filesystem.
+function verifyArchiveContents(work){
+ const archive=path.join(work,'rollback-source-and-metadata.tgz');
+ const stat=fs.lstatSync(archive);
+ if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.uid!==process.getuid()||stat.size>32*1024*1024)no();
+ const metadata=['deployments.before.txt','versions.before.txt','source-sha.txt'];
+ const members=[...fs.readdirSync(path.join(work,'remote')).map(n=>'remote/'+n),...metadata];
+ const env={...process.env,LC_ALL:'C',TAR_OPTIONS:''};
+ function tar(args,encoding){
+  const r=spawnSync('tar',args,{encoding,env,timeout:10000,maxBuffer:2*1024*1024});
+  if(r.error||r.status!==0)no();return r.stdout;
+ }
+ const names=tar(['-tzf',archive],'utf8').trim().split('\n');
+ if(!exact(names.slice().sort(),['remote/',...members].sort()))no();
+ const types=tar(['-tvzf',archive],'utf8').trim().split('\n').map(line=>line[0]);
+ if(types.length!==names.length||types.some((t,i)=>t!==(names[i]==='remote/'?'d':'-')))no();
+ for(const member of members){
+  const bytes=privateFile(path.join(work,member));
+  if(!tar(['-xOzf',archive,'--',member],undefined).equals(bytes))no();
+ }
 }
 export function prepareF02DevStage({work,profile,expected}={}){
  try{
   privateDirectory(work);const p=boundProfile(profile,expected);verifyBackup(work,p);
   const {entries,serverPushOrder}=inspectF02DevPackage(p);
-  for(const name of ['f02-stage','f02-profile.json','f02-seal.json','f02.clasp.json'])
+  for(const name of ['f02-stage','f02-profile.json','f02-seal.json','f02.clasp.json','f02.claspignore'])
    if(fs.existsSync(path.join(work,name)))no();
   const stage=path.join(work,'f02-stage');fs.mkdirSync(stage,{mode:0o700});
   const manifest=fs.readFileSync(path.join(work,'remote/appsscript.json'));
@@ -92,6 +119,7 @@ export function prepareF02DevStage({work,profile,expected}={}){
   }
   const config={scriptId:p.scriptId,rootDir:'f02-stage',scriptExtensions:['.gs'],htmlExtensions:['.html'],
    filePushOrder:serverPushOrder.map(n=>'f02-stage/'+n)};
+  fs.writeFileSync(path.join(work,'f02.claspignore'),'',{flag:'wx',mode:0o600});
   fs.writeFileSync(path.join(work,'f02-profile.json'),JSON.stringify(p),{flag:'wx',mode:0o600});
   fs.writeFileSync(path.join(work,'f02.clasp.json'),JSON.stringify(config),{flag:'wx',mode:0o600});
   fs.writeFileSync(path.join(work,'f02-seal.json'),JSON.stringify(sealed),{flag:'wx',mode:0o600});
@@ -103,6 +131,7 @@ export function verifyF02DevStage({work,expected}={}){
   privateDirectory(work);
   const p=boundProfile(JSON.parse(privateFile(path.join(work,'f02-profile.json'))),expected);verifyBackup(work,p);
   const {entries,serverPushOrder}=inspectF02DevPackage(p);
+  if(privateFile(path.join(work,'f02.claspignore')).length!==0)no();
   const stage=privateDirectory(path.join(work,'f02-stage'));
   const names=[...entries.keys(),'appsscript.json'].sort();
   if(!exact(fs.readdirSync(stage).sort(),names))no();
@@ -155,6 +184,12 @@ function cli(){
  verifyF02DevStage({work,expected});
  const profile=JSON.parse(privateFile(path.join(work,'f02-profile.json')));
  if(mode==='--verify'){console.log('F02_DEV=EXACT_PRIVATE_STAGE_PASS');return;}
+ if(mode==='--check-selected'){
+  const selected=JSON.parse(privateFile(path.join(work,'f02-release-attempt/selected-files.json')));
+  const names=fs.readdirSync(path.join(work,'f02-stage')).map(n=>'f02-stage/'+n).sort();
+  if(!Array.isArray(selected.filesToPush)||!exact(selected.filesToPush.slice().sort(),names))no();
+  return;
+ }
  if(mode==='--check-pushed'){verifyRemoteCopy(work,profile,'post-push');return;}
  if(mode==='--check-immutable'){verifyRemoteCopy(work,profile,'immutable');return;}
  if(mode==='--new-version'){

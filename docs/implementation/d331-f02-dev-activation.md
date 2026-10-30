@@ -19,7 +19,7 @@ Activation does not issue rights: every read/write/status operation still checks
 
 Use the existing target inventory in #189; never publish identifiers, account emails, credentials or raw inventories. Preserve original manifest/OAuth/execute/access settings. The old P0-11 read-only preflight must first produce a **fresh** private snapshot at the exact approved source SHA, including archive/checksum, local extraction drill, source and deployment/version inventories. The earlier Version20 backup is historical evidence and cannot be reused across a later source SHA.
 
-The new wrapper `tools/deploy-d331-f02-dev.sh` accepts only `--prepare`, `--verify`, and `--deploy`. It checks the actual tool checkout, clean main/origin/main and exact source SHA. Prepare/verify require the read-only flag; deploy requires the SHA-bound DEV execution flag. The implementation does not add rollback/create-project/create-deployment/delete/login modes.
+The new wrapper `tools/deploy-d331-f02-dev.sh` accepts only `--prepare`, `--verify`, and `--deploy`. It requires the tested clasp 3.4.1, actual tool checkout, clean main/origin/main and exact source SHA. Prepare/verify require the read-only flag; deploy requires the SHA-bound DEV execution flag. The implementation does not add rollback/create-project/create-deployment/delete/login modes.
 
 Set these privately, with actual existing values rather than the placeholders:
 
@@ -43,9 +43,9 @@ SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --verify
 bash tools/deploy-d331-f02-dev.sh --deploy
 ```
 
-Prepare creates a new `f02-stage`, profile, exact clasp configuration and hash ledger without altering the old OFF stage. Verification regenerates expected bytes from canonical source/profile and checks the original backup, target/prior version, private ownership/modes, file set, manifest and push order. Existing artifacts or resource conflicts are rejected instead of replaced.
+Prepare creates a new `f02-stage`, profile, exact clasp configuration and hash ledger without altering the old OFF stage. Verification regenerates expected bytes from canonical source/profile and checks the original backup, target/prior version, private ownership/modes, file set, manifest and push order. It validates the consumed remote clasp config (exact Script ID, rootDir `.`, `.gs/.html` extensions and allowed keys), and compares every archived regular-file member to the current backup bytes using tar-to-stdout without extracting paths. A checksum alone is not treated as proof that the current backup still matches its archive. Existing artifacts or resource conflicts are rejected instead of replaced.
 
-Deploy takes a one-attempt directory lock and records each phase privately. It pulls fresh source and inventories and rejects any drift before push. After whole-project push, it reads the source back and compares bytes; it creates an immutable version, pulls that exact version and compares again. Only then, after another deployment-drift check, does it update the **existing deployment** using explicit `--versionNumber`. Final inventory verification requires the intended version and unchanged other deployments. Raw command output remains in the private attempt directory.
+Deploy takes a one-attempt directory lock and records each phase privately. It pulls fresh source and inventories and rejects any drift before push. Every cloud command pins explicit project and a generated/verified empty private ignore file, overriding ambient configuration. Before any push, actual clasp `show-file-status --json` must select exactly the 35 physical stage files. After whole-project push, it reads the source back and compares bytes; it creates an immutable version, pulls that exact version and compares again. Only then, after another deployment-drift check, does it update the **existing deployment** using explicit `--versionNumber`. Final inventory verification requires the intended version and unchanged other deployments. Raw command output remains in the private attempt directory.
 
 Release operators must serialize changes: the read/check/update sequence is not a remote transaction or a conditional lock against manual/nonparticipating writers. A change inside the final check-to-update window cannot be ruled out by these offline tests.
 
@@ -59,7 +59,7 @@ The wrapper changes source/deployment only; it does not provision accounts, gran
 
 The server must prove the current Script Property binding through its ordinary fail-closed checks. Then exercise login/Records, empty/read, create, selected-field PATCH/optional clear, receipt/fresh read, stale revision, denied/expired/revoked grant and logout; verify the original Dashboard/Records/report/library smoke paths. Do not induce a real interrupted write merely to test PENDING without a separately bounded reconciliation procedure; interruption behavior is covered offline. No patient data or Gemini call is needed.
 
-S1 tests actual assembled package/profile/private stage. S2 reuses the existing GAS I/O fixture and actual authorization/credential helpers with assembled package source for read/create/PATCH/status and denials. S3 executes the actual shell wrapper against synthetic git/clasp/filesystem I/O, including drift, immutable-version checks, unknown mutation phases and refusal to repeat. Full Native26 tests/contracts/parity remain required.
+S1 tests actual assembled package/profile/private stage. S2 reuses the existing GAS I/O fixture and actual authorization/credential helpers with assembled package source for read/create/PATCH/status and denials. S3 executes the actual shell wrapper against synthetic git/clasp/filesystem I/O, including drift, unsafe copied config, inherited ignore/project overrides, actual selected-file omission, immutable-version checks, unknown mutation phases and refusal to repeat. Full Native26 tests/contracts/parity remain required.
 
 ## Evidence limits and current frontier
 
