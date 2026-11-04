@@ -352,3 +352,17 @@ test('P0-19 does not project domain cell details or permit mutation APIs',()=>{
  assert.doesNotMatch(source,/\.getDataRange\s*\(|getActiveSpreadsheet\s*\(/);
  assert.doesNotMatch(source,/Logger\.log\(|console\.log\(|JSON\.stringify\(rows\)/);
 });
+
+test('F03 private Plan read capability is distinct from Case read and accepts no arbitrary capability',()=>{
+ const base=setup(),planGrant=grant(base.ctx,{Capability:'dengue.plan.read'});
+ assert.throws(()=>base.ctx.d331P003bAuthorizedContext_(TOKEN,ID,'dengue.plan.read'),/D331_UNAVAILABLE/);
+ const plan=setup({grantRows:[planGrant]});
+ const value=plan.ctx.d331P003bAuthorizedContext_(TOKEN,ID,'dengue.plan.read');
+ assert.equal(value.eventId,ID);assert.equal(value.areaId,'area-A');
+ assert.throws(()=>plan.read(),/D331_UNAVAILABLE/);
+ for(const capability of ['dengue.plan.write','assign','dengue.case.read|dengue.plan.read',{},null]){
+  const n=plan.trace.opens;
+  assert.throws(()=>plan.ctx.d331P003bAuthorizedContext_(TOKEN,ID,capability),/D331_UNAVAILABLE/);
+  assert.equal(plan.trace.opens,n);
+ }
+});

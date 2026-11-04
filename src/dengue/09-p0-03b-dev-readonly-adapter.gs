@@ -80,7 +80,7 @@ function d331P003bSessionUser_(sessionToken,userSheet) {
   if (user[5]!=='active'||typeof user[3]!=='string'||!user[3]||
       !passwordConstantEqual_(session.tag,sessionCredentialTag_(user[3])))
     d331P003bDeny_();
-  return {userId:user[0],status:user[5]}; // no password hash escapes
+  return {userId:user[0],status:user[5],role:user[4]}; // no password hash escapes
 }
 function d331P003bGrant_(sheet,userId,eventId,operation,now,policyRevision) {
   var headers=d331P002aHeaders_('D331AccessGrants');
@@ -110,7 +110,10 @@ function d331P003bGrant_(sheet,userId,eventId,operation,now,policyRevision) {
       g.RevokedAtUTC||g.RevokedByUserID)d331P003bDeny_();
   return g;
 }
-function d331P003bAuthorizedContext_(sessionToken,eventId) {
+function d331P003bAuthorizedContext_(sessionToken,eventId,capability) {
+  // Private, fixed capability selection; public callers cannot supply authority.
+  capability=capability===undefined?'dengue.case.read':capability;
+  if(capability!=='dengue.case.read'&&capability!=='dengue.plan.read')d331P003bDeny_();
   // A future source change + binding/clinical/access review is mandatory.
   // A browser cannot turn the hard-coded feature OFF to ON.
   if (D331_G1A_ENABLED!==true||D331_P003B_ENABLED_!==true)
@@ -146,7 +149,7 @@ function d331P003bAuthorizedContext_(sessionToken,eventId) {
     var areaRows=d331P003bReadRows_(areas,10,10000);
     var now=new Date().toISOString();
     var grant=d331P003bGrant_(grants,user.userId,eventId,
-      'dengue.case.read',now,D331_P003B_APPROVED_POLICY_REVISION_);
+      capability,now,D331_P003B_APPROVED_POLICY_REVISION_);
 
     // Existing pure Domain and Event/Area authorization guards.
     var allowed=d331N1bAuthorizeOffline_(user,mainRow,areaRows,
@@ -154,7 +157,7 @@ function d331P003bAuthorizedContext_(sessionToken,eventId) {
        capabilities:[grant.Capability],allowedAreaIds:[grant.AreaID],
        allowedEventIds:[grant.EventID]},
       D331_P003B_APPROVED_DISEASE_LABELS_,
-      'dengue.case.read',false,undefined);
+      capability,false,undefined);
     if (allowed.areaId!==grant.AreaID)d331P003bDeny_();
     // Internal-only context: NEVER return a Spreadsheet/Sheet handle through
     // a google.script.run exposed function or allow the caller to supply one.
@@ -212,4 +215,18 @@ function getDengueWorkspace(sessionToken,eventId) {
       slaAssessment:'NOT_EVALUATED',clinicalPolicyApproved:false,
       canWrite:false,canEnable:false};
   }catch(e){d331P003bDeny_();}
+}
+
+// F03: narrow current Plan ownership checks. No user directory leaves the server.
+function d331P003bPlanAssignmentActor_(user){
+  if(!user||['Manager','Super Admin'].indexOf(user.role)<0||
+     typeof hasPermission_!=='function'||!hasPermission_(user.role,'assign'))d331P003bDeny_();
+}
+function d331P003bPlanOwner_(users,grants,userId,eventId,areaId,now){
+  var user=d331P003bOneRowById_(users,1,14,userId,10000);
+  if(user[5]!=='active')d331P003bDeny_();
+  var grant=d331P003bGrant_(grants,userId,eventId,'dengue.plan.write',now,
+    D331_P003B_APPROVED_POLICY_REVISION_);
+  if(grant.AreaID!==areaId)d331P003bDeny_();
+  return {userId:user[0]};
 }

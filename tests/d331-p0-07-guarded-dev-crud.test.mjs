@@ -224,10 +224,10 @@ test('all five workflow entities support guarded UPDATE with revision',()=>{
  const s=setup();const {c,p,a,e,f}=seedChain(s);
  const statuses=[
   ['case',c,{Classification:'PROBABLE'}],
-  ['plan',p,{PlanStatus:'CLOSED'}],
   ['action',a,{ActionStatus:'COMPLETED',OutcomeCode:'DONE'}],
   ['survey',e,{SurveyStatus:'FINAL'}],
-  ['followup',f,{FollowupStatus:'COMPLETE',OutcomeCode:'DONE'}]
+  ['followup',f,{FollowupStatus:'COMPLETE',OutcomeCode:'DONE'}],
+  ['plan',p,{PlanStatus:'CLOSED'}]
  ];
  for(const [kind,entity,payload] of statuses){
   const result=s.run(kind,'update',payload,{
