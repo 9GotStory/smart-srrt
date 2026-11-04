@@ -269,6 +269,12 @@ function d331P007Operate_(sessionToken,eventId,command){
     acquired=true;
     var context=d331P007Authorize_(sessionToken,eventId,spec,command.expectedEventRevision);
     var tables=context.tables,user=context.user,auth=context.auth,now=context.now;
+    // Plan grants do not replace the current core mutation permission.
+    // Both authorities are checked under this lock before ledger/domain writes.
+    if(command.kind==='plan'&&
+       (typeof hasPermission_!=='function'||
+        !hasPermission_(user.role,command.mode==='create'?'create':'edit')))
+      d331P007Deny_();
 
     // Build canonical digest independent of incoming payload key order.
     var keys=Object.keys(command.payload).sort(),pairs=keys.map(function(k){

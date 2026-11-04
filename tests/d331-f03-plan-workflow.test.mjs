@@ -101,7 +101,7 @@ function setup(options={}){
  const data={
   MainData:[main],
   UserAccounts:[['user-1','ชื่อจำลอง','fixture@example.invalid',
-   'TEST_ONLY_HASH','Staff','active','','','','','','','','']],
+   'TEST_ONLY_HASH',options.role??'Admin','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
    '2','หมู่บ้านจำลอง','SYN-001',true,'','']],
   D331AccessGrants:kinds.map((kind,i)=>grantRow(ctx,
@@ -130,7 +130,8 @@ function setup(options={}){
  }})};
  ctx.LockService={getScriptLock:()=>{
   trace.locks++;
-  return {tryLock:()=>!options.lockFails,releaseLock:()=>{trace.release++;}};
+  return {tryLock:()=>{if(options.onLock)options.onLock();return !options.lockFails;},
+   releaseLock:()=>{trace.release++;}};
  }};
  ctx.Utilities={DigestAlgorithm:{SHA_256:'SHA_256'},Charset:{UTF_8:'UTF_8'},
   formatDate:(date,timeZone,pattern)=>{
@@ -175,6 +176,18 @@ const planCommand=(caseId,more={})=>({...request(caseId),mode:'create',requestId
  payload:{TriggerCaseID:caseId,EpisodeKey:'EP1'},...more});
 function makeCase(s){return s.ctx.saveDengueCase(TOKEN,EVENT,{mode:'create',requestId:uid(799),
  expectedEventRevision:3,payload:basicCase()}).caseId;}
+test('F03 S1 current Staff with a Plan grant cannot create through the public RPC',()=>{
+ const s=setup();s.sheets.UserAccounts.grid[1][4]='Admin';const c=makeCase(s);
+ s.sheets.UserAccounts.grid[1][4]='Staff';
+ const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+ const grants=plain(s.sheets.D331AccessGrants.grid);
+ assert.equal(s.ctx.hasPermission_('Staff','create'),false);
+ assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.writes.length,writes);
+ assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+ assert.deepEqual(plain(s.sheets.D331AccessGrants.grid),grants);
+ assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,[]);
+});
 test('F03 S1 default OFF or missing approval/dependency denies all four RPCs before services',()=>{
  for(const options of [{planFlag:false},{planApproval:false},{}]){
   const s=setup(options);if(!Object.keys(options).length)s.ctx.d331P007Authorize_=undefined;
@@ -232,6 +245,67 @@ function updatePlan(s,c,p,payload,revision,requestId=uid(820+revision)){
  return s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{mode:'update',requestId,
   entityId:p,expectedEntityRevision:revision,payload}));
 }
+test('F03 S1 role downgrade keeps the Plan grant but denies every public update before writes',()=>{
+ for(const payload of [{PlanStatus:'CLOSED'},{PlanStatus:'OPEN'},{PlanStatus:'VOID'},
+  {ResponsibleUserID:'user-2'}]){
+  const s=setup(),c=makeCase(s),command=planCommand(c);
+  const p=s.ctx.saveDenguePlan(TOKEN,EVENT,command).planId;let revision=1;
+  if(payload.PlanStatus==='OPEN'){
+   updatePlan(s,c,p,{PlanStatus:'CLOSED'},1);revision=2;
+  }
+  if(payload.ResponsibleUserID){addOwner(s);s.sheets.UserAccounts.grid[1][4]='Manager';}
+  const before=plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans;
+  const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  const grants=plain(s.sheets.D331AccessGrants.grid);
+  s.sheets.UserAccounts.grid[1][4]='Staff'; // same session, unchanged credential and grants
+  assert.equal(s.ctx.hasPermission_('Staff','edit'),false);
+  assert.throws(()=>updatePlan(s,c,p,payload,revision,uid(1100)),/D331_WRITE_UNAVAILABLE/);
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,command),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,writes);
+  assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+  assert.deepEqual(plain(s.sheets.D331AccessGrants.grid),grants);
+  assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,before);
+ }
+});
+test('F03 S1 public mutations use the role observed after acquiring the writer lock',()=>{
+ for(const mode of ['create','update']){
+  const options={},s=setup(options),c=makeCase(s);
+  const p=mode==='update'?s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId:null;
+  const command=mode==='create'?planCommand(c):planCommand(c,{mode:'update',requestId:uid(1101),
+   entityId:p,expectedEntityRevision:1,payload:{PlanStatus:'CLOSED'}});
+  const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  const before=plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans;
+  const locks=s.trace.locks,releases=s.trace.release;
+  options.onLock=()=>{s.sheets.UserAccounts.grid[1][4]='Staff';};
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,command),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.locks,locks+1);assert.equal(s.trace.release,releases+1);
+  assert.equal(s.trace.writes.length,writes);
+  assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+  assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,before);
+ }
+ const options={},s=setup(options),c=makeCase(s);s.sheets.UserAccounts.grid[1][4]='Staff';
+ options.onLock=()=>{s.sheets.UserAccounts.grid[1][4]='Admin';};
+ assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).status,'CREATED');
+});
+test('F03 S1 Admin/Manager/Super Admin need both core permissions and current Plan grants',()=>{
+ for(const role of ['Admin','Manager','Super Admin']){
+  const s=setup({role}),c=makeCase(s),command=planCommand(c);
+  assert.equal(s.ctx.hasPermission_(role,'create'),true);assert.equal(s.ctx.hasPermission_(role,'edit'),true);
+  const created=s.ctx.saveDenguePlan(TOKEN,EVENT,command);
+  assert.equal(created.status,'CREATED');assert.equal(created.revision,1);
+  assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,command).status,'REPLAYED');
+  assert.equal(updatePlan(s,c,created.planId,{PlanStatus:'CLOSED'},1).revision,2);
+  assert.equal(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c)).plans[0].planStatus,'CLOSED');
+  const grant=s.sheets.D331AccessGrants.grid.findIndex(r=>r[3]==='dengue.plan.write');
+  s.sheets.D331AccessGrants.grid.splice(grant,1);
+  const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{requestId:uid(1102),
+   payload:{TriggerCaseID:c,EpisodeKey:'EP2'}})),/D331_WRITE_UNAVAILABLE/);
+  assert.throws(()=>updatePlan(s,c,created.planId,{PlanStatus:'OPEN'},2),/D331_WRITE_UNAVAILABLE/);
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,command),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,writes);assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+ }
+});
 test('F03 S1 explicit close/reopen/void rejects stale/no-op/terminal/child conflicts without cascades',()=>{
  const s=setup(),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
  const action=s.run('action','create',basicAction(p));

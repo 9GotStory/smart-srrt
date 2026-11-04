@@ -110,7 +110,7 @@ function setup(options={}){
  const data={
   MainData:[main],
   UserAccounts:[['user-1','ชื่อจำลอง','fixture@example.invalid',
-   'TEST_ONLY_HASH','Staff','active','','','','','','','','']],
+   'TEST_ONLY_HASH',options.role??'Admin','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
    '2','หมู่บ้านจำลอง','SYN-001',true,'','']],
   D331AccessGrants:options.devPackage?['dengue.case.read','dengue.case.write'].map((cap,i)=>
@@ -588,4 +588,17 @@ test('F02 DEV create/read/PATCH round-trips Sheets Date onset without rewriting 
   entityId:created.caseId,expectedEntityRevision:2,payload:{OnsetLocalDate:''}})));
  assert.equal(cleared.revision,3);assert.equal(s.sheets.DengueCases.grid[1][5],'');
  assert.equal(plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT)).cases[0].caseRevision,3);
+});
+
+test('F03 Plan core-RBAC guard preserves the existing explicitly granted Staff Case writer',()=>{
+ const s=setup({role:'Staff'});
+ assert.equal(s.ctx.hasPermission_('Staff','create'),false);
+ const created=s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());
+ assert.equal(created.status,'CREATED');
+ const updated=s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(494),
+  entityId:created.caseId,expectedEntityRevision:1,payload:{Classification:'PROBABLE'}}));
+ assert.equal(updated.status,'UPDATED');assert.equal(updated.revision,2);
+ const writes=s.trace.writes.length;
+ deny(()=>s.run('plan','create',{TriggerCaseID:created.caseId,EpisodeKey:'EP1'}));
+ assert.equal(s.trace.writes.length,writes);
 });
