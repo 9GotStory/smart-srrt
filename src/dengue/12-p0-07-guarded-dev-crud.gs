@@ -254,7 +254,7 @@ function d331P007Authorize_(sessionToken,eventId,spec,expectedRevision){
     expectedRevision===undefined?event[31]:expectedRevision);
   if(auth.areaId!==grant.AreaID)d331P007Deny_();
 
-  return {tables:tables,users:users,user:user,auth:auth,now:now};
+  return {tables:tables,users:users,user:user,auth:auth,now:now,spreadsheet:ss};
 }
 
 function d331P007Operate_(sessionToken,eventId,command){
@@ -275,6 +275,17 @@ function d331P007Operate_(sessionToken,eventId,command){
        (typeof hasPermission_!=='function'||
         !hasPermission_(user.role,command.mode==='create'?'create':'edit')))
       d331P007Deny_();
+
+    if(command.kind==='plan'){
+      // Same pinned workbook and participating lock; never use fallback/repair helpers.
+      var settings=d331P003bGetRequiredSheet_(context.spreadsheet,CONFIG.SHEETS.SETTINGS,
+        ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+      var statuses=d331P003bReadRows_(settings,2,D331_P007_LIMIT_).filter(function(row){
+        return row[0]==='SYSTEM_STATUS';
+      });
+      if(statuses.length>1||String((statuses.length?statuses[0][1]:'')||'open').toLowerCase()==='closed')
+        d331P007Deny_();
+    }
 
     // Build canonical digest independent of incoming payload key order.
     var keys=Object.keys(command.payload).sort(),pairs=keys.map(function(k){

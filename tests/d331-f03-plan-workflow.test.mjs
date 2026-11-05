@@ -8,6 +8,7 @@ import {readOrderedClientScripts} from './helpers/native-client.mjs';
 const paths=[
  '../src/server/00-bootstrap.gs',
  '../src/server/01-schema-and-db.gs',
+ '../src/server/02-auth-and-attachments.gs',
  '../src/dengue/00-g1a-foundation.gs',
  '../src/dengue/03-n1b1-trusted-event-contract.gs',
  '../src/dengue/07-p0-02a-mvp-schema-contract.gs',
@@ -52,6 +53,7 @@ function mkSheet(name,headers,rows,trace,options){
    typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)
    ?new Date(value+'T00:00:00+07:00'):value;
  return {name,grid,
+  getDataRange(){return {getValues:()=>grid.map(r=>r.slice())};},
   getParent(){return {getId:()=>DB,getSpreadsheetTimeZone:()=>options.timeZone??'Asia/Bangkok'};},
   getLastColumn(){return grid[0].length;},
   getLastRow(){return grid.length;},
@@ -88,6 +90,7 @@ function setup(options={}){
  const headers={
   MainData:Array.from(ctx.MAIN_HEADERS).concat(Array.from(ctx.EVENT_META_HEADERS),['OwnerUserID']),
   UserAccounts:Array.from(ctx.D331_P003B_USER_HEADERS_),
+  SystemSettings:['Key','Value','Description','UpdatedAt','UpdatedBy'],
   AreaMaster:Array.from(ctx.D331_P003B_AREA_HEADERS_)
  };
  for(const name of Array.from(ctx.D331_P005_V2_TABS_))
@@ -100,6 +103,7 @@ function setup(options={}){
  main[38]='user-2';
  const data={
   MainData:[main],
+  SystemSettings:[['SYSTEM_STATUS','open','','','']],
   UserAccounts:[['user-1','ชื่อจำลอง','fixture@example.invalid',
    'TEST_ONLY_HASH',options.role??'Admin','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
@@ -188,6 +192,62 @@ test('F03 S1 current Staff with a Plan grant cannot create through the public RP
  assert.deepEqual(plain(s.sheets.D331AccessGrants.grid),grants);
  assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,[]);
 });
+test('F03 S1 closed system denies public Plan create just as actual core auth does',()=>{
+ const s=setup(),c=makeCase(s);s.sheets.SystemSettings.grid[1][1]='closed';
+ const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+ assert.throws(()=>s.ctx.requireAuth_(TOKEN,'create'),/ระบบถูกปิด/);
+ assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.writes.length,writes);
+ assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+ assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,[]);
+});
+test('F03 S1 duplicate SYSTEM_STATUS cannot hide a later closed value',()=>{
+ const s=setup(),c=makeCase(s);
+ s.sheets.SystemSettings.grid.push(['SYSTEM_STATUS','closed','','','']);
+ const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+ assert.throws(()=>s.ctx.requireAuth_(TOKEN,'create'),/ระบบถูกปิด/);
+ assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.writes.length,writes);
+ assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+});
+test('F03 S1 settings normalization and default-open behavior match actual core auth',()=>{
+ for(const value of ['closed','CLOSED','Closed','open','OPEN','',null,'missing']){
+  const s=setup(),c=makeCase(s);
+  if(value==='missing')s.sheets.SystemSettings.grid.splice(1);
+  else s.sheets.SystemSettings.grid[1][1]=value;
+  const closed=typeof value==='string'&&value.toLowerCase()==='closed';
+  if(closed){
+   const writes=s.trace.writes.length;
+   assert.throws(()=>s.ctx.requireAuth_(TOKEN,'create'),/ระบบถูกปิด/);
+   assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)),/D331_WRITE_UNAVAILABLE/);
+   assert.equal(s.trace.writes.length,writes);
+  }else{
+   assert.equal(s.ctx.requireAuth_(TOKEN,'create').role,'Admin');
+   assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).status,'CREATED');
+  }
+ }
+});
+test('F03 S1 Plan status reads use the already pinned workbook without fallback or repair',()=>{
+ const s=setup(),c=makeCase(s);s.trace.opens=0;s.trace.properties=0;s.trace.reads.length=0;
+ const settings=plain(s.sheets.SystemSettings.grid);
+ assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).status,'CREATED');
+ assert.equal(s.trace.opens,1);assert.equal(s.trace.properties,1);
+ assert.deepEqual(s.trace.reads.filter(r=>r[0]==='SystemSettings'),[
+  ['SystemSettings',1,1,1,5],['SystemSettings',2,1,1,2]]);
+ assert.deepEqual(plain(s.sheets.SystemSettings.grid),settings);
+});
+test('F03 S1 missing/malformed/unbounded settings and failed reads deny before Plan writes',()=>{
+ for(const change of [s=>{delete s.sheets.SystemSettings;},
+  s=>{s.sheets.SystemSettings.grid[0].reverse();},
+  s=>{s.sheets.SystemSettings.getLastRow=()=>502;},
+  s=>{s.sheets.SystemSettings.getRange=()=>({getValues:()=>{throw Error('PRIVATE_SETTINGS_FAILURE');}});},
+  s=>{s.sheets.SystemSettings.grid.push(s.sheets.SystemSettings.grid[1].slice());}]){
+  const s=setup(),c=makeCase(s),writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  change(s);
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)),/^Error: D331_WRITE_UNAVAILABLE$/);
+  assert.equal(s.trace.writes.length,writes);assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+ }
+});
 test('F03 S1 default OFF or missing approval/dependency denies all four RPCs before services',()=>{
  for(const options of [{planFlag:false},{planApproval:false},{}]){
   const s=setup(options);if(!Object.keys(options).length)s.ctx.d331P007Authorize_=undefined;
@@ -245,6 +305,43 @@ function updatePlan(s,c,p,payload,revision,requestId=uid(820+revision)){
  return s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{mode:'update',requestId,
   entityId:p,expectedEntityRevision:revision,payload}));
 }
+test('F03 S1 system write freeze blocks lifecycle and assignment but retains read-only receipts',()=>{
+ for(const payload of [{PlanStatus:'CLOSED'},{PlanStatus:'OPEN'},{PlanStatus:'VOID'},
+  {ResponsibleUserID:'user-2'}]){
+  const s=setup(),c=makeCase(s),command=planCommand(c),p=s.ctx.saveDenguePlan(TOKEN,EVENT,command).planId;
+  let revision=1;
+  if(payload.PlanStatus==='OPEN'){updatePlan(s,c,p,{PlanStatus:'CLOSED'},1);revision=2;}
+  if(payload.ResponsibleUserID){s.sheets.UserAccounts.grid[1][4]='Manager';addOwner(s);}
+  const before=plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans;
+  const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  const grants=plain(s.sheets.D331AccessGrants.grid);
+  s.sheets.SystemSettings.grid[1][1]='closed';
+  assert.throws(()=>s.ctx.requireAuth_(TOKEN,payload.ResponsibleUserID?'assign':'edit'),/ระบบถูกปิด/);
+  assert.throws(()=>updatePlan(s,c,p,payload,revision,uid(1300)),/D331_WRITE_UNAVAILABLE/);
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,command),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,writes);
+  assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+  assert.deepEqual(plain(s.sheets.D331AccessGrants.grid),grants);
+  assert.deepEqual(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans,before);
+  assert.equal(s.ctx.getDenguePlanWriteStatus(TOKEN,EVENT,command.requestId).status,'COMMITTED');
+  assert.equal(s.trace.writes.length,writes);
+ }
+});
+test('F03 S1 system closure is read after acquiring the participating writer lock',()=>{
+ for(const update of [false,true]){
+  const options={},s=setup(options),c=makeCase(s);
+  const p=update?s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId:null;
+  const command=update?planCommand(c,{mode:'update',requestId:uid(1301),entityId:p,
+   expectedEntityRevision:1,payload:{PlanStatus:'CLOSED'}}):planCommand(c);
+  const writes=s.trace.writes.length,ledger=plain(s.sheets.DengueRequestLedger.grid);
+  options.onLock=()=>{s.sheets.SystemSettings.grid[1][1]='closed';};
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,command),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,writes);assert.deepEqual(plain(s.sheets.DengueRequestLedger.grid),ledger);
+ }
+ const options={},s=setup(options),c=makeCase(s);s.sheets.SystemSettings.grid[1][1]='closed';
+ options.onLock=()=>{s.sheets.SystemSettings.grid[1][1]='open';};
+ assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).status,'CREATED');
+});
 test('F03 S1 role downgrade keeps the Plan grant but denies every public update before writes',()=>{
  for(const payload of [{PlanStatus:'CLOSED'},{PlanStatus:'OPEN'},{PlanStatus:'VOID'},
   {ResponsibleUserID:'user-2'}]){
@@ -455,7 +552,7 @@ function planClient(){
 }
 
 test('F03 S3 serialized actual server outputs drive registered Records create/receipt/fresh-read without optimistic revision',async()=>{
- for(const failure of ['none','domain','commit']){
+ for(const failure of ['none','domain','commit','closed']){
   const options={},s=setup(options),c=makeCase(s);
   vm.runInContext(fs.readFileSync(new URL('../src/dengue/15-p0-22b2-case-read-integration.gs',import.meta.url),'utf8'),s.ctx);
   s.ctx.D331_P022B2_ENABLED_=true;s.ctx.D331_P022B2_REVOCATION_APPROVED_=true;
@@ -469,11 +566,14 @@ test('F03 S3 serialized actual server outputs drive registered Records create/re
   h.ctx.d331F02CaseRead_.select(EVENT);await respond();h.select();await respond();assert.match(h.text(),/ไม่มี Plan/);
   h.click('เพิ่ม Plan');h.fill('d331-f03-episode','EP-S3');
   if(failure==='domain')options.failDomain='DenguePlans';if(failure==='commit')options.failCommit=true;
+  if(failure==='closed')s.sheets.SystemSettings.grid[1][1]='closed';
+  const beforeSave=s.trace.writes.length;
   h.click('บันทึก Plan');await respond();
+  if(failure==='closed')assert.equal(s.trace.writes.length,beforeSave);
   assert.match(h.text(),failure==='none'?/ยืนยันการบันทึก/:/ยังไม่ทราบผล/);
   if(failure!=='none'){h.click('ตรวจสอบสถานะคำขอ');await respond();assert.match(h.text(),/ยังไม่ทราบผล/);}
   h.click('อ่านรายการ Plan ใหม่');await respond();
-  assert.match(h.text(),failure==='domain'?/ไม่มี Plan/:/EP-S3/);
+  assert.match(h.text(),failure==='domain'||failure==='closed'?/ไม่มี Plan/:/EP-S3/);
   if(failure!=='none')assert.match(h.text(),/ยังไม่ทราบผล/);
   assert.equal(h.requests.filter(r=>r.args[0]==='saveDenguePlan').length,1);
   assert.doesNotMatch(h.text(),/PayloadDigest|TEST_ONLY_HASH|example.invalid/);

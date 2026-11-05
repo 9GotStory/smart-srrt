@@ -97,6 +97,7 @@ function setup(options={}){
  const headers={
   MainData:Array.from(ctx.MAIN_HEADERS).concat(Array.from(ctx.EVENT_META_HEADERS),['OwnerUserID']),
   UserAccounts:Array.from(ctx.D331_P003B_USER_HEADERS_),
+  SystemSettings:['Key','Value','Description','UpdatedAt','UpdatedBy'],
   AreaMaster:Array.from(ctx.D331_P003B_AREA_HEADERS_)
  };
  for(const name of Array.from(ctx.D331_P005_V2_TABS_))
@@ -109,6 +110,7 @@ function setup(options={}){
  main[38]='user-2';
  const data={
   MainData:[main],
+  SystemSettings:[['SYSTEM_STATUS','open','','','']],
   UserAccounts:[['user-1','ชื่อจำลอง','fixture@example.invalid',
    'TEST_ONLY_HASH',options.role??'Admin','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
