@@ -99,6 +99,32 @@ function getDengueCaseWriteStatus(sessionToken, eventId, requestId) {
   }catch(ignore){throw new Error('D331_WRITE_UNAVAILABLE');}
 }
 
+// F03 source declarations only: private workflow remains unregistered/OFF.
+function listDenguePlansForEvent(sessionToken,eventId,selection) {
+  try {
+    if(typeof d331F03List_!=='function')throw new Error();
+    return d331F03List_(sessionToken,eventId,selection);
+  }catch(ignore){throw new Error('D331_UNAVAILABLE');}
+}
+function listAssignableDenguePlanOwners(sessionToken,eventId,selection) {
+  try {
+    if(typeof d331F03Owners_!=='function')throw new Error();
+    return d331F03Owners_(sessionToken,eventId,selection);
+  }catch(ignore){throw new Error('D331_UNAVAILABLE');}
+}
+function saveDenguePlan(sessionToken,eventId,command) {
+  try {
+    if(typeof d331F03Save_!=='function')throw new Error();
+    return d331F03Save_(sessionToken,eventId,command);
+  }catch(ignore){throw new Error('D331_WRITE_UNAVAILABLE');}
+}
+function getDenguePlanWriteStatus(sessionToken,eventId,requestId) {
+  try {
+    if(typeof d331F03Status_!=='function')throw new Error();
+    return d331F03Status_(sessionToken,eventId,requestId);
+  }catch(ignore){throw new Error('D331_WRITE_UNAVAILABLE');}
+}
+
 function getPublicDashboardData(filter) {
   return buildDashboardAggregate_(getFilteredEventRows_(filter || {}));
 }
