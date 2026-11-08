@@ -1,6 +1,6 @@
 # Historical Agent Task Records — 11–12 October 2026
 
-**Status:** Historical. ย้ายจากท้ายไฟล์ `AGENTS.md` เดิมเมื่อ 8 November 2026 เมื่อโครงการเปลี่ยนมาใช้ [CLAUDE.md](../../CLAUDE.md) ไฟล์เดียว เนื้อหาคงเดิม ปรับเฉพาะ relative links ให้ตรงตำแหน่งใหม่ ชื่อ Agent และผู้ตรวจในบันทึกนี้ (เช่น Codex, Multica, ChatGPT) สะท้อนกระบวนการ ณ เวลานั้น
+**Status:** Historical. ย้ายจากท้ายไฟล์ `AGENTS.md` เดิมเมื่อ 8 November 2026 เมื่อโครงการเปลี่ยนมาใช้ [CLAUDE.md](../../CLAUDE.md) ไฟล์เดียว เนื้อหาคงเดิม ปรับเฉพาะ relative links ให้ตรงตำแหน่งใหม่ ชื่อ Agent และผู้ตรวจในบันทึกนี้ (เช่น Codex, Multica, ChatGPT) สะท้อนกระบวนการ ณ เวลานั้น คำว่า "ส่วนบน" ในบันทึกนี้หมายถึงส่วน current ของไฟล์เดิม ซึ่งปัจจุบันคือ CLAUDE.md
 
 ข้อความด้านล่างรักษาบริบทเดิม รวม candidate/NOT MERGED, topology เก่า และข้อกำหนดเฉพาะงาน ณ เวลานั้น Current source/permission ต้องอ่านส่วนบนและ INDEX; ข้อความเหล่านี้ไม่ยกเลิก scope ที่ PO อนุมัติในงานปัจจุบัน และไม่เป็นสิทธิ์ Deploy/Migrate
 

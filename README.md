@@ -96,7 +96,7 @@ Dengue 3-3-1 อยู่ในขอบเขตพัฒนาต่อขอ�
 
 Product backlog และข้อกำหนดที่เหลืออยู่ที่ [D331 Remaining Feature Briefs](docs/implementation/d331-remaining-feature-briefs.md); สถานะ source/registration/tests ดู [Feature Reference](docs/features.md#d331-development-status). ไม่คัดลอก requirements ใหม่ที่นี่ การตัดสินใจ privacy/security/clinical และการอนุมัติ read/write/Deploy ยังแยกกัน
 
-ทะเบียนล่าสุดระบุ existing **DEV Web App Version 22** (F02 synthetic-only, operator receipt 4 November 2026) และไม่มี Production environment; เป็น dated evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Script↔Deployment↔Workbook binding สำหรับข้อมูลจริงยัง HOLD ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
+ทะเบียนล่าสุดระบุ existing **DEV Web App Version 22** (F02 synthetic-only, operator receipt 4 November 2026) และไม่มี Production environment; เป็น dated evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Current Script↔Deployment↔Workbook binding ยังไม่ re-attest ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
 
 **F01 / P0-31B source/offline completion — 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged ที่ `f8418c200564da7b9ef9370d350ad890b6a910ca`, post-merge CI ผ่าน และ #257/#258/#259 CLOSED/completed; ดู [F01 evidence](docs/implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records). งานถัดไปรอ PO เลือกและอนุมัติแผนเฉพาะ feature ตาม workflow; source/offline completion ไม่ใช่ Browser UAT, Deploy, Migration หรือสิทธิ์ข้อมูลจริง และ D331 ยังคง OFF
 
