@@ -22,7 +22,7 @@ var D331_P007_KIND_ = {
     sheet:'DenguePlans',id:'PlanID',rev:'PlanRevision',status:'PlanStatus',
     entity:'PLAN',capability:'dengue.plan.write',
     create:['TriggerCaseID','EpisodeKey'],
-    update:['PlanStatus'],initial:'OPEN',terminal:['CLOSED','VOID']
+    update:['PlanStatus','ResponsibleUserID'],initial:'OPEN',terminal:['VOID']
   },
   action: {
     sheet:'DengueControlActions',id:'ActionID',rev:'ActionRevision',
@@ -50,7 +50,7 @@ var D331_P007_KIND_ = {
 };
 var D331_P007_NEXT_ = {
   case:{ACTIVE:['VOID']},
-  plan:{OPEN:['CLOSED','VOID']},
+  plan:{OPEN:['CLOSED','VOID'],CLOSED:['OPEN']},
   action:{PLANNED:['IN_PROGRESS','COMPLETED','CANCELLED'],
     IN_PROGRESS:['COMPLETED','CANCELLED']},
   survey:{DRAFT:['FINAL','VOID']},
@@ -80,6 +80,7 @@ function d331P007Command_(eventId,command){
       typeof command!=='object'||Array.isArray(command))d331P007Deny_();
   var allowedTop=['kind','mode','requestId','expectedEventRevision','payload',
     'entityId','expectedEntityRevision'];
+  if(command.kind==='plan')allowedTop=allowedTop.concat(['caseId','expectedCaseRevision']);
   if(Object.keys(command).some(function(k){return allowedTop.indexOf(k)<0;}))
     d331P007Deny_();
   if(!Object.prototype.hasOwnProperty.call(D331_P007_KIND_,command.kind)||
@@ -120,6 +121,14 @@ function d331P007Read_(sheet,sheetName){
     }
     catch(e){d331P007Deny_();}
   });
+}
+// Free-text EpisodeKey stays text: Sheets would parse a value like 2026-11-08 into a
+// Date on append, and strict row validation would then deny every later write.
+function d331P007AppendPlanRow_(sheet,row){
+  var last=sheet.getLastRow(),column=d331P002aHeaders_('DenguePlans').indexOf('EpisodeKey')+1;
+  sheet.insertRowAfter(last);
+  sheet.getRange(last+1,column,1,1).setNumberFormat('@');
+  sheet.getRange(last+1,1,1,row.length).setValues([row]);
 }
 function d331P007Digest_(canonical){
   var bytes=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
@@ -253,7 +262,7 @@ function d331P007Authorize_(sessionToken,eventId,spec,expectedRevision){
     expectedRevision===undefined?event[31]:expectedRevision);
   if(auth.areaId!==grant.AreaID)d331P007Deny_();
 
-  return {tables:tables,user:user,auth:auth,now:now};
+  return {tables:tables,users:users,user:user,auth:auth,now:now,spreadsheet:ss};
 }
 
 function d331P007Operate_(sessionToken,eventId,command){
@@ -268,14 +277,33 @@ function d331P007Operate_(sessionToken,eventId,command){
     acquired=true;
     var context=d331P007Authorize_(sessionToken,eventId,spec,command.expectedEventRevision);
     var tables=context.tables,user=context.user,auth=context.auth,now=context.now;
+    // Plan grants do not replace the current core mutation permission.
+    // Both authorities are checked under this lock before ledger/domain writes.
+    if(command.kind==='plan'&&
+       (typeof hasPermission_!=='function'||
+        !hasPermission_(user.role,command.mode==='create'?'create':'edit')))
+      d331P007Deny_();
+
+    if(command.kind==='plan'){
+      // Same pinned workbook and participating lock; never use fallback/repair helpers.
+      var settings=d331P003bGetRequiredSheet_(context.spreadsheet,CONFIG.SHEETS.SETTINGS,
+        ['Key','Value','Description','UpdatedAt','UpdatedBy']);
+      var statuses=d331P003bReadRows_(settings,2,D331_P007_LIMIT_).filter(function(row){
+        return row[0]==='SYSTEM_STATUS';
+      });
+      if(statuses.length>1||String((statuses.length?statuses[0][1]:'')||'open').toLowerCase()==='closed')
+        d331P007Deny_();
+    }
 
     // Build canonical digest independent of incoming payload key order.
     var keys=Object.keys(command.payload).sort(),pairs=keys.map(function(k){
       return [k,command.payload[k]];
     });
-    var digest=d331P007Digest_(JSON.stringify([eventId,user.userId,
+    var canonical=[eventId,user.userId,
       spec.capability,command.mode,command.entityId||'',
-      command.expectedEntityRevision||0,command.expectedEventRevision,pairs]));
+      command.expectedEntityRevision||0,command.expectedEventRevision,pairs];
+    if(command.kind==='plan'&&command.caseId!==undefined)canonical.push(command.caseId||'',command.expectedCaseRevision||0);
+    var digest=d331P007Digest_(JSON.stringify(canonical));
     var ledgerSheet=tables.DengueRequestLedger;
     var ledgerRows=d331P007Read_(ledgerSheet,'DengueRequestLedger');
     var found=ledgerRows.filter(function(r){return r[0]===command.requestId;});
@@ -289,9 +317,10 @@ function d331P007Operate_(sessionToken,eventId,command){
          !d331P007Id_(saved.EntityID))d331P007Deny_();
       return {status:'REPLAYED',kind:command.kind,entityId:saved.EntityID};
     }
-    // A fresh request ID cannot bypass an interrupted Case write for this Event.
-    if(command.kind==='case'&&ledgerRows.some(function(r){
-      return r[1]===eventId&&r[3]===spec.capability&&r[5]==='PENDING';
+    // A fresh request ID cannot bypass an interrupted Case/Plan write for this Event.
+    if((command.kind==='case'||command.kind==='plan')&&ledgerRows.some(function(r){
+      return r[1]===eventId&&r[3]===spec.capability&&
+        (r[5]==='PENDING'||(command.kind==='plan'&&r[5]==='UNKNOWN'));
     }))d331P007Deny_();
 
     // Validate all domain records and FK snapshot BEFORE the first write.
@@ -308,6 +337,38 @@ function d331P007Operate_(sessionToken,eventId,command){
       existingIndex=matches[0];
       previous=d331P007Object_(spec.sheet,target[existingIndex]);
       if(previous.EventID!==eventId)d331P007Deny_();
+    }
+    if(command.kind==='plan'){
+      var tuples=Object.create(null);
+      target.forEach(function(r){var key=JSON.stringify([r[1],r[2],r[3]]);
+        if(tuples[key])d331P007Deny_();tuples[key]=true;});
+      if(previous&&(previous.AreaID!==auth.areaId||
+         (previous.PlanStatus==='CLOSED'&&(Object.keys(command.payload).join('|')!=='PlanStatus'||
+          command.payload.PlanStatus!=='OPEN'))))d331P007Deny_();
+      if(Object.prototype.hasOwnProperty.call(command.payload,'ResponsibleUserID')){
+        if(command.mode!=='update'||Object.keys(command.payload).join('|')!=='ResponsibleUserID')d331P007Deny_();
+        d331P003bPlanAssignmentActor_(user);
+        d331P003bPlanOwner_(context.users,tables.D331AccessGrants,command.payload.ResponsibleUserID,
+          eventId,auth.areaId,now);
+      }
+      var trigger=previous?previous.TriggerCaseID:command.payload.TriggerCaseID;
+      var parents=all.DengueCases.filter(function(r){return r[0]===trigger;});
+      if(parents.length!==1||parents[0][1]!==eventId||
+         (command.caseId!==undefined&&(command.caseId!==trigger||parents[0][2]!==command.expectedCaseRevision))||
+         ((command.mode==='create'||command.payload.PlanStatus==='OPEN')&&parents[0][3]!=='ACTIVE'))d331P007Deny_();
+      if(command.mode==='create'&&target.some(function(r){
+        return r[1]===eventId&&r[2]===trigger&&r[3]===command.payload.EpisodeKey;
+      }))d331P007Deny_();
+    }
+    if(command.kind==='plan'&&previous&&
+       ['CLOSED','VOID'].indexOf(command.payload.PlanStatus)>=0){
+      ['action','survey','followup'].forEach(function(kind){
+        var childSpec=D331_P007_KIND_[kind];
+        if(all[childSpec.sheet].some(function(row){
+          var child=d331P007Object_(childSpec.sheet,row);
+          return child.PlanID===previous.PlanID&&childSpec.terminal.indexOf(child[childSpec.status])<0;
+        }))d331P007Deny_();
+      });
     }
     var prepared=d331P007MutateRow_(spec,command,previous,
       user.userId,eventId,auth.areaId,now);
@@ -326,7 +387,8 @@ function d331P007Operate_(sessionToken,eventId,command){
     // Intent is persisted FIRST. Any interruption leaves PENDING -> HOLD.
     ledgerSheet.appendRow(pending);
     if(command.mode==='create'){
-      tables[spec.sheet].appendRow(prepared.row);
+      if(command.kind==='plan')d331P007AppendPlanRow_(tables[spec.sheet],prepared.row);
+      else tables[spec.sheet].appendRow(prepared.row);
     }else{
       tables[spec.sheet].getRange(existingIndex+2,1,1,prepared.row.length)
         .setValues([prepared.row]);
@@ -347,7 +409,7 @@ function d331P007Operate_(sessionToken,eventId,command){
 }
 
 // Status is authorized against current session/grants, never an old request's authority.
-function d331P007CaseWriteStatus_(sessionToken,eventId,requestId){
+function d331P007WriteStatus_(sessionToken,eventId,requestId,kind){
   d331P007RequireReady_();
   if(!d331P007Id_(eventId)||!d331P007Id_(requestId))d331P007Deny_();
   var lock=null,acquired=false;
@@ -355,7 +417,8 @@ function d331P007CaseWriteStatus_(sessionToken,eventId,requestId){
     lock=LockService.getScriptLock();
     if(!lock||!lock.tryLock(15000))d331P007Deny_();
     acquired=true;
-    var spec=D331_P007_KIND_.case;
+    var spec=D331_P007_KIND_[kind];
+    if(kind!=='case'&&kind!=='plan')d331P007Deny_();
     var context=d331P007Authorize_(sessionToken,eventId,spec);
     var rows=d331P007Read_(context.tables.DengueRequestLedger,'DengueRequestLedger');
     var found=rows.filter(function(r){return r[0]===requestId;});
@@ -365,9 +428,15 @@ function d331P007CaseWriteStatus_(sessionToken,eventId,requestId){
     if(saved.EventID!==eventId||saved.PrincipalID!==context.user.userId||
        saved.Operation!==spec.capability)d331P007Deny_();
     if(saved.Phase==='PENDING')return {status:'PENDING'};
-    if(saved.Phase!=='COMMITTED'||saved.EntityType!=='CASE'||
+    if(saved.Phase==='UNKNOWN'&&kind==='plan')return {status:'UNKNOWN'};
+    if(saved.Phase!=='COMMITTED'||saved.EntityType!==spec.entity||
        !d331P007Id_(saved.EntityID))d331P007Deny_();
-    return {status:'COMMITTED',caseId:saved.EntityID};
+    return {status:'COMMITTED',entityId:saved.EntityID};
   }catch(ignore){d331P007Deny_();}
   finally{if(acquired)lock.releaseLock();}
+}
+
+function d331P007CaseWriteStatus_(sessionToken,eventId,requestId){
+  var value=d331P007WriteStatus_(sessionToken,eventId,requestId,'case');
+  return value.status==='COMMITTED'?{status:value.status,caseId:value.entityId}:value;
 }

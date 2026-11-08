@@ -127,6 +127,7 @@
   function renderTables(){
     if(typeof d331F02CaseRead_!=='undefined')d331F02CaseRead_.refresh();
     if(typeof d331F02CaseWrite_!=='undefined')d331F02CaseWrite_.refresh();
+    if(typeof d331F03Plans_!=='undefined')d331F03Plans_.refresh();
     if(!currentUser)d331P020PreviewBridge_.reset();
     if(!currentUser&&typeof d331P024RecordsMockBridge_!=='undefined')
       d331P024RecordsMockBridge_.reset();
@@ -383,8 +384,18 @@ var d331F02CaseRead_ = (function(){
       READY:'รายการ Case แบบอ่านอย่างเดียว · ยังไม่ประเมินเกณฑ์เวลา 3-3-1',
       ERROR:'ไม่สามารถยืนยันรายการ Case ได้ กรุณาตรวจสอบเหตุการณ์และสิทธิ์ก่อนลองใหม่'}[status];
     view.list.replaceChildren();
-    cases.forEach(function(c){view.list.appendChild(f02Node('li',
-      c.caseId+' · Revision '+c.caseRevision+' · '+c.caseStatus));});
+    cases.forEach(function(c){var item=f02Node('li',
+      c.caseId+' · Revision '+c.caseRevision+' · '+c.caseStatus);
+      if(typeof d331F03Plans_!=='undefined'&&D331_F03_PLANS_AVAILABLE_===true){
+        var button=f02Node('button','ดู Plans '+c.caseId);button.type='button';button.className='btn light';
+        var atOwner=owner;
+        button.addEventListener('click',function(){refresh();
+          if(owner===atOwner&&cases.indexOf(c)>=0)d331F03Plans_.select(c.caseId,button);});
+        item.appendChild(button);
+      }
+      view.list.appendChild(item);
+    });
+    if(typeof d331F03Plans_!=='undefined')d331F03Plans_.refresh();
     if(typeof d331F02CaseWrite_!=='undefined')d331F02CaseWrite_.refresh();
   }
   function clear(){owner=null;pending=null;cases=[];status='UNAVAILABLE';returnFocus=null;f02Render();}
@@ -455,6 +466,232 @@ var d331F02CaseRead_ = (function(){
       ?'<button type="button" class="btn light" onclick="d331F02CaseRead_.select(\''+eventId+'\',this)">ดู Case</button>':'';},
     snapshot:function(){refresh();return {status:status,eventId:owner?owner.eventId:null,
       cases:cases.map(function(c){return {caseId:c.caseId,caseRevision:c.caseRevision,caseStatus:c.caseStatus};})};}});
+})();
+
+// F03 is separately OFF; no default Plan read/write/owner/receipt dispatch.
+var D331_F03_PLANS_AVAILABLE_ = false;
+var d331F03Plans_ = (function(){
+  var owner=null,root=null,observer=null,pending=null,plans=[],state='UNAVAILABLE',opener=null;
+  var draft=null,receipt=null,view=null,holds=Object.create(null);
+  var uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  function f03Context(caseId){
+    if(D331_F03_PLANS_AVAILABLE_!==true||!token||!currentUser||!roleCanRecord())return null;
+    var read=d331F02CaseRead_.snapshot();if(read.status!=='READY')return null;
+    var cases=read.cases.filter(function(c){return c.caseId===caseId&&c.caseStatus==='ACTIVE';});
+    var events=allData.filter(function(e){return e.eventId===read.eventId;});
+    if(cases.length!==1||events.length!==1||events[0].recordStatus!=='active')return null;
+    return {eventId:read.eventId,revision:events[0].revision,caseId:caseId,caseRevision:cases[0].caseRevision,
+      token:token,user:currentUser,id:currentUser.userId,email:currentUser.email,subject:currentUser.id,role:currentUser.role};
+  }
+  function f03Same(a,b){return !!a&&!!b&&Object.keys(a).every(function(k){return a[k]===b[k];});}
+  function f03Node(tag,text){var n=root.ownerDocument.createElement(tag);n.textContent=text||'';return n;}
+  function f03Button(label,fn){var n=f03Node('button',label),at=owner,atDraft=draft,atPending=pending;
+    n.type='button';n.className='btn light';n.addEventListener('click',function(){f03Refresh();
+      if(owner===at&&draft===atDraft&&pending===atPending&&!n.disabled)fn();});return n;}
+  function f03Clear(){owner=null;pending=null;plans=[];draft=null;receipt=null;view=null;state='UNAVAILABLE';
+    if(root){root.hidden=true;root.replaceChildren();root.setAttribute('aria-busy','false');}}
+  function f03Close(){var target=opener;f03Clear();if(root)root.open=false;
+    if(target&&target.isConnected!==false)target.focus();opener=null;}
+  function f03Consume(records){for(var i=0;i<records.length;i++){
+    var next=i+1<records.length?records[i+1].oldValue!==null:root.open;
+    if(records[i].oldValue!==null&&!next){f03Clear();break;}
+  }}
+  function f03Refresh(){
+    if(observer)f03Consume(observer.takeRecords());
+    if(owner&&(!root.open||root.isConnected===false||!f03Same(owner,f03Context(owner.caseId)))){
+      f03Clear();root.open=false;
+    }
+  }
+  function f03Bind(){if(root)return;
+    if(typeof MutationObserver!=='function')return;
+    root=el('d331-f03-region');if(!root)return;
+    root.addEventListener('toggle',f03Refresh);observer=new MutationObserver(f03Consume);
+    observer.observe(root,{attributes:true,attributeFilter:['open'],attributeOldValue:true});
+  }
+  function f03Selection(){return {caseId:owner.caseId,expectedEventRevision:owner.revision,expectedCaseRevision:owner.caseRevision};}
+  function f03Render(notice){
+    if(!root||!owner)return;root.hidden=false;root.replaceChildren();root.setAttribute('aria-busy',pending?'true':'false');
+    root.appendChild(f03Node('summary','Plans ของ Case ที่เลือก'));
+    var info=f03Node('p','เหตุการณ์ '+owner.eventId+' · Case '+owner.caseId+' · Revision '+owner.caseRevision);
+    info.style.overflowWrap='anywhere';root.appendChild(info);
+    var message=f03Node('p',{LOADING:'กำลังโหลด Plans',EMPTY:'ไม่มี Plan ของ Case นี้',READY:'รายการ Plans',
+      UNAVAILABLE:'ยังไม่เปิด Plans หรือไม่มีสิทธิ์',ERROR:'ไม่สามารถยืนยันรายการ Plans ได้'}[state]);
+    var hold=holds[owner.eventId];
+    if(pending&&pending.kind==='write')message.textContent='กำลังบันทึก Plan · การปิดหน้าต่างไม่ยกเลิกคำขอ';
+    else if(pending&&pending.kind==='status')message.textContent='กำลังตรวจสอบสถานะคำขอ';
+    else if(receipt)message.textContent='ยืนยันการบันทึก · '+receipt.planId+
+      (receipt.revision?' · Revision '+receipt.revision:' · ต้องอ่านรายการใหม่เพื่อยืนยัน Revision');
+    else if(pending&&pending.kind==='owners')message.textContent='กำลังโหลดผู้รับผิดชอบที่มีสิทธิ์';
+    else if(hold)message.textContent+=' · ยังไม่ทราบผลการเขียน · ห้ามส่งคำขอใหม่ ต้องตรวจสอบหรือให้ผู้ดูแลกระทบยอด';
+    else if(notice)message.textContent=notice;
+    message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;root.appendChild(message);
+    view={status:message};if(receipt||(pending&&pending.kind!=='read'))message.focus();
+    var list=f03Node('ul');list.setAttribute('aria-label','รายการ Plans');
+    plans.forEach(function(p){var item=f03Node('li',p.planId+' · '+p.episodeKey+' · '+p.planStatus+
+      ' · Revision '+p.planRevision+' · ผู้รับผิดชอบ '+p.responsibleUserId);item.style.overflowWrap='anywhere';
+      if(!pending&&!hold&&!receipt&&!draft){
+        if(p.planStatus==='OPEN'){
+          item.appendChild(f03Button('ปิด Plan '+p.planId,function(){f03Begin(p,'CLOSED');}));
+          item.appendChild(f03Button('ยกเลิก Plan '+p.planId,function(){f03Begin(p,'VOID');}));
+          if(owner.role==='Manager'||owner.role==='Super Admin')item.appendChild(f03Button('เลือกผู้รับผิดชอบ '+p.planId,function(){f03Owners(p);}));
+        }else if(p.planStatus==='CLOSED')item.appendChild(f03Button('เปิด Plan อีกครั้ง '+p.planId,function(){f03Begin(p,'OPEN');}));
+      }
+      list.appendChild(item);
+    });
+    root.appendChild(list);
+    if(hold){
+      if(hold.principal===f03Principal(owner)){
+        var reference=f03Node('p','คำขอ '+hold.requestId);reference.style.overflowWrap='anywhere';root.appendChild(reference);
+        var verify=f03Button('ตรวจสอบสถานะคำขอ',f03VerifyStatus);verify.disabled=!!pending;root.appendChild(verify);
+      }
+    }else if(!pending&&!receipt&&(state==='READY'||state==='EMPTY')){
+      if(draft)f03RenderDraft();
+      else root.appendChild(f03Button('เพิ่ม Plan',function(){draft={mode:'create',episodeKey:''};f03Render();view.input.focus();}));
+    }
+    if(pending&&pending.kind==='write'){var disabledSave=f03Button('บันทึก Plan',function(){});disabledSave.disabled=true;root.appendChild(disabledSave);}
+    var reload=f03Button('อ่านรายการ Plan ใหม่',f03Load);reload.disabled=!!pending;root.appendChild(reload);
+    root.appendChild(f03Button('ปิด Plans',f03Close));
+  }
+  function f03Validate(value,at){
+    if(!value||Object.keys(value).sort().join('|')!=='areaId|caseId|caseRevision|contractVersion|eventId|plans|revision'||
+       value.contractVersion!=='D331_PLAN_LIST_V1'||value.eventId!==at.eventId||value.revision!==at.revision||
+       value.caseId!==at.caseId||value.caseRevision!==at.caseRevision||typeof value.areaId!=='string'||
+       !value.areaId.trim()||!Array.isArray(value.plans)||value.plans.length>500)throw new Error();
+    var ids=Object.create(null),episodes=Object.create(null);
+    return value.plans.map(function(p){
+      if(!p||Object.keys(p).sort().join('|')!=='episodeKey|planId|planRevision|planStatus|responsibleUserId|triggerCaseId'||
+         typeof p.planId!=='string'||!uuid.test(p.planId)||ids[p.planId]||p.triggerCaseId!==at.caseId||
+         !Number.isSafeInteger(p.planRevision)||p.planRevision<1||['OPEN','CLOSED','VOID'].indexOf(p.planStatus)<0||
+         typeof p.episodeKey!=='string'||!p.episodeKey||p.episodeKey.length>256||p.episodeKey.trim()!==p.episodeKey||episodes[p.episodeKey]||
+         typeof p.responsibleUserId!=='string'||!p.responsibleUserId||p.responsibleUserId.length>256||p.responsibleUserId.trim()!==p.responsibleUserId)throw new Error();
+      ids[p.planId]=true;episodes[p.episodeKey]=true;
+      return {planId:p.planId,triggerCaseId:p.triggerCaseId,episodeKey:p.episodeKey,planRevision:p.planRevision,
+        planStatus:p.planStatus,responsibleUserId:p.responsibleUserId};
+    });
+  }
+  function f03Load(){
+    if(pending||!owner)return;
+    draft=null;receipt=null;var ticket={owner:owner,kind:'read'};pending=ticket;plans=[];state='LOADING';f03Render();view.status.focus();
+    function f03Active(){f03Refresh();return pending===ticket&&owner===ticket.owner;}
+    function f03Fail(error){if(!f03Active())return;pending=null;plans=[];
+      state=error&&error.message==='D331_UNAVAILABLE'?'UNAVAILABLE':'ERROR';f03Render();}
+    try{Promise.resolve(gs('listDenguePlansForEvent',owner.token,owner.eventId,f03Selection())).then(function(value){
+      if(!f03Active())return;try{plans=f03Validate(value,owner);pending=null;state=plans.length?'READY':'EMPTY';f03Render();}
+      catch(ignored){f03Fail();}
+    },f03Fail);}catch(ignored){f03Fail();}
+  }
+  function f03Principal(at){return JSON.stringify([at.id||'',at.subject||'',at.email||'']);}
+  function f03Begin(plan,status){
+    draft={mode:'update',kind:'status',planId:plan.planId,revision:plan.planRevision,status:status};f03Render();view.save.focus();
+  }
+  function f03RenderDraft(){
+    var editing=draft;
+    if(draft.kind==='status')root.appendChild(f03Node('p','ยืนยันเปลี่ยนสถานะเป็น '+draft.status+' · '+draft.planId));
+    else{
+      var assigning=draft.kind==='owner',label=f03Node('label',assigning?'ผู้รับผิดชอบที่มีสิทธิ์ปัจจุบัน':'EpisodeKey');
+      label.htmlFor=assigning?'d331-f03-owner':'d331-f03-episode';root.appendChild(label);
+      var input=f03Node(assigning?'select':'input');input.id=label.htmlFor;input.className='input';
+      if(assigning){
+        var empty=f03Node('option','เลือกผู้รับผิดชอบ');empty.value='';input.appendChild(empty);
+        draft.owners.forEach(function(user){var option=f03Node('option',user.userId);option.value=user.userId;input.appendChild(option);});
+      }else{input.autocomplete='off';input.maxLength=256;}
+      input.value=assigning?draft.ownerId:draft.episodeKey;root.appendChild(input);view.input=input;
+      function f03Update(){f03Refresh();if(draft!==editing||pending)return;
+        if(assigning)draft.ownerId=input.value;else draft.episodeKey=input.value;
+        view.save.disabled=!f03Payload();}
+      input.addEventListener('input',f03Update);input.addEventListener('change',f03Update);
+    }
+    view.save=f03Button('บันทึก Plan',f03Save);view.save.disabled=!f03Payload();root.appendChild(view.save);
+    root.appendChild(f03Button('ยกเลิก',function(){draft=null;f03Render();view.status.focus();}));
+  }
+  function f03Payload(){
+    if(!draft)return null;
+    if(draft.kind==='status')return {PlanStatus:draft.status};
+    if(draft.kind==='owner')return draft.ownerId!==draft.previousOwner&&
+      draft.owners.some(function(u){return u.userId===draft.ownerId;})?{ResponsibleUserID:draft.ownerId}:null;
+    var value=draft.episodeKey;
+    if(typeof value!=='string'||!value||value.length>256||value.trim()!==value||/^[=+@-]/.test(value)||
+       plans.some(function(p){return p.episodeKey===value;}))return null;
+    return {TriggerCaseID:owner.caseId,EpisodeKey:value};
+  }
+  function f03Owners(plan){
+    if(pending)return;var ticket={owner:owner,kind:'owners'};pending=ticket;f03Render();
+    function f03OwnerActive(){f03Refresh();return pending===ticket&&owner===ticket.owner;}
+    function f03OwnerFail(){if(!f03OwnerActive())return;pending=null;
+      f03Render('ไม่สามารถยืนยันรายชื่อผู้รับผิดชอบได้ ลองอีกครั้งหรืออ่านรายการ Plan ใหม่');view.status.focus();}
+    try{Promise.resolve(gs('listAssignableDenguePlanOwners',owner.token,owner.eventId,f03Selection())).then(function(value){
+      if(!f03OwnerActive())return;
+      try{
+        if(!value||Object.keys(value).sort().join('|')!=='areaId|caseId|caseRevision|contractVersion|eventId|owners|revision'||
+           value.contractVersion!=='D331_PLAN_OWNERS_V1'||value.eventId!==owner.eventId||value.revision!==owner.revision||
+           value.caseId!==owner.caseId||value.caseRevision!==owner.caseRevision||typeof value.areaId!=='string'||!value.areaId.trim()||
+           !Array.isArray(value.owners)||value.owners.length>10000)throw new Error();
+        var seen=Object.create(null),eligible=value.owners.map(function(u){
+          if(!u||Object.keys(u).join('|')!=='userId'||typeof u.userId!=='string'||!u.userId||u.userId.length>256||
+             u.userId.trim()!==u.userId||seen[u.userId])throw new Error();
+          seen[u.userId]=true;return {userId:u.userId};
+        });
+        pending=null;draft={mode:'update',kind:'owner',planId:plan.planId,revision:plan.planRevision,
+          previousOwner:plan.responsibleUserId,ownerId:'',owners:eligible};f03Render();view.input.focus();
+      }catch(ignored){f03OwnerFail();}
+    },f03OwnerFail);}catch(ignored){f03OwnerFail();}
+  }
+  function f03ValidReceipt(value,ticket,statusOnly){
+    var version=statusOnly?'D331_PLAN_WRITE_RECEIPT_V1':'D331_PLAN_WRITE_V1';
+    if(!value||value.contractVersion!==version||value.eventId!==ticket.owner.eventId||value.requestId!==ticket.requestId)throw new Error();
+    var keys=['contractVersion','eventId','requestId','status'],status=value.status;
+    if(statusOnly){
+      if(['NOT_FOUND','PENDING','COMMITTED','UNKNOWN'].indexOf(status)<0)throw new Error();
+      if(status==='COMMITTED')keys.push('planId');
+    }else{
+      if(['CREATED','UPDATED','REPLAYED'].indexOf(status)<0||(status!=='REPLAYED'&&status!==ticket.expectedStatus))throw new Error();
+      keys.push('planId');if(status!=='REPLAYED')keys.push('revision');
+    }
+    if(Object.keys(value).sort().join('|')!==keys.sort().join('|')||
+       (keys.indexOf('planId')>=0&&(typeof value.planId!=='string'||!uuid.test(value.planId)))||
+       (ticket.planId&&value.planId&&ticket.planId!==value.planId)||
+       (keys.indexOf('revision')>=0&&value.revision!==ticket.expectedRevision))throw new Error();
+    return value;
+  }
+  function f03Complete(ticket,value,statusOnly){
+    f03Refresh();if(pending!==ticket||owner!==ticket.owner)return;
+    try{value=f03ValidReceipt(value,ticket,statusOnly);
+      if(['CREATED','UPDATED','REPLAYED','COMMITTED'].indexOf(value.status)>=0){
+        receipt={planId:value.planId};if(value.revision)receipt.revision=value.revision;delete holds[owner.eventId];
+      }
+    }catch(ignored){} // retain unknown outcome for malformed or foreign results
+    pending=null;draft=null;f03Render();view.status.focus();
+  }
+  function f03Failed(ticket){f03Refresh();if(pending!==ticket||owner!==ticket.owner)return;
+    pending=null;draft=null;f03Render();view.status.focus();}
+  function f03Save(){
+    if(pending||holds[owner.eventId])return;
+    var values=f03Payload(),requestId;if(!values)return;
+    try{requestId=crypto.randomUUID();if(!uuid.test(requestId))throw new Error();}
+    catch(ignored){view.status.textContent='ไม่สามารถสร้างรหัสคำขอได้';return;}
+    var command={mode:draft.mode,requestId:requestId,expectedEventRevision:owner.revision,
+      caseId:owner.caseId,expectedCaseRevision:owner.caseRevision,payload:values};
+    if(draft.planId){command.entityId=draft.planId;command.expectedEntityRevision=draft.revision;}
+    var ticket={owner:owner,kind:'write',requestId:requestId,planId:draft.planId,
+      expectedStatus:draft.planId?'UPDATED':'CREATED',expectedRevision:draft.planId?draft.revision+1:1};
+    holds[owner.eventId]={requestId:requestId,principal:f03Principal(owner)};pending=ticket;draft=null;f03Render();
+    try{Promise.resolve(gs('saveDenguePlan',owner.token,owner.eventId,command)).then(function(value){f03Complete(ticket,value,false);},function(){f03Failed(ticket);});}
+    catch(ignored){f03Failed(ticket);}
+  }
+  function f03VerifyStatus(){
+    var hold=holds[owner.eventId];if(pending||!hold||hold.principal!==f03Principal(owner))return;
+    var ticket={owner:owner,kind:'status',requestId:hold.requestId};pending=ticket;f03Render();
+    try{Promise.resolve(gs('getDenguePlanWriteStatus',owner.token,owner.eventId,hold.requestId)).then(function(value){f03Complete(ticket,value,true);},function(){f03Failed(ticket);});}
+    catch(ignored){f03Failed(ticket);}
+  }
+  function f03Select(caseId,from){
+    f03Refresh();var next=f03Context(caseId);if(!next){f03Close();return;}
+    if(pending&&f03Same(owner,next))return;f03Bind();if(!root||root.isConnected===false)return;
+    f03Clear();owner=next;opener=from||null;root.open=true;f03Load();
+  }
+  function f03Dispose(){f03Clear();if(!root)return;root.open=false;root.removeEventListener('toggle',f03Refresh);
+    if(observer)observer.disconnect();observer=null;root=null;opener=null;}
+  return Object.freeze({select:f03Select,refresh:f03Refresh,close:f03Close,dispose:f03Dispose});
 })();
 
 // F02-W remains source-only. This switch is never a caller-supplied authority.

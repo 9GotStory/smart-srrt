@@ -69,6 +69,7 @@ function mkSheet(name,headers,rows,trace,options){
    return {
     getValues(){return grid.slice(row-1,row-1+height)
       .map(r=>r.slice(col-1,col-1+width));},
+    setNumberFormat(){return this;},
     setValues(matrix){
       if(options.failCommit&&name==='DengueRequestLedger'&&
          matrix[0][5]==='COMMITTED')throw Error('Simulated ledger commit failure');
@@ -80,6 +81,12 @@ function mkSheet(name,headers,rows,trace,options){
       trace.writes.push({sheet:name,type:'setValues'});
     }
    };
+  },
+  insertRowAfter(after){
+    if(options.failDomain&&name===options.failDomain)
+      throw Error('Simulated post-ledger domain failure');
+    assert.equal(after,grid.length);
+    grid.push(headers.map(()=>''));
   },
   appendRow(row){
     if(options.failDomain&&name===options.failDomain)
@@ -97,6 +104,7 @@ function setup(options={}){
  const headers={
   MainData:Array.from(ctx.MAIN_HEADERS).concat(Array.from(ctx.EVENT_META_HEADERS),['OwnerUserID']),
   UserAccounts:Array.from(ctx.D331_P003B_USER_HEADERS_),
+  SystemSettings:['Key','Value','Description','UpdatedAt','UpdatedBy'],
   AreaMaster:Array.from(ctx.D331_P003B_AREA_HEADERS_)
  };
  for(const name of Array.from(ctx.D331_P005_V2_TABS_))
@@ -109,8 +117,9 @@ function setup(options={}){
  main[38]='user-2';
  const data={
   MainData:[main],
+  SystemSettings:[['SYSTEM_STATUS','open','','','']],
   UserAccounts:[['user-1','ชื่อจำลอง','fixture@example.invalid',
-   'TEST_ONLY_HASH','Staff','active','','','','','','','','']],
+   'TEST_ONLY_HASH',options.role??'Admin','active','','','','','','','','']],
   AreaMaster:[['area-A','จังหวัดจำลอง','อำเภอจำลอง','ตำบลจำลอง',
    '2','หมู่บ้านจำลอง','SYN-001',true,'','']],
   D331AccessGrants:options.devPackage?['dengue.case.read','dengue.case.write'].map((cap,i)=>
@@ -224,10 +233,10 @@ test('all five workflow entities support guarded UPDATE with revision',()=>{
  const s=setup();const {c,p,a,e,f}=seedChain(s);
  const statuses=[
   ['case',c,{Classification:'PROBABLE'}],
-  ['plan',p,{PlanStatus:'CLOSED'}],
   ['action',a,{ActionStatus:'COMPLETED',OutcomeCode:'DONE'}],
   ['survey',e,{SurveyStatus:'FINAL'}],
-  ['followup',f,{FollowupStatus:'COMPLETE',OutcomeCode:'DONE'}]
+  ['followup',f,{FollowupStatus:'COMPLETE',OutcomeCode:'DONE'}],
+  ['plan',p,{PlanStatus:'CLOSED'}]
  ];
  for(const [kind,entity,payload] of statuses){
   const result=s.run(kind,'update',payload,{
@@ -588,4 +597,17 @@ test('F02 DEV create/read/PATCH round-trips Sheets Date onset without rewriting 
   entityId:created.caseId,expectedEntityRevision:2,payload:{OnsetLocalDate:''}})));
  assert.equal(cleared.revision,3);assert.equal(s.sheets.DengueCases.grid[1][5],'');
  assert.equal(plain(s.ctx.listDengueCasesForEvent(TOKEN,EVENT)).cases[0].caseRevision,3);
+});
+
+test('F03 Plan core-RBAC guard preserves the existing explicitly granted Staff Case writer',()=>{
+ const s=setup({role:'Staff'});
+ assert.equal(s.ctx.hasPermission_('Staff','create'),false);
+ const created=s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand());
+ assert.equal(created.status,'CREATED');
+ const updated=s.ctx.saveDengueCase(TOKEN,EVENT,caseCommand({mode:'update',requestId:uid(494),
+  entityId:created.caseId,expectedEntityRevision:1,payload:{Classification:'PROBABLE'}}));
+ assert.equal(updated.status,'UPDATED');assert.equal(updated.revision,2);
+ const writes=s.trace.writes.length;
+ deny(()=>s.run('plan','create',{TriggerCaseID:created.caseId,EpisodeKey:'EP1'}));
+ assert.equal(s.trace.writes.length,writes);
 });
