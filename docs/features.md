@@ -576,7 +576,7 @@ Source Schema: [`00-bootstrap.gs`](../src/server/00-bootstrap.gs), [`01-schema-a
 | D331 brief | Source / registration / tests | Operational status |
 | --- | --- | --- |
 | F01 / P0-31B Case→Plan mock UI | T1 [#258](https://github.com/9GotStory/smart-srrt/issues/258) composed UI + T2 [#259](https://github.com/9GotStory/smart-srrt/issues/259) existing Records/Auth integration, shared reset/session/disclosure precommit fences; [S1 model tests](../tests/d331-p031a-offline-case-plan.test.mjs), [S2/S3 DOM/registered source tests](../tests/d331-p0-31b-case-plan-records.test.mjs); exact Case/Plan mirrors, standalone partials **unregistered** | Implemented in Source / Verified by Automated Tests สำหรับ synthetic offline workflow; [#261](https://github.com/9GotStory/smart-srrt/pull/261) merged, exact post-merge CI ผ่าน และ #257/#258/#259 CLOSED/completed ณ 29 October 2026; live workflow HOLD |
-| F02 Event→Case | Case-only reader/create/explicit PATCH/receipt; [reader tests](../tests/d331-p0-22b2-server-case-read.test.mjs), [writer tests](../tests/d331-p0-07-guarded-dev-crud.test.mjs), [client tests](../tests/d331-f02-case-write.test.mjs) | Canonical Native26/Native33 OFF. Separate synthetic DEV Version21 deployed via #267; Playwright login/binding/empty-read/create PASS, fresh list FAIL on Sheets Date conversion. Repair source pending review/CI and separate Merge; UAT remains FAIL |
+| F02 Event→Case | Case-only reader/create/explicit PATCH/receipt; [reader tests](../tests/d331-p0-22b2-server-case-read.test.mjs), [writer tests](../tests/d331-p0-07-guarded-dev-crud.test.mjs), [client tests](../tests/d331-f02-case-write.test.mjs) | Canonical Native26/Native33 OFF. Separate synthetic DEV **Version22** จาก `17975ff` via #267/#268; bounded synthetic Browser UAT **PASS** ณ 4 November 2026 ตาม operator receipt ใน [#238](https://github.com/9GotStory/smart-srrt/issues/238) (Observed in Deployed UI เฉพาะเส้นทางสังเคราะห์นี้); ข้อมูลจริง/clinical gates ยัง HOLD |
 | F03 Plans | Offline model + schema/guarded CRUD groundwork | ไม่มี live Plan workflow |
 | F04 Control Actions | Offline lifecycle + schema/guarded CRUD groundwork | ไม่มี functional authorized UI |
 | F05 Entomology HI/CI | [Pure workflow/count engine](../src/dengue/11-p0-06-offline-workflow-engine.gs), [offline tests](../tests/d331-p0-06-offline-workflow-engine.test.mjs) | Real survey/reporting scope HOLD; denominator ศูนย์เป็น null |
@@ -602,7 +602,7 @@ DEV v20/mock UAT เป็น owner-reported dated evidence ตาม [INDEX](IN
 
 - [INDEX.md](INDEX.md) — Navigation, authority และ current/historical/proposed classification
 - [README.md](../README.md) — ภาพรวม/Native development/ลิงก์เริ่มต้น
-- [AGENTS.md](../AGENTS.md) — ขอบเขตและกฎสำหรับ AI Agents รวม Context7
+- [CLAUDE.md](../CLAUDE.md) — ขอบเขตและกฎสำหรับ Claude Code รวม Context7
 - [`src/server/`](../src/server/) และ [`src/web/`](../src/web/) — Implementation จริง
 - [Architecture](./architecture/) · [Governance](./governance/) · [Deployment](./deployment/)
 - [UX G-33](./ux/g33-single-report-action.md) · [Roadmap](./roadmap/group-a-b-development-plan.md)
@@ -646,6 +646,8 @@ Original feature reference baseline: `main@1486211d0cbbcd8bc772dda6a5d9ab2d2a32f
 
 </details>
 
+
+**F02 synthetic DEV Version22 — 4 November 2026 (supersedes the Version21 status below):** After [#268](https://github.com/9GotStory/smart-srrt/pull/268) merged at `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946` with exact post-merge [CI #41017985940](https://github.com/9GotStory/smart-srrt/actions/runs/41017985940) SUCCESS, the separate F02 package updated the original DEV deployment from Version21 to **Version22**. Per the operator receipt in [#238](https://github.com/9GotStory/smart-srrt/issues/238), Playwright CLI 0.1.22/Chrome observed login, read of the existing committed Case, one selected-field PATCH, one confirmed optional clear and fresh lists (Revision1→3); stale Case/Event revisions and expired/revoked grants were denied without ledger rows; navigation smoke and logout/old-session denial passed. Final data: one synthetic Case, three COMMITTED ledger requests, zero PENDING. **Bounded synthetic-only UAT PASS.** This is Observed in Deployed UI for those F02 paths only. Canonical Native26/Native33 stay OFF; F03, real data and clinical assessment are not covered.
 
 **F02 synthetic DEV operational correction and date repair — 30 October 2026:** [#267](https://github.com/9GotStory/smart-srrt/pull/267) merged at `6257851296e949e88777c4a8e86aa83c9d22a399`; the separate candidate was deployed as original DEV Version21 with exact pushed/immutable source and deployment readbacks. Playwright CLI 0.1.22/Chrome observed login, current binding, empty Case read and one create (Revision1/COMMITTED). Fresh list failed because Sheets returns the onset as a Date while the logical validator requires YYYY-MM-DD. Navigation smoke and logout/old-session denial passed; PATCH and remaining workflow negatives were not run. **UAT FAIL**; see [#238](https://github.com/9GotStory/smart-srrt/issues/238). No duplicate create, PENDING, manual row repair, rollback or Gemini call. The test account is Admin under existing Records RBAC; Staff is not granted record rights.
 

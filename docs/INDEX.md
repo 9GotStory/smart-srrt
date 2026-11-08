@@ -2,11 +2,12 @@
 
 **Reviewed:** 21 October 2026 (Asia/Bangkok)
 **Implementation baseline:** `main@29ca13ba33f87d46f1f50fba90fe904773b6594a`
+**Last status update:** 8 November 2026 — เปลี่ยน instruction file เป็น CLAUDE.md, workflow เป็น Claude Code + Matt Pocock Skills และบันทึก F02 DEV Version 22; ไม่ใช่การ review เอกสารทั้งชุดกับ baseline ใหม่
 **Purpose:** ทางเข้ารวมและแผนที่ authority ของเอกสาร ไม่ใช่ spec, policy approval หรือคำสั่ง Deploy ตรวจ HEAD ใหม่ก่อนใช้ snapshot นี้กับงานถัดไป
 
 ## Reading order
 
-1. [AGENTS.md](../AGENTS.md) — scope, engineering invariants และ approval gates สำหรับ Agent
+1. [CLAUDE.md](../CLAUDE.md) — scope, engineering invariants, workflow และ approval gates สำหรับ Claude Code
 2. [README.md](../README.md) — system overview และ Development scope
 3. [Feature Reference](features.md) — current capability/source/test status; Core IDs F01–F23
 4. ใช้ index นี้เลือกเอกสารเฉพาะงาน แล้วตรวจ canonical source/tests ที่ commit เดียวกันก่อนตัดสินใจ
@@ -52,7 +53,7 @@
 | Evidence | Recorded state | Provenance / limit |
 | --- | --- | --- |
 | Source baseline CI | [run #39574236406](https://github.com/9GotStory/smart-srrt/actions/runs/39574236406) completed SUCCESS ที่ implementation SHA ข้างต้น | GitHub Actions verified; ไม่ใช่ live GAS/UAT หรือผล CI ของ docs PR ในอนาคต |
-| Existing Development Web App | Last recorded **v20**, D331 OFF; mock-only browser UAT **8/8** | [Remaining briefs, 21 Oct](implementation/d331-remaining-feature-briefs.md), [P0-29 owner-evidence classification](https://github.com/9GotStory/smart-srrt/issues/248). Owner-reported; ไม่ได้ re-attest ผ่าน Apps Script/Browser ในรอบนี้ |
+| Existing Development Web App | **Version 22** จาก `main@17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946` ([post-merge CI #41017985940](https://github.com/9GotStory/smart-srrt/actions/runs/41017985940) SUCCESS) ผ่าน F02 synthetic package ที่แยกจาก canonical Native26; bounded synthetic-only Browser UAT **PASS** 4 November 2026. ก่อนหน้า: v20 mock-only UAT 8/8 และ Version21 UAT FAIL | [Operator receipt ใน Issue #238](https://github.com/9GotStory/smart-srrt/issues/238), [F02 DEV runbook](implementation/d331-f02-dev-activation.md). Dated operator evidence เฉพาะเส้นทาง F02 สังเคราะห์; ไม่ได้ re-attest ผ่าน Apps Script/Browser ในรอบเอกสารนี้ และไม่ครอบคลุม F03 หรือข้อมูลจริง |
 | Environment scope | Latest record ระบุ **ไม่มี Production environment** | เป็น recorded owner context; คำว่า production/@10/TEST v12/v16 ในเอกสารเก่าไม่พิสูจน์ environment วันนี้ และไม่ยกเลิก approval gates |
 | DEV schema setup | Prior authorized metadata setup: seven empty D331 v2 tabs / 113 ordered headers | [Issue #219](https://github.com/9GotStory/smart-srrt/issues/219). Historical header evidence; ไม่พิสูจน์ current binding, grants หรือสิทธิ์อ่าน rows |
 | Trusted source/data binding | **HOLD / not freshly attested** | Exact Script↔Deployment↔Workbook และ allowed fixtures/data ต้องตรวจภายใต้ authorization แยก; restricted identifiers เก็บกับ custodian ไม่คัดลอกลง docs |
@@ -73,7 +74,7 @@
 | [deployment](deployment/) | [G-32 jobs](deployment/g32-report-jobs.md), [G-34 runbook](deployment/g34-native-multifile-apps-script.md) | Dated contracts/runbooks; เทียบ current topology/approved target ก่อนใช้ ไม่มี deploy authorization |
 | [discovery](discovery/) | [H0 source inventory](discovery/h0-authentication-source-inventory-2026-10-12.md) | Historical discovery / unresolved operator evidence requests |
 | [governance](governance/) | [Migration/release policy](governance/migration-version-release-policy.md), registry/readiness links ด้านบน | Scope/permission constraints; implementation รายละเอียดต้องเทียบ source |
-| [handoff](handoff/) | [Security handoff 12 Oct](handoff/smart-srrt-security-release-2026-10-12.md) | Historical handoff at its exact SHA |
+| [handoff](handoff/) | [Security handoff 12 Oct](handoff/smart-srrt-security-release-2026-10-12.md), [Agent task records 11–12 Oct](handoff/agent-task-records-2026-10-12.md) | Historical handoff at its exact SHA |
 | [implementation](implementation/) | [D331 remaining briefs](implementation/d331-remaining-feature-briefs.md) และ per-slice records | Current requirements entrypoint + Historical implementation evidence + Proposed designs ปะปน; ไม่ถือทั้งหมวดเป็น current implementation |
 | [integration](integration/) | [P3/v7 reconciliation](integration/p3-v7-workflow-reconciliation-2026-10-09.md), [P4/v7 readiness](integration/p4-v7-migration-readiness-2026-10-09.md) | Historical compatibility analysis; live migration HOLD |
 | [licenses](licenses/) | [Lucide license](licenses/lucide-LICENSE.txt) | Third-party license reference |
@@ -86,7 +87,8 @@
 
 ## Historical and proposed interpretation
 
-- Historical One-Click installation/release guidance, Native counts และ old candidate banners คงอยู่ใน [README](../README.md), [AGENTS](../AGENTS.md), [features](features.md) ส่วน Historical และเอกสารเดิมตามหมวด; frozen artifacts ไม่ใช่ current build source
+- Historical One-Click installation/release guidance, Native counts และ old candidate banners คงอยู่ใน [README](../README.md), [Agent task records](handoff/agent-task-records-2026-10-12.md), [features](features.md) ส่วน Historical และเอกสารเดิมตามหมวด; frozen artifacts ไม่ใช่ current build source
 - D331 C3/Option A/R1/R3 documents เป็น design records; latest MVP/remaining briefs ไม่อนุญาตขยาย provider/cloud infrastructure หรือถือ design เป็น approved grant/revocation policy
 - Known out-of-scope drift: [RR-04 cross-references](architecture/rr-04-login-abuse-corrective-design.md) มี relative links ของ RR-01/02/03 ที่ชี้ directory ผิด; target จริงอยู่ [implementation](implementation/). ไฟล์นั้นคงเดิมใน four-file alignment นี้; ใช้ current entrypoints ด้านบน
 - **F01 update, 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged และ #257/#258/#259 CLOSED/completed สำหรับ synthetic source/offline delivery; exact SHA/review/post-merge CI อยู่ใน [F01 completion evidence](implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records). รอ PO เลือก feature ถัดไปและอนุมัติแผนก่อนสร้าง/ปรับ Issue หรือ implementation; Merge, data access, Browser UAT และ Deploy เป็นคนละ gate. D331 OFF
+- **Claude Code workflow, 8 November 2026:** Instruction file ของโครงการคือ [CLAUDE.md](../CLAUDE.md) ไฟล์เดียว งานพัฒนาและรีวิวใช้ Claude Code + Matt Pocock Skills. เอกสารก่อนวันที่นี้ที่อ้าง `AGENTS.md`, Codex, Multica หรือ ChatGPT Technical Review เป็น Historical ตามวันที่ของเอกสาร; ผลรีวิวที่บันทึกไว้เดิมยังเป็นหลักฐานของ SHA นั้น

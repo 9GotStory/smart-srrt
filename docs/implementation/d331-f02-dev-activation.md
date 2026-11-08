@@ -1,7 +1,7 @@
 # F02 synthetic-only Development activation
 
 Date: 30 October 2026. Source baseline: `main@7c6b7618ae45f22b6a6ffa45c76d726dad89d088`.
-Status: **original synthetic DEV Version21 deployed at `6257851296e949e88777c4a8e86aa83c9d22a399`; browser UAT FAIL on Case date round-trip. The repair remains a source candidate, not deployed.** Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238).
+Status: **original synthetic DEV is Version22, deployed from `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`; bounded synthetic-only browser UAT PASS on 4 November 2026.** The Version21 FAIL record below is historical. Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238).
 
 The PO requested enabling F02 in the existing Development environment, confirmed that all Event/health content is synthetic, and approved the eight-path implementation scope and S1–S3. This authorizes pursuing a bounded synthetic DEV exercise; it is not real-patient privacy/clinical approval. Source Merge remains a separate PO gate. Do not ask again whether the settled target is Production or whether the agreed data is synthetic.
 
@@ -65,7 +65,7 @@ S1 tests actual assembled package/profile/private stage. S2 reuses the existing 
 
 Before implementation, a read-only operator check found the original deployment at Version20; source/manifest backup SHA256 and local restore drill passed without cloud mutation or Sheet row reads. This is dated metadata/source evidence, not browser acceptance of the new candidate.
 
-The initial release completed the original Version20 → Version21 update with pushed/immutable source and deployment inventory readbacks. Playwright CLI 0.1.22/Chrome verified login, the pinned runtime binding, an empty Case list and one UI create at Revision1/COMMITTED. Fresh list then failed because Sheets stored the onset date as a DATE cell while the logical validator requires a string. Two read-only browser RPC probes reproduced this while the same session confirmed COMMITTED. Dashboard/Records/report/library navigation and logout/old-token denial passed. No PATCH, duplicate create, PENDING, manual row rewrite, Gemini call or rollback followed. **Version21 UAT is FAIL**, with redacted receipts in #238. **The date repair has not been deployed or observed in DEV.** Source code, synthetic tests, exact-HEAD CI/review, source Merge, actual deployed version and browser results must be recorded separately in #238. Real-data D2/P1/P2/S1/S2/C1/C2 decisions remain distinct; the synthetic exercise does not close them or start F03–F08.
+The initial release completed the original Version20 → Version21 update with pushed/immutable source and deployment inventory readbacks. Playwright CLI 0.1.22/Chrome verified login, the pinned runtime binding, an empty Case list and one UI create at Revision1/COMMITTED. Fresh list then failed because Sheets stored the onset date as a DATE cell while the logical validator requires a string. Two read-only browser RPC probes reproduced this while the same session confirmed COMMITTED. Dashboard/Records/report/library navigation and logout/old-token denial passed. No PATCH, duplicate create, PENDING, manual row rewrite, Gemini call or rollback followed. **Version21 UAT is FAIL**, with redacted receipts in #238. The date repair was later deployed and retested as Version22; see the [Version22 result](#version22-synthetic-dev-result--4-november-2026). Real-data D2/P1/P2/S1/S2/C1/C2 decisions remain distinct; the synthetic exercise does not close them or start F03–F08.
 
 
 ## Approved date round-trip repair and active-package backup
@@ -87,3 +87,11 @@ bash tools/deploy-d331-f02-dev.sh --deploy
 ```
 
 The already-authorized bounded Playwright retest follows exact-HEAD review/CI, separate PO source Merge, post-merge CI and fresh backup/update. First read the existing committed synthetic Case, then selected-field PATCH/fresh revision/receipt and negative permission/revision/logout checks. Do not work around the failure with duplicate creates or manual row edits. Record browser UI versus browser-invoked RPC checks separately; clinical policy remains NOT_EVALUATED.
+
+## Version22 synthetic DEV result — 4 November 2026
+
+[#268](https://github.com/9GotStory/smart-srrt/pull/268) merged at `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946` with post-merge [CI #41017985940](https://github.com/9GotStory/smart-srrt/actions/runs/41017985940) SUCCESS. After a fresh active-package backup, the guarded one-attempt release updated the original deployment from Version21 to Version22, with pushed and immutable byte readbacks and a passing final inventory.
+
+The bounded Playwright CLI 0.1.22/Chrome retest **passed**: login; read of the existing committed Case at Revision1 without rewriting its row; one selected-field PATCH to Revision2; one confirmed optional clear to Revision3; fresh lists. Stale Case/Event revisions and expired/revoked grants were denied with no ledger row. Dashboard/Records/report/library navigation and logout/old-session denial passed; no Gemini generation ran. Final data: one synthetic Case at CaseRevision3, three COMMITTED ledger requests, zero PENDING. The full redacted receipt is at the top of [#238](https://github.com/9GotStory/smart-srrt/issues/238).
+
+Test grants were renewed for this retest only and expired at 2026-11-05T07:32:41Z (14:32:41 +07:00). A further DEV exercise needs newly approved, explicitly scoped grants. F03 is not part of this package, and real-data and clinical decisions remain HOLD.
