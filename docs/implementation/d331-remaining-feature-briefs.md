@@ -27,7 +27,7 @@ The implementation should remain organized within the original five areas: **Dat
 - Preserve **D331 OFF** and deny-default server permissions; synthetic fixtures must be visibly and technically distinct from real data.
 - No PHI, real patient row reads, live Case CRUD, Script Property/ACL mutations, creation of grants, `clasp push`, DEV deployment or physical Google Sheets alterations merely because a source PR was merged.
 - Preserve original Records behavior, Login/Logout, Native source manifest and unrelated AI Reporter/Public Library boundaries. Do not send patient/Case data to Gemini, public dashboard, logs, exports or external tools without distinct approval.
-- Respect exact-HEAD review, scoped PR, pinned CI, independent review and **separate Product Owner approval for Merge and Deployment**. Do not treat general “continue” as standing authorization for live data.
+- Respect exact-HEAD review, scoped PR, pinned CI and **separate Product Owner approval for Merge and Deployment**. Do not treat general “continue” as standing authorization for live data.
 - Policies D2/P1/P2/S1/S2/C1/C2 and verified DEV source/data binding remain **HOLD** until the accountable human provides a dated/versioned, scoped decision. The technical proposal `GLOBAL_IMMUTABLE` + `DENIED_REDESIGN` is **not an approved policy**.
 
 ## 3. Remaining feature register (requirements, not task breakdown)
@@ -195,7 +195,7 @@ Use existing [#238](https://github.com/9GotStory/smart-srrt/issues/238), [#248](
 3. Take exactly **one PO-selected** feature brief at a time. Obtain the PO's next-feature selection before starting a new feature; check the register above and open PRs for what is complete or in review. Produce a proposed scoped implementation plan containing: current code evidence, intended user workflow, source/data boundaries, smallest coherent changes, acceptance/negative tests, dependencies/blocked decisions, CI verification, and the specific approval needed for the next action.
 4. Explicitly separate **source-only/mock work that can progress now** from **live data and clinical steps blocked by human policy**. If a gate is blocked, do not invent permission or unnecessary substitute infrastructure; prepare only permitted mock/tests and identify the precise decision needed.
 5. **Stop after presenting the plan for Product Owner review. Do not implement, create GitHub Issues, push, merge, deploy, read/write real Sheets or create grants in the same step.** First reconcile existing Issues to avoid duplicates.
-6. **After the Product Owner approves that feature's plan**, create or update **one** scoped GitHub Issue with the agreed implementation scope, acceptance/negative tests, dependencies and explicit approval gates. Then implement that Issue with TDD and create a Draft PR for independent review of exact SHA/diff/CI by a fresh Claude Code session running `code-review`. Merge and deployment require separate authorization.
+6. **After the Product Owner approves that feature's plan**, create or update **one** scoped GitHub Issue with the agreed implementation scope, acceptance/negative tests, dependencies and explicit approval gates. Then implement that Issue with TDD and create a Draft PR and review its exact SHA/diff/CI with `code-review`. Merge and deployment require separate authorization.
 7. When a feature is complete, update its brief with **actual evidence** and obtain the PO's next-feature selection; no giant multi-feature PR and no standing authorization.
 
 ### Suggested Claude Code instruction for the next PO-selected feature
