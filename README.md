@@ -61,7 +61,7 @@ docs/          architecture, baseline, deployment, governance,
                integration, migrations, roadmap, testing, ux, workflow
 docs/INDEX.md     Documentation navigation / Source-of-Truth Map
 docs/features.md  Current Feature Status
-AGENTS.md      กติกาและบริบทสำหรับ AI Coding Agents
+CLAUDE.md      กติกาและบริบทสำหรับ Claude Code
 Code_Smart_SRRT_OneClick_v2026.09.08.1.gs
 Index_Smart_SRRT_OneClick.html
 คู่มือติดตั้ง_Smart_SRRT_ระดับอำเภอ_v2026.09.08.1.txt
@@ -92,15 +92,15 @@ Native package เป็น source/build artifact; การนำไปใช�
 
 ## D331 Development Scope และสถานะหลักฐาน
 
-Dengue 3-3-1 อยู่ในขอบเขตพัฒนาต่อของแอปเดิม โดยใช้ auth, Records, Apps Script และ Sheets เดิม **D331 ยัง OFF**. มี synthetic Case list/add/edit ใน Records และ offline Case→Plan model แล้ว; มี private reader/guarded CRUD candidates แต่ยังไม่มี operational workflow ข้อมูลจริงครบวงจร
+Dengue 3-3-1 อยู่ในขอบเขตพัฒนาต่อของแอปเดิม โดยใช้ auth, Records, Apps Script และ Sheets เดิม **Canonical package ยัง D331 OFF**. มี synthetic Case list/add/edit ใน Records และ offline Case→Plan model แล้ว; มี private reader/guarded CRUD candidates แต่ยังไม่มี operational workflow ข้อมูลจริงครบวงจร
 
 Product backlog และข้อกำหนดที่เหลืออยู่ที่ [D331 Remaining Feature Briefs](docs/implementation/d331-remaining-feature-briefs.md); สถานะ source/registration/tests ดู [Feature Reference](docs/features.md#d331-development-status). ไม่คัดลอก requirements ใหม่ที่นี่ การตัดสินใจ privacy/security/clinical และการอนุมัติ read/write/Deploy ยังแยกกัน
 
-ทะเบียนล่าสุดระบุ existing **DEV Web App v20**, owner-reported **mock-only UAT 8/8** และไม่มี Production environment; เป็น dated owner evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Current Script↔Deployment↔Workbook binding ยังไม่ re-attest ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
+ทะเบียนล่าสุดระบุ existing **DEV Web App Version 22** (F02 synthetic-only, operator receipt 4 November 2026) และไม่มี Production environment; เป็น dated evidence ไม่ใช่การตรวจ runtime ใหม่ในรอบเอกสารนี้ Current Script↔Deployment↔Workbook binding ยังไม่ re-attest ดู [environment/evidence](docs/INDEX.md#environment-and-evidence)
 
 **F01 / P0-31B source/offline completion — 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged ที่ `f8418c200564da7b9ef9370d350ad890b6a910ca`, post-merge CI ผ่าน และ #257/#258/#259 CLOSED/completed; ดู [F01 evidence](docs/implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records). งานถัดไปรอ PO เลือกและอนุมัติแผนเฉพาะ feature ตาม workflow; source/offline completion ไม่ใช่ Browser UAT, Deploy, Migration หรือสิทธิ์ข้อมูลจริง และ D331 ยังคง OFF
 
-**F02 synthetic DEV activation — source candidate, 30 October 2026:** PO confirmed synthetic-only Event/health data and approved a separate [F02 DEV activation package/runbook](docs/implementation/d331-f02-dev-activation.md). It reuses existing backend authorization and adds the missing Case reader to a private 34-source-file candidate. Canonical Native26/old Native33 remain OFF; source/CI is not deployed or browser evidence. The guarded wrapper preserves the original manifest/target, checks backup/drift and immutable-version bytes, and updates only the existing DEV deployment. Source Merge remains a separate PO gate; the requested synthetic DEV exercise does not approve real-patient access or clinical policy. Current deployment/browser acceptance of this candidate is **NOT VERIFIED**.
+**F02 synthetic DEV activation — source candidate, 30 October 2026:** PO confirmed synthetic-only Event/health data and approved a separate [F02 DEV activation package/runbook](docs/implementation/d331-f02-dev-activation.md). It reuses existing backend authorization and adds the missing Case reader to a private 34-source-file candidate. Canonical Native26/old Native33 remain OFF; source/CI is not deployed or browser evidence. The guarded wrapper preserves the original manifest/target, checks backup/drift and immutable-version bytes, and updates only the existing DEV deployment. Source Merge remains a separate PO gate; the requested synthetic DEV exercise does not approve real-patient access or clinical policy. **Update — 4 November 2026:** the original DEV deployment is Version 22 from `main@17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, and the bounded synthetic-only Browser UAT passed per the operator receipt in [#238](https://github.com/9GotStory/smart-srrt/issues/238). This covers neither F03 nor real data.
 
 ## เริ่มอ่านที่นี่
 
@@ -108,7 +108,7 @@ Product backlog และข้อกำหนดที่เหลืออย�
 
 - [Documentation Navigation และ Source-of-Truth Map](docs/INDEX.md)
 - [ความสามารถและสถานะฟีเจอร์ทั้งหมด — `docs/features.md`](docs/features.md)
-- [แนวทางสำหรับ AI Agents — `AGENTS.md`](AGENTS.md)
+- [แนวทางสำหรับ Claude Code — `CLAUDE.md`](CLAUDE.md)
 - [Current Native source/build authority](docs/INDEX.md#source-of-truth-map)
 - [Privacy & KPI](docs/architecture/p2-privacy-kpi-contract.md)
 - [ReportRegistry G-17](docs/governance/g17-report-registry.md), [Readiness G-26](docs/governance/g26-ai-report-readiness.md), [History G-27](docs/governance/g27-event-report-history.md)
@@ -121,7 +121,7 @@ Product backlog และข้อกำหนดที่เหลืออย�
 
 ## การดูแลรักษาและการมีส่วนร่วม
 
-ใช้ GitHub เป็น Source of Truth: อ่านข้อกำหนดใน `AGENTS.md` → ระบุ Scope → ตรวจ Source/Tests → ทำงานใน Branch แยก → เปิด PR → ตรวจรับโดยผู้ตรวจอิสระตามกระบวนการ → รอ Product Owner อนุมัติ Merge/Deploy/Migration แยกแต่ละขั้น หลีกเลี่ยงการนำข้อมูลสุขภาพจริง, Session Token, Gemini API Key, Spreadsheet ID หรือไฟล์หลักฐานที่ระบุตัวบุคคลเข้าสู่ GitHub, Test Fixtures และ Logs
+ใช้ GitHub เป็น Source of Truth: อ่านข้อกำหนดใน `CLAUDE.md` → ระบุ Scope → ตรวจ Source/Tests → ทำงานใน Branch แยก → เปิด PR → ตรวจด้วย `code-review` ตาม Workflow → รอ Product Owner อนุมัติ Merge/Deploy/Migration แยกแต่ละขั้น หลีกเลี่ยงการนำข้อมูลสุขภาพจริง, Session Token, Gemini API Key, Spreadsheet ID หรือไฟล์หลักฐานที่ระบุตัวบุคคลเข้าสู่ GitHub, Test Fixtures และ Logs
 
 เอกสารนี้เป็น **ภาพรวมระบบ** ไม่ใช่คำอนุญาตให้เปลี่ยนแปลงระบบที่ใช้งานอยู่
 
