@@ -49,9 +49,18 @@ function grantRow(ctx,cap,i,policy=POLICY){
 }
 function mkSheet(name,headers,rows,trace,options){
  const grid=[headers.slice(),...rows.map(r=>r.slice())];
- const stored=(value,column)=>options.coerceCaseDates&&name==='DengueCases'&&column===5&&
-   typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)
-   ?new Date(value+'T00:00:00+07:00'):value;
+ const formats=new Map();
+ const stored=(value,column,row)=>{
+  if(typeof value!=='string')return value;
+  if(options.coerceCaseDates&&name==='DengueCases'&&column===5&&/^\d{4}-\d{2}-\d{2}$/.test(value))
+   return new Date(value+'T00:00:00+07:00');
+  // Models Sheets parsing date- or number-like strings unless the cell is plain text.
+  if(options.coercePlanText&&name==='DenguePlans'&&column===3&&formats.get(row+':'+(column+1))!=='@'){
+   if(/^\d{4}-\d{2}-\d{2}$/.test(value))return new Date(value+'T00:00:00+07:00');
+   if(/^\d+$/.test(value))return Number(value);
+  }
+  return value;
+ };
  return {name,grid,
   getDataRange(){return {getValues:()=>grid.map(r=>r.slice())};},
   getParent(){return {getId:()=>DB,getSpreadsheetTimeZone:()=>options.timeZone??'Asia/Bangkok'};},
@@ -62,23 +71,33 @@ function mkSheet(name,headers,rows,trace,options){
    return {
     getValues(){return grid.slice(row-1,row-1+height)
       .map(r=>r.slice(col-1,col-1+width));},
+    setNumberFormat(format){
+      for(let i=0;i<height;i++)for(let j=0;j<width;j++)formats.set((row+i)+':'+(col+j),format);
+      return this;
+    },
     setValues(matrix){
       if(options.failCommit&&name==='DengueRequestLedger'&&
          matrix[0][5]==='COMMITTED')throw Error('Simulated ledger commit failure');
       assert.equal(matrix.length,height);
       assert.ok(matrix.every(r=>r.length===width));
       for(let i=0;i<matrix.length;i++){
-       for(let j=0;j<width;j++)grid[row+i-1][col+j-1]=stored(matrix[i][j],col+j-1);
+       for(let j=0;j<width;j++)grid[row+i-1][col+j-1]=stored(matrix[i][j],col+j-1,row+i);
       }
       trace.writes.push({sheet:name,type:'setValues'});
     }
    };
   },
+  insertRowAfter(after){
+    if(options.failDomain&&name===options.failDomain)
+      throw Error('Simulated post-ledger domain failure');
+    assert.equal(after,grid.length);
+    grid.push(headers.map(()=>''));
+  },
   appendRow(row){
     if(options.failDomain&&name===options.failDomain)
       throw Error('Simulated post-ledger domain failure');
     assert.equal(row.length,headers.length);
-    grid.push(row.map(stored));
+    grid.push(row.map((value,column)=>stored(value,column,grid.length+1)));
     trace.writes.push({sheet:name,type:'appendRow'});
   }
  };
@@ -428,11 +447,28 @@ test('F03 S1 explicit close/reopen/void rejects stale/no-op/terminal/child confl
  assert.equal(s.sheets.DengueCases.grid[1][2],1);assert.equal(s.sheets.DengueControlActions.grid[1][Array.from(s.ctx.d331P002aHeaders_('DengueControlActions')).indexOf('ActionStatus')],'COMPLETED');
 });
 
+test('F03 S1 an EpisodeKey stays reserved across OPEN, CLOSED and VOID for new request IDs',()=>{
+ for(const end of ['OPEN','CLOSED','VOID']){
+  const s=setup(),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
+  if(end!=='OPEN')updatePlan(s,c,p,{PlanStatus:end},1);
+  const n=s.trace.writes.length;
+  assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{requestId:uid(1402)})),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,n);
+ }
+});
+test('F03 S1 a CLOSED Plan accepts only reopen, so assignment denies without writes',()=>{
+ const s=setup({role:'Manager'}),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
+ addOwner(s);updatePlan(s,c,p,{PlanStatus:'CLOSED'},1);const n=s.trace.writes.length;
+ assert.throws(()=>updatePlan(s,c,p,{ResponsibleUserID:'user-2'},2,uid(1403)),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.writes.length,n);
+});
+
 function addOwner(s,id='user-2'){
  const row=s.sheets.UserAccounts.grid[1].slice();row[0]=id;row[1]='ชื่อจำลองผู้รับผิดชอบ';
  s.sheets.UserAccounts.grid.push(row);
- const grant=grantRow(s.ctx,'dengue.plan.write',40);
- grant[2]=id;s.sheets.D331AccessGrants.grid.push(grant);
+ for(const [capability,i] of [['dengue.plan.read',41],['dengue.plan.write',40]]){
+  const grant=grantRow(s.ctx,capability,i);grant[2]=id;s.sheets.D331AccessGrants.grid.push(grant);
+ }
 }
 test('F03 S1 assignment resolves eligible current Plan writers and enforces role+assign authority',()=>{
  const s=setup(),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
@@ -461,6 +497,28 @@ test('F03 S1 assignment resolves eligible current Plan writers and enforces role
  }
 });
 
+function addCandidate(s,id,role,capabilities){
+ const row=s.sheets.UserAccounts.grid[1].slice();row[0]=id;row[4]=role;s.sheets.UserAccounts.grid.push(row);
+ capabilities.forEach((capability,i)=>{const grant=grantRow(s.ctx,capability,60+i);grant[2]=id;
+  s.sheets.D331AccessGrants.grid.push(grant);});
+}
+test('F03 S1 assignees need current core edit plus Plan read and write grants',()=>{
+ for(const [role,capabilities] of [['Staff',['dengue.plan.read','dengue.plan.write']],
+  ['Admin',['dengue.plan.write']],['Admin',['dengue.plan.read']]]){
+  const s=setup({role:'Manager'}),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
+  addCandidate(s,'user-3',role,capabilities);
+  assert.deepEqual(plain(s.ctx.listAssignableDenguePlanOwners(TOKEN,EVENT,request(c))).owners,[{userId:'user-1'}]);
+  const n=s.trace.writes.length;
+  assert.throws(()=>updatePlan(s,c,p,{ResponsibleUserID:'user-3'},1),/D331_WRITE_UNAVAILABLE/);
+  assert.equal(s.trace.writes.length,n);
+ }
+ const s=setup({role:'Manager'}),c=makeCase(s),p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c)).planId;
+ addCandidate(s,'user-3','Admin',['dengue.plan.read','dengue.plan.write']);
+ assert.deepEqual(plain(s.ctx.listAssignableDenguePlanOwners(TOKEN,EVENT,request(c))).owners,
+  [{userId:'user-1'},{userId:'user-3'}]);
+ assert.equal(updatePlan(s,c,p,{ResponsibleUserID:'user-3'},1).revision,2);
+});
+
 test('F03 S1 PENDING before/after domain write blocks fresh IDs and exposes truthful minimal receipt',()=>{
  for(const failure of ['domain','commit']){
   const opts={},s=setup(opts),c=makeCase(s),cmd=planCommand(c);
@@ -473,6 +531,32 @@ test('F03 S1 PENDING before/after domain write blocks fresh IDs and exposes trut
    {...cmd,requestId:id,payload:{TriggerCaseID:c,EpisodeKey:'EP2'}}),/D331_WRITE_UNAVAILABLE/);
   assert.equal(s.trace.writes.length,writes);
   assert.equal(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans.length,failure==='domain'?0:1);
+ }
+});
+
+test('F03 S1 UNKNOWN ledger phase blocks fresh IDs and exposes a truthful minimal receipt',()=>{
+ const opts={failDomain:'DenguePlans'},s=setup(opts),c=makeCase(s),cmd=planCommand(c);
+ assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,cmd),/D331_WRITE_UNAVAILABLE/);
+ s.sheets.DengueRequestLedger.grid.at(-1)[5]='UNKNOWN';delete opts.failDomain;
+ const writes=s.trace.writes.length;
+ assert.deepEqual(plain(s.ctx.getDenguePlanWriteStatus(TOKEN,EVENT,cmd.requestId)),{
+  contractVersion:'D331_PLAN_WRITE_RECEIPT_V1',eventId:EVENT,requestId:cmd.requestId,status:'UNKNOWN'});
+ for(const id of [cmd.requestId,uid(1400)])assert.throws(()=>s.ctx.saveDenguePlan(TOKEN,EVENT,
+  {...cmd,requestId:id,payload:{TriggerCaseID:c,EpisodeKey:'EP2'}}),/D331_WRITE_UNAVAILABLE/);
+ assert.equal(s.trace.writes.length,writes);
+});
+
+test('F03 S1 date-like and numeric EpisodeKeys stay text through later reads and writes',()=>{
+ for(const key of ['2026-11-08','12345']){
+  const s=setup({coercePlanText:true}),c=makeCase(s);
+  const p=s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{payload:{TriggerCaseID:c,EpisodeKey:key}}));
+  assert.equal(p.status,'CREATED');
+  assert.equal(s.sheets.DenguePlans.grid[1][3],key);
+  assert.equal(plain(s.ctx.listDenguePlansForEvent(TOKEN,EVENT,request(c))).plans[0].episodeKey,key);
+  assert.equal(updatePlan(s,c,p.planId,{PlanStatus:'CLOSED'},1).revision,2);
+  assert.equal(s.sheets.DenguePlans.grid[1][3],key);
+  assert.equal(s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{requestId:uid(1401),
+   payload:{TriggerCaseID:c,EpisodeKey:'EP2'}})).status,'CREATED');
  }
 });
 
@@ -588,6 +672,47 @@ test('F03 S3 serialized actual server outputs drive registered Records create/re
    assert.match(h.text(),/ผู้รับผิดชอบ user-2/);assert.match(h.text(),/Revision 4/);
   }
  }
+});
+
+async function s3Selected(){
+ const s=setup(),c=makeCase(s);
+ vm.runInContext(fs.readFileSync(new URL('../src/dengue/15-p0-22b2-case-read-integration.gs',import.meta.url),'utf8'),s.ctx);
+ s.ctx.D331_P022B2_ENABLED_=true;s.ctx.D331_P022B2_REVOCATION_APPROVED_=true;
+ s.ctx.D331_P022B2_APPROVED_FIELDS_=['CaseID','CaseRevision','CaseStatus'];
+ s.sheets.D331AccessGrants.grid.push(grantRow(s.ctx,'dengue.case.read',50));
+ s.ctx.saveDenguePlan(TOKEN,EVENT,planCommand(c,{payload:{TriggerCaseID:c,EpisodeKey:'EP-S3'}}));
+ const h=planClient(),settle=()=>new Promise(resolve=>setImmediate(resolve));
+ const serve=req=>plain(s.ctx[req.args[0]](...plain(req.args.slice(1))));
+ h.ctx.d331F02CaseRead_.select(EVENT);h.requests.at(-1).resolve(serve(h.requests.at(-1)));await settle();
+ h.select();return {h,settle,serve};
+}
+test('F03 S3 tampered actual server Plan lists are rejected by the registered client',async()=>{
+ for(const change of [v=>{v.patient='PRIVATE_SENTINEL';},v=>{v.plans[0].email='PRIVATE_SENTINEL';},
+  v=>{v.eventId=uid(12);},v=>{v.caseRevision=2;},v=>{v.plans[0].triggerCaseId=uid(13);}]){
+  const {h,settle,serve}=await s3Selected(),req=h.requests.at(-1),value=serve(req);
+  change(value);req.resolve(value);await settle();
+  assert.match(h.text(),/ไม่สามารถยืนยัน/);assert.doesNotMatch(h.text(),/EP-S3|PRIVATE_SENTINEL/);
+ }
+ const {h,settle,serve}=await s3Selected(),req=h.requests.at(-1);
+ req.resolve(serve(req));await settle();assert.match(h.text(),/EP-S3/);
+});
+test('F03 S3 a late actual server read cannot complete a newer Plan read',async()=>{
+ const {h,settle,serve}=await s3Selected(),stale=h.requests.at(-1),value=serve(stale);
+ h.click('ปิด Plans');h.select();const fresh=h.requests.at(-1);assert.notEqual(fresh,stale);
+ stale.resolve(value);await settle();
+ assert.match(h.text(),/กำลังโหลด Plans/);assert.doesNotMatch(h.text(),/EP-S3/);
+ fresh.resolve(serve(fresh));await settle();assert.match(h.text(),/EP-S3/);
+});
+test('F03 S3 a late actual server receipt cannot clear the uncertain hold of a newer owner',async()=>{
+ const {h,settle,serve}=await s3Selected(),read=h.requests.at(-1);
+ read.resolve(serve(read));await settle();
+ h.click('เพิ่ม Plan');h.fill('d331-f03-episode','EP-LATE');h.click('บันทึก Plan');
+ const save=h.requests.at(-1),receipt=serve(save);
+ h.click('ปิด Plans');h.select();const fresh=h.requests.at(-1);
+ save.resolve(receipt);await settle();
+ assert.doesNotMatch(h.text(),/ยืนยันการบันทึก/);
+ fresh.resolve(serve(fresh));await settle();
+ assert.match(h.text(),/ยังไม่ทราบผล/);assert.equal(h.requests.filter(r=>r.args[0]==='saveDenguePlan').length,1);
 });
 
 test('F03 S1 Plan reader never reads foreign Event full Plan/Case rows',()=>{

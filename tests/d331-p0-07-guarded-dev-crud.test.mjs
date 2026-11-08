@@ -69,6 +69,7 @@ function mkSheet(name,headers,rows,trace,options){
    return {
     getValues(){return grid.slice(row-1,row-1+height)
       .map(r=>r.slice(col-1,col-1+width));},
+    setNumberFormat(){return this;},
     setValues(matrix){
       if(options.failCommit&&name==='DengueRequestLedger'&&
          matrix[0][5]==='COMMITTED')throw Error('Simulated ledger commit failure');
@@ -80,6 +81,12 @@ function mkSheet(name,headers,rows,trace,options){
       trace.writes.push({sheet:name,type:'setValues'});
     }
    };
+  },
+  insertRowAfter(after){
+    if(options.failDomain&&name===options.failDomain)
+      throw Error('Simulated post-ledger domain failure');
+    assert.equal(after,grid.length);
+    grid.push(headers.map(()=>''));
   },
   appendRow(row){
     if(options.failDomain&&name===options.failDomain)

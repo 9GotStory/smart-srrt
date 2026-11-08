@@ -224,9 +224,11 @@ function d331P003bPlanAssignmentActor_(user){
 }
 function d331P003bPlanOwner_(users,grants,userId,eventId,areaId,now){
   var user=d331P003bOneRowById_(users,1,14,userId,10000);
-  if(user[5]!=='active')d331P003bDeny_();
-  var grant=d331P003bGrant_(grants,userId,eventId,'dengue.plan.write',now,
-    D331_P003B_APPROVED_POLICY_REVISION_);
-  if(grant.AreaID!==areaId)d331P003bDeny_();
+  if(user[5]!=='active'||typeof hasPermission_!=='function'||!hasPermission_(user[4],'edit'))d331P003bDeny_();
+  ['dengue.plan.read','dengue.plan.write'].forEach(function(capability){
+    var grant=d331P003bGrant_(grants,userId,eventId,capability,now,
+      D331_P003B_APPROVED_POLICY_REVISION_);
+    if(grant.AreaID!==areaId)d331P003bDeny_();
+  });
   return {userId:user[0]};
 }

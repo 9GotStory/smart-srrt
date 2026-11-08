@@ -144,13 +144,14 @@ test('F03 S2 create/cancel/save uses one immutable request and explicit fresh re
 
 test('F03 S2 explicit lifecycle and eligible owner selection submit only the selected revision-safe action',async()=>{
  const h=harness({enabled:true,role:'Manager'});h.run('D331_F03_PLANS_AVAILABLE_=true;');await plansReady(h,[planRow()]);
+ assert.ok(pbutton(h,'ยกเลิก Plan '+PLAN));assert.equal(pbutton(h,'Void Plan '+PLAN),undefined);
  pclick(h,'ปิด Plan '+PLAN);assert.match(ptext(h),/ยืนยัน.*CLOSED/);pclick(h,'บันทึก Plan');
  let cmd=JSON.parse(JSON.stringify(h.requests.at(-1).args[3]));
  assert.deepEqual(cmd,{mode:'update',requestId:CASE,expectedEventRevision:3,caseId:CASE,expectedCaseRevision:1,
   entityId:PLAN,expectedEntityRevision:1,payload:{PlanStatus:'CLOSED'}});
  h.requests.at(-1).resolve(writeReceipt({status:'UPDATED',revision:2}));await settle();pclick(h,'อ่านรายการ Plan ใหม่');
  h.requests.at(-1).resolve(planDto({plans:[planRow({planStatus:'CLOSED',planRevision:2})]}));await settle();
- assert.equal(pbutton(h,'Void Plan '+PLAN),undefined);pclick(h,'เปิด Plan อีกครั้ง '+PLAN);pclick(h,'ยกเลิก');
+ assert.equal(pbutton(h,'ยกเลิก Plan '+PLAN),undefined);pclick(h,'เปิด Plan อีกครั้ง '+PLAN);pclick(h,'ยกเลิก');
  pclick(h,'เปิด Plan อีกครั้ง '+PLAN);pclick(h,'บันทึก Plan');
  h.requests.at(-1).resolve(writeReceipt({status:'UPDATED',revision:3}));await settle();pclick(h,'อ่านรายการ Plan ใหม่');
  h.requests.at(-1).resolve(planDto({plans:[planRow({planRevision:3})]}));await settle();
@@ -161,6 +162,21 @@ test('F03 S2 explicit lifecycle and eligible owner selection submit only the sel
  pfill(h,'d331-f03-owner','user-2');pclick(h,'บันทึก Plan');
  cmd=JSON.parse(JSON.stringify(h.requests.at(-1).args[3]));
  assert.deepEqual(cmd.payload,{ResponsibleUserID:'user-2'});assert.equal(cmd.expectedEntityRevision,3);
+});
+
+test('F03 S2 assignee-list failure keeps Plan actions usable and allows a retry',async()=>{
+ const owners=more=>({contractVersion:'D331_PLAN_OWNERS_V1',eventId:EVENT,revision:3,caseId:CASE,caseRevision:1,
+  areaId:'area-A',owners:[{userId:'user-2'}],...more});
+ for(const fail of [r=>r.reject(Error('PRIVATE_SENTINEL')),r=>r.resolve(owners({patient:'PRIVATE_SENTINEL'}))]){
+  const h=harness({enabled:true,role:'Manager'});h.run('D331_F03_PLANS_AVAILABLE_=true;');await plansReady(h,[planRow()]);
+  pclick(h,'เลือกผู้รับผิดชอบ '+PLAN);fail(h.requests.at(-1));await settle();
+  assert.match(ptext(h),/ไม่สามารถยืนยันรายชื่อผู้รับผิดชอบ/);assert.match(ptext(h),/EP1/);
+  assert.equal(h.doc.activeElement.getAttribute('role'),'status');assert.doesNotMatch(ptext(h),/PRIVATE_SENTINEL/);
+  pclick(h,'ปิด Plan '+PLAN);assert.equal(h.doc.activeElement,pbutton(h,'บันทึก Plan'));pclick(h,'ยกเลิก');
+  assert.doesNotMatch(ptext(h),/ไม่สามารถยืนยันรายชื่อผู้รับผิดชอบ/);
+  pclick(h,'เลือกผู้รับผิดชอบ '+PLAN);h.requests.at(-1).resolve(owners());await settle();
+  assert.ok(walk(h.planRoot).find(n=>n.id==='d331-f03-owner'));assert.equal(h.requests.filter(r=>r.args[0]==='saveDenguePlan').length,0);
+ }
 });
 
 test('F03 S2 unknown/PENDING/NOT_FOUND/denial and malformed receipts retain Event hold without retry',async()=>{

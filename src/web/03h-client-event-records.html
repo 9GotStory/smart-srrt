@@ -509,7 +509,7 @@ var d331F03Plans_ = (function(){
     observer.observe(root,{attributes:true,attributeFilter:['open'],attributeOldValue:true});
   }
   function f03Selection(){return {caseId:owner.caseId,expectedEventRevision:owner.revision,expectedCaseRevision:owner.caseRevision};}
-  function f03Render(){
+  function f03Render(notice){
     if(!root||!owner)return;root.hidden=false;root.replaceChildren();root.setAttribute('aria-busy',pending?'true':'false');
     root.appendChild(f03Node('summary','Plans ของ Case ที่เลือก'));
     var info=f03Node('p','เหตุการณ์ '+owner.eventId+' · Case '+owner.caseId+' · Revision '+owner.caseRevision);
@@ -523,6 +523,7 @@ var d331F03Plans_ = (function(){
       (receipt.revision?' · Revision '+receipt.revision:' · ต้องอ่านรายการใหม่เพื่อยืนยัน Revision');
     else if(pending&&pending.kind==='owners')message.textContent='กำลังโหลดผู้รับผิดชอบที่มีสิทธิ์';
     else if(hold)message.textContent+=' · ยังไม่ทราบผลการเขียน · ห้ามส่งคำขอใหม่ ต้องตรวจสอบหรือให้ผู้ดูแลกระทบยอด';
+    else if(notice)message.textContent=notice;
     message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.tabIndex=-1;root.appendChild(message);
     view={status:message};if(receipt||(pending&&pending.kind!=='read'))message.focus();
     var list=f03Node('ul');list.setAttribute('aria-label','รายการ Plans');
@@ -531,7 +532,7 @@ var d331F03Plans_ = (function(){
       if(!pending&&!hold&&!receipt&&!draft){
         if(p.planStatus==='OPEN'){
           item.appendChild(f03Button('ปิด Plan '+p.planId,function(){f03Begin(p,'CLOSED');}));
-          item.appendChild(f03Button('Void Plan '+p.planId,function(){f03Begin(p,'VOID');}));
+          item.appendChild(f03Button('ยกเลิก Plan '+p.planId,function(){f03Begin(p,'VOID');}));
           if(owner.role==='Manager'||owner.role==='Super Admin')item.appendChild(f03Button('เลือกผู้รับผิดชอบ '+p.planId,function(){f03Owners(p);}));
         }else if(p.planStatus==='CLOSED')item.appendChild(f03Button('เปิด Plan อีกครั้ง '+p.planId,function(){f03Begin(p,'OPEN');}));
       }
@@ -616,7 +617,8 @@ var d331F03Plans_ = (function(){
   function f03Owners(plan){
     if(pending)return;var ticket={owner:owner,kind:'owners'};pending=ticket;f03Render();
     function f03OwnerActive(){f03Refresh();return pending===ticket&&owner===ticket.owner;}
-    function f03OwnerFail(){if(!f03OwnerActive())return;pending=null;state='ERROR';f03Render();view.status.focus();}
+    function f03OwnerFail(){if(!f03OwnerActive())return;pending=null;
+      f03Render('ไม่สามารถยืนยันรายชื่อผู้รับผิดชอบได้ ลองอีกครั้งหรืออ่านรายการ Plan ใหม่');view.status.focus();}
     try{Promise.resolve(gs('listAssignableDenguePlanOwners',owner.token,owner.eventId,f03Selection())).then(function(value){
       if(!f03OwnerActive())return;
       try{

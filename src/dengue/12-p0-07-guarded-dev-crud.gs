@@ -122,6 +122,14 @@ function d331P007Read_(sheet,sheetName){
     catch(e){d331P007Deny_();}
   });
 }
+// Free-text EpisodeKey stays text: Sheets would parse a value like 2026-11-08 into a
+// Date on append, and strict row validation would then deny every later write.
+function d331P007AppendPlanRow_(sheet,row){
+  var last=sheet.getLastRow(),column=d331P002aHeaders_('DenguePlans').indexOf('EpisodeKey')+1;
+  sheet.insertRowAfter(last);
+  sheet.getRange(last+1,column,1,1).setNumberFormat('@');
+  sheet.getRange(last+1,1,1,row.length).setValues([row]);
+}
 function d331P007Digest_(canonical){
   var bytes=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
     canonical,Utilities.Charset.UTF_8);
@@ -311,7 +319,8 @@ function d331P007Operate_(sessionToken,eventId,command){
     }
     // A fresh request ID cannot bypass an interrupted Case/Plan write for this Event.
     if((command.kind==='case'||command.kind==='plan')&&ledgerRows.some(function(r){
-      return r[1]===eventId&&r[3]===spec.capability&&r[5]==='PENDING';
+      return r[1]===eventId&&r[3]===spec.capability&&
+        (r[5]==='PENDING'||(command.kind==='plan'&&r[5]==='UNKNOWN'));
     }))d331P007Deny_();
 
     // Validate all domain records and FK snapshot BEFORE the first write.
@@ -378,7 +387,8 @@ function d331P007Operate_(sessionToken,eventId,command){
     // Intent is persisted FIRST. Any interruption leaves PENDING -> HOLD.
     ledgerSheet.appendRow(pending);
     if(command.mode==='create'){
-      tables[spec.sheet].appendRow(prepared.row);
+      if(command.kind==='plan')d331P007AppendPlanRow_(tables[spec.sheet],prepared.row);
+      else tables[spec.sheet].appendRow(prepared.row);
     }else{
       tables[spec.sheet].getRange(existingIndex+2,1,1,prepared.row.length)
         .setValues([prepared.row]);
@@ -418,6 +428,7 @@ function d331P007WriteStatus_(sessionToken,eventId,requestId,kind){
     if(saved.EventID!==eventId||saved.PrincipalID!==context.user.userId||
        saved.Operation!==spec.capability)d331P007Deny_();
     if(saved.Phase==='PENDING')return {status:'PENDING'};
+    if(saved.Phase==='UNKNOWN'&&kind==='plan')return {status:'UNKNOWN'};
     if(saved.Phase!=='COMMITTED'||saved.EntityType!==spec.entity||
        !d331P007Id_(saved.EntityID))d331P007Deny_();
     return {status:'COMMITTED',entityId:saved.EntityID};
