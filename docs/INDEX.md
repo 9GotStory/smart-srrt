@@ -2,7 +2,7 @@
 
 **Reviewed:** 21 October 2026 (Asia/Bangkok)
 **Implementation baseline:** `main@29ca13ba33f87d46f1f50fba90fe904773b6594a`
-**Last status update:** 8 November 2026 — เปลี่ยน instruction file เป็น CLAUDE.md, workflow เป็น Claude Code + Matt Pocock Skills และบันทึก F02 DEV Version 22; ไม่ใช่การ review เอกสารทั้งชุดกับ baseline ใหม่
+**Last status update:** 8 November 2026 — เปลี่ยน instruction file เป็น CLAUDE.md, workflow เป็น Claude Code + Matt Pocock Skills และบันทึก F02 DEV Version 22 กับ F03 source merge; ไม่ใช่การ review เอกสารทั้งชุดกับ baseline ใหม่
 **Purpose:** ทางเข้ารวมและแผนที่ authority ของเอกสาร ไม่ใช่ spec, policy approval หรือคำสั่ง Deploy ตรวจ HEAD ใหม่ก่อนใช้ snapshot นี้กับงานถัดไป
 
 ## Reading order
@@ -92,4 +92,5 @@
 - Known out-of-scope drift: [RR-04 cross-references](architecture/rr-04-login-abuse-corrective-design.md) มี relative links ของ RR-01/02/03 ที่ชี้ directory ผิด; target จริงอยู่ [implementation](implementation/). ไฟล์นั้นคงเดิมใน four-file alignment นี้; ใช้ current entrypoints ด้านบน
 - **Documentation Alignment, 21 October 2026:** [PR #255](https://github.com/9GotStory/smart-srrt/pull/255) merged at `main@b289d969b915c91db996b48b19a00bf294c107d1`, covering `AGENTS.md` (now `CLAUDE.md`), `README.md`, `docs/features.md` and `docs/INDEX.md`; not Deploy or real-data authorization
 - **F01 update, 29 October 2026:** [PR #261](https://github.com/9GotStory/smart-srrt/pull/261) merged และ #257/#258/#259 CLOSED/completed สำหรับ synthetic source/offline delivery; exact SHA/review/post-merge CI อยู่ใน [F01 completion evidence](implementation/d331-remaining-feature-briefs.md#f01--p0-31b--synthetic-case--plan-in-records). รอ PO เลือก feature ถัดไปและอนุมัติแผนก่อนสร้าง/ปรับ Issue หรือ implementation; Merge, data access, Browser UAT และ Deploy เป็นคนละ gate. D331 OFF
+- **F03 update, 8 November 2026:** [PR #270](https://github.com/9GotStory/smart-srrt/pull/270) merged ที่ `6904a82dd4ac54320533f3a61a6817dcbbfced9f` และ post-merge CI ผ่าน สำหรับ synthetic source/offline delivery; หลักฐานอยู่ใน [F03 brief](implementation/d331-remaining-feature-briefs.md#f03--investigation--plans). F03 ยัง OFF; activation, Browser UAT, Deploy และ data access เป็นคนละ gate
 - **Claude Code workflow, 8 November 2026:** Instruction file ของโครงการคือ [CLAUDE.md](../CLAUDE.md) ไฟล์เดียว งานพัฒนาและรีวิวใช้ Claude Code + Matt Pocock Skills. เอกสารก่อนวันที่นี้ที่อ้าง `AGENTS.md`, Codex, Multica, ChatGPT Technical Review หรือ Independent Review ของ PR เป็น Historical ตามวันที่ของเอกสาร; ผลรีวิวที่บันทึกไว้เดิมยังเป็นหลักฐานของ SHA นั้น
