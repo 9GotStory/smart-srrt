@@ -102,6 +102,8 @@ Product backlog และข้อกำหนดที่เหลืออย�
 
 **F02 synthetic DEV activation — source candidate, 30 October 2026:** PO confirmed synthetic-only Event/health data and approved a separate [F02 DEV activation package/runbook](docs/implementation/d331-f02-dev-activation.md). It reuses existing backend authorization and adds the missing Case reader to a private 34-source-file candidate. Canonical Native26/old Native33 remain OFF; source/CI is not deployed or browser evidence. The guarded wrapper preserves the original manifest/target, checks backup/drift and immutable-version bytes, and updates only the existing DEV deployment. Source Merge remains a separate PO gate; the requested synthetic DEV exercise does not approve real-patient access or clinical policy. **Update — 4 November 2026:** the original DEV deployment is Version 22 from `main@17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, and the bounded synthetic-only Browser UAT passed per the operator receipt in [#238](https://github.com/9GotStory/smart-srrt/issues/238). This covers neither F03 nor real data.
 
+**F03 Plans source/offline completion — 8 November 2026:** [PR #270](https://github.com/9GotStory/smart-srrt/pull/270) merged ที่ `6904a82dd4ac54320533f3a61a6817dcbbfced9f` และ post-merge CI ผ่าน; ดู [F03 evidence](docs/implementation/d331-remaining-feature-briefs.md#f03--investigation--plans). F03 ยัง OFF และยังไม่ Deploy; source/offline completion ไม่ใช่ Browser UAT, Deploy, Migration หรือสิทธิ์ข้อมูลจริง
+
 ## เริ่มอ่านที่นี่
 
 เอกสารอ้างอิง **`docs/features.md`** เป็น Feature Reference ฉบับปัจจุบันที่มี Traceability รายฟีเจอร์, ข้อจำกัด, Tests และสถานะหลักฐาน; เก็บ `doc/features.md` เป็นเอกสาร Legacy Snapshot ไม่ควรใช้แทนฉบับปัจจุบัน.
