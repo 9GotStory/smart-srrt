@@ -167,6 +167,9 @@ function prepareActiveSnapshot(work,p,previousWork){
  for(const [name,bytes] of entries)if(!privateFile(path.join(previousStage,name)).equals(bytes))no();
  // All identity/profile/seal checks precede the first remote command.
  priorMetadata(work,p,metadata);
+ writeSnapshotInput(work,p,metadata);
+}
+function writeSnapshotInput(work,p,metadata){
  for(const [name,bytes] of Object.entries(metadata))fs.writeFileSync(path.join(work,name),bytes,{flag:'wx',mode:0o600});
  fs.writeFileSync(path.join(work,'source-sha.txt'),p.sourceSha+'\n',{flag:'wx',mode:0o600});
  fs.writeFileSync(path.join(work,'snapshot.claspignore'),'',{flag:'wx',mode:0o600});
@@ -176,10 +179,41 @@ function prepareActiveSnapshot(work,p,previousWork){
    rootDir:'.',scriptExtensions:['.gs'],htmlExtensions:['.html']}),{flag:'wx',mode:0o600});
  }
 }
-function checkActiveSnapshot(work,p){
+// Previous-release evidence is the sealed release workspace by default. Live re-attestation,
+// for a lost workspace, needs an explicit opt-in and never runs alongside a workspace.
+const LIVE_EVIDENCE='LIVE_REATTESTATION';
+function usesLiveReattestation(env){
+ const value=env.SMART_SRRT_F02_PREVIOUS_EVIDENCE;
+ if(!value)return false;
+ if(value!==LIVE_EVIDENCE||env.SMART_SRRT_F02_PREVIOUS_WORK)no();
+ return true;
+}
+// The frontier fixes every other value, so the Version 22 profile is derived from the candidate.
+// The live bytes must then prove it before any evidence is written.
+function prepareReattestedSnapshot(work,p){
+ privateDirectory(work);
+ if(fs.readdirSync(work).length||p.priorVersion!==PREVIOUS_F02.version)no();
+ const previous=validateProfile({...p,sourceSha:PREVIOUS_F02.sourceSha,priorVersion:PREVIOUS_F02.priorVersion});
+ writeSnapshotInput(work,p,{'previous-profile.json':Buffer.from(JSON.stringify(previous))});
+}
+function sealReattestedSnapshot(work,p){
+ const previous=validateProfile(JSON.parse(privateFile(path.join(work,'previous-profile.json'))));
+ const manifest=privateFile(path.join(work,'immutable-prior/appsscript.json'));
+ const {entries}=priorF02Package(previous);
+ entries.set('appsscript.json',manifest);
+ const seal={sourceSha:previous.sourceSha,profileSha256:digest(Buffer.from(JSON.stringify(previous))),
+  files:Object.fromEntries([...entries].map(([name,bytes])=>[name,digest(bytes)])),evidence:LIVE_EVIDENCE};
+ const metadata={'previous-profile.json':Buffer.from(JSON.stringify(previous)),
+  'previous-manifest.json':manifest,'previous-seal.json':Buffer.from(JSON.stringify(seal))};
+ // Every snapshot check passes in memory before the derived evidence is written.
+ checkActiveSnapshot(work,p,metadata);
+ for(const name of ['previous-manifest.json','previous-seal.json'])
+  fs.writeFileSync(path.join(work,name),metadata[name],{flag:'wx',mode:0o600});
+}
+function checkActiveSnapshot(work,p,metadata){
  if(privateFile(path.join(work,'source-sha.txt')).toString().trim()!==p.sourceSha||
     privateFile(path.join(work,'snapshot.claspignore')).length)no();
- const entries=priorMetadata(work,p);
+ const entries=priorMetadata(work,p,metadata);
  for(const folder of ['remote','immutable-prior'])checkSnapshotCopy(path.join(work,folder),entries,p.scriptId);
  const rows=deploymentRows(privateFile(path.join(work,'deployments.before.txt')).toString());
  if(rows.get(p.deploymentId)?.version!==String(p.priorVersion)||
@@ -297,11 +331,14 @@ function cli(){
   priorVersion:Number(env.SMART_SRRT_F02_PRIOR_VERSION)};
  if(mode==='--snapshot-input'||mode==='--snapshot-seal'){
   privateDirectory(work);
-  const p=boundProfile(JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE)),expected);
+  const p=boundProfile(JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE)),expected),live=usesLiveReattestation(env);
+  const note=live?'PREVIOUS_EVIDENCE='+LIVE_EVIDENCE+'; ':'';
   if(mode==='--snapshot-input'){
-   prepareActiveSnapshot(work,p,env.SMART_SRRT_F02_PREVIOUS_WORK);
-   console.log('F02_DEV=SNAPSHOT_INPUT_VALIDATED; REMOTE_WRITES=NO');return;
+   if(live)prepareReattestedSnapshot(work,p);
+   else prepareActiveSnapshot(work,p,env.SMART_SRRT_F02_PREVIOUS_WORK);
+   console.log('F02_DEV=SNAPSHOT_INPUT_VALIDATED; '+note+'REMOTE_WRITES=NO');return;
   }
+  if(live)sealReattestedSnapshot(work,p);
   checkActiveSnapshot(work,p);
   const archive='rollback-source-and-metadata.tgz';
   if(fs.existsSync(path.join(work,archive))||fs.existsSync(path.join(work,archive+'.sha256')))no();
@@ -314,7 +351,7 @@ function cli(){
   fs.writeFileSync(path.join(work,archive+'.sha256'),digest(privateFile(path.join(work,archive)))+'  '+archive+'\n',
    {flag:'wx',mode:0o600});
   verifyBackup(work,p);
-  console.log('F02_DEV=ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED; REMOTE_WRITES=NO');return;
+  console.log('F02_DEV=ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED; '+note+'REMOTE_WRITES=NO');return;
  }
  if(mode==='--prepare'){
   const profile=JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE));

@@ -119,7 +119,7 @@ The package adds no public server declaration. The four Plan RPCs (`listDenguePl
 
 The snapshot accepts exactly one previous release: source `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, whose profile has `priorVersion=21` and whose release created and deployed Version22. The candidate profile must have `priorVersion=22`. The older `6257851296e949e88777c4a8e86aa83c9d22a399` (Version21) frontier is no longer accepted. The tool rebuilds Version22 from that local Git object with the F02-only activation (34 files, 16 in push order), kept apart from the candidate activation. It keeps the native compiler and vendor drift check; those tool files are unchanged between `17975ff` and the baseline.
 
-The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace.
+The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace, unless the operator opts in to live re-attestation (below).
 
 Use only this active Version22 snapshot as the baseline for the F03 candidate. The older P0-11 snapshot path still exists for an OFF Native24–Native33 deployment, but it is not a valid baseline for this round. The tool checks the Version22 frontier only on the active snapshot path, so it does not enforce this.
 
@@ -136,6 +136,28 @@ bash tools/deploy-d331-f02-dev.sh --deploy
 ```
 
 Deploy moves only the existing DEV deployment to the next immutable version, expected to be Version23, so the URL stays the same. The version and deployment descriptions still read "F02 synthetic DEV" plus the source SHA; the SHA identifies the content. An uncertain push, version or update stops for manual reconciliation without retry or rollback. Version22 stays immutable and backed up. Pointing the deployment back to it is a manual operator action that needs its own PO approval.
+
+The backup directory becomes the Version23 release workspace, and the next round needs it as evidence. Keep it in a persistent private location, such as a dated folder under `~/.local/share/smart-srrt/`. Never use `/tmp`: on the operator machine it is tmpfs and is cleared at reboot.
+
+### If the Version22 release workspace is lost
+
+The Version22 workspace from 4 November 2026 was lost, and #273's amendment of 12 November 2026 adds live re-attestation for that case. Use it only when the workspace is lost. Opt in with `SMART_SRRT_F02_PREVIOUS_EVIDENCE=LIVE_REATTESTATION`, and leave `SMART_SRRT_F02_PREVIOUS_WORK` unset. Opting in while a workspace is set, or with any other value, stops before any cloud read. Every other setting is the same as above:
+
+```bash
+# Backup approval: read-only re-attestation of the live Version22.
+SMART_SRRT_F02_PREVIOUS_EVIDENCE=LIVE_REATTESTATION SMART_SRRT_F02_READONLY_APPROVED=YES \
+ bash tools/deploy-d331-f02-dev.sh --snapshot
+```
+
+Before any cloud read, the tool requires an empty backup directory and a candidate profile with `priorVersion=22`. It derives the Version22 profile from that candidate: source `17975ff`, `priorVersion=21`, and every other value unchanged. The script ID and deployment ID are in the operator's private P0-11 backups. The workbook ID and the Version22 policy revision come from #189.
+
+After the usual read-only pulls, and before writing any evidence, these must all hold:
+
+- The live source and the immutable Version22 equal, byte for byte, the F02-only rebuild of `17975ff` from the local Git object. The workbook ID and policy revision are embedded in those bytes, so a wrong value fails here. A wrong disease label or Case fields is refused earlier, when the profile is checked.
+- Both copies carry the same V8 manifest.
+- The deployment is at Version22, and the inventories do not change between reads.
+
+Any mismatch stops with no evidence, archive or later step. On success, the output says `PREVIOUS_EVIDENCE=LIVE_REATTESTATION`, and the archived seal records `"evidence":"LIVE_REATTESTATION"`. Prepare, verify and deploy then run as above. The receipt must say that the baseline was re-attested from the live deployment against Git, not taken from the 4 November record. That release run itself is no longer verifiable.
 
 ### Accounts and grants
 
@@ -172,6 +194,6 @@ The [activation tests](../../tests/d331-f02-dev-activation.test.mjs) hold the of
 
 - **S1** checks the actual package, profile, stage and frontier.
 - **S2** loads the prepared stage's server files in push order with synthetic Google services and calls the four Plan RPCs. It models Sheets turning date-like and numeric text into values.
-- **S3** runs the actual wrapper with synthetic git, clasp and filesystem, from a Version22 fixture to the Version23 update.
+- **S3** runs the actual wrapper with synthetic git, clasp and filesystem, from a Version22 fixture to the Version23 update. It does this with the stored workspace and with live re-attestation, and it includes re-attestation refusals that write no evidence.
 
 EpisodeKey text storage on real Sheets, F03 deployed behavior and Observed in Deployed UI stay **Not Verified** until an operator receipt exists. The redacted receipt goes on #273, separates Browser UI from browser-invoked backend checks and names tool versions. Restricted identifiers stay in #189. Real data, F04–F08, the D2/P1/P2/S1/S2/C1/C2 policy gates and clinical assessment (`NOT_EVALUATED`) are out of scope.

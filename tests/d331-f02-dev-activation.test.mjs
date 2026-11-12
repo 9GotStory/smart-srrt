@@ -329,6 +329,7 @@ if(a[0]==='pull'){
  if(mode==='immutable-drift'&&process.cwd().endsWith('immutable'))fs.appendFileSync('00-bootstrap.gs','//drift');
  if(mode==='prior-source-drift'&&process.cwd().endsWith('remote'))fs.appendFileSync('00-bootstrap.gs','//drift');
  if(mode==='prior-immutable-drift'&&process.cwd().endsWith('immutable-prior'))fs.appendFileSync('00-bootstrap.gs','//drift');
+ if(mode==='prior-manifest-drift'&&process.cwd().endsWith('remote'))fs.writeFileSync('appsscript.json','{"runtimeVersion":"V8","timeZone":"UTC"}\\n');
  process.exit(0);
 }
 if(a[0]==='list-deployments'){
@@ -517,53 +518,118 @@ function version22Entries(p){
   entries.set(name,Buffer.from(entries.get(name).toString().replace(before,after)));
  return entries;
 }
-// The retained Version 22 release workspace (sealed F02-only stage, profile and receipts) and a
-// candidate profile. Overrides describe wrong prior evidence for the frontier checks.
-async function activeOperatorFixture({previous:previousPatch={},created=22,candidate:candidatePatch={}}={}){
- const f=operatorFixture(),sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
+// The live Version 22 (the fake clasp's current and immutable source) and a candidate profile.
+// With evidence 'workspace' the retained release workspace (sealed stage, profile and receipts)
+// is there too; with 'live' it is lost and the operator opts in to live re-attestation.
+// Overrides describe wrong prior evidence for the frontier checks.
+async function activeOperatorFixture({previous:previousPatch={},created=22,candidate:candidatePatch={},
+ evidence='workspace',manifest}={}){
+ assert.ok(['workspace','live'].includes(evidence));
+ const f=operatorFixture(),sha256=bytes=>createHash('sha256').update(bytes).digest('hex'),live=evidence==='live';
  const previous=profile({sourceSha:V22_SHA,priorVersion:21,...previousPatch});
  const stage=path.join(f.work,'f02-stage');fs.mkdirSync(stage,{mode:0o700});
  const entries=version22Entries(previous),files={};
- entries.set('appsscript.json',fs.readFileSync(path.join(f.remote,'appsscript.json')));
+ entries.set('appsscript.json',manifest??fs.readFileSync(path.join(f.remote,'appsscript.json')));
  for(const [name,bytes] of entries){fs.writeFileSync(path.join(stage,name),bytes,{mode:0o600});files[name]=sha256(bytes);}
- fs.writeFileSync(path.join(f.work,'f02-profile.json'),JSON.stringify(previous),{mode:0o600});
- fs.writeFileSync(path.join(f.work,'f02-seal.json'),JSON.stringify({sourceSha:previous.sourceSha,
-  profileSha256:sha256(JSON.stringify(previous)),files}),{mode:0o600});
- const attempt=path.join(f.work,'f02-release-attempt');fs.mkdirSync(attempt,{mode:0o700});
  const inventory=fs.readFileSync(path.join(f.work,'deployments.before.txt'),'utf8').replace('@20','@'+created);
- for(const [name,text] of Object.entries({'state.txt':'SOURCE_AND_DEPLOYMENT_VERIFIED\n',
-  'version.created.json':JSON.stringify({versionNumber:created}),'deployments.after.txt':inventory}))
-  fs.writeFileSync(path.join(attempt,name),text,{mode:0o600});
+ fs.writeFileSync(path.join(f.work,'deployments.live.txt'),inventory,{mode:0o600});
+ if(!live){
+  fs.writeFileSync(path.join(f.work,'f02-profile.json'),JSON.stringify(previous),{mode:0o600});
+  fs.writeFileSync(path.join(f.work,'f02-seal.json'),JSON.stringify({sourceSha:previous.sourceSha,
+   profileSha256:sha256(JSON.stringify(previous)),files}),{mode:0o600});
+  const attempt=path.join(f.work,'f02-release-attempt');fs.mkdirSync(attempt,{mode:0o700});
+  for(const [name,text] of Object.entries({'state.txt':'SOURCE_AND_DEPLOYMENT_VERIFIED\n',
+   'version.created.json':JSON.stringify({versionNumber:created}),'deployments.after.txt':inventory}))
+   fs.writeFileSync(path.join(attempt,name),text,{mode:0o600});
+ }
  const work=fs.mkdtempSync(path.join(os.tmpdir(),'srrt-f03-active-'));fs.chmodSync(work,0o700);
  const candidate=profile({priorVersion:22,...candidatePatch}),input=path.join(f.work,'next-profile.json');
  fs.writeFileSync(input,JSON.stringify(candidate),{mode:0o600});
  const extra={SMART_SRRT_F02_PRIVATE_BACKUP_DIR:work,SMART_SRRT_F02_PROFILE:input,
-  SMART_SRRT_F02_PRIOR_VERSION:String(candidate.priorVersion),SMART_SRRT_F02_PREVIOUS_WORK:f.work,
-  F02_TEST_ACTIVE_REMOTE:stage,F02_TEST_INVENTORY:path.join(attempt,'deployments.after.txt')};
+  SMART_SRRT_F02_PRIOR_VERSION:String(candidate.priorVersion),
+  F02_TEST_ACTIVE_REMOTE:stage,F02_TEST_INVENTORY:path.join(f.work,'deployments.live.txt'),
+  ...(live?{SMART_SRRT_F02_PREVIOUS_WORK:'',SMART_SRRT_F02_PREVIOUS_EVIDENCE:'LIVE_REATTESTATION'}:
+   {SMART_SRRT_F02_PREVIOUS_WORK:f.work})};
  return {work,previousWork:f.work,run:(mode,more={})=>f.run(mode,{...extra,...more}),calls:f.calls,
   cleanup:()=>{fs.rmSync(work,{recursive:true,force:true});f.cleanup();}};
 }
+// The shared S3 path after a successful snapshot: verified Version 22 backup → 35-file stage → Version 23.
+function deploysFromVersion22(f,snapshot){
+ assert.equal(snapshot.status,0,snapshot.stderr);assert.match(snapshot.stdout,/ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED/);
+ assert.ok(f.calls().every(c=>!['push','create-version','update-deployment'].includes(c.args[0])));
+ assert.ok(f.calls().filter(c=>c.args[0]!=='--version').every(c=>c.project&&c.ignore===path.join(f.work,'snapshot.claspignore')));
+ const pulls=f.calls().filter(c=>c.args[0]==='pull');assert.equal(pulls.length,2);
+ assert.deepEqual(pulls[1].args,['pull','--versionNumber','22']);
+ const backup=fs.readdirSync(path.join(f.work,'immutable-prior'));
+ assert.equal(backup.length,36);assert.equal(backup.includes(PLANS),false); // 34 F02 files, manifest, .clasp.json
+ const prep=f.run('--prepare');assert.equal(prep.status,0,prep.stderr);assert.match(prep.stdout,/SOURCE_FILES=35/);
+ const deploy=f.run('--deploy');assert.equal(deploy.status,0,deploy.stderr);
+ assert.match(deploy.stdout,/DEPLOYMENT_VERSION=23/);
+ const selected=JSON.parse(fs.readFileSync(path.join(f.work,'f02-release-attempt/selected-files.json'))).filesToPush;
+ assert.equal(selected.length,36);
+ for(const name of [PLANS,READER,'appsscript.json'])assert.ok(selected.includes('f02-stage/'+name),name);
+ assert.equal(f.calls().filter(c=>c.args[0]==='push').length,1);
+ const updates=f.calls().filter(c=>c.args[0]==='update-deployment');assert.equal(updates.length,1);
+ assert.equal(updates[0].args[1],DEPLOY);assert.equal(updates[0].args[updates[0].args.indexOf('--versionNumber')+1],'23');
+ assert.doesNotMatch(snapshot.stdout+prep.stdout+deploy.stdout,new RegExp(SCRIPT+'|'+DEPLOY+'|'+DB));
+}
 test('F03 DEV S3 Version 22 is freshly backed up and the candidate updates only its existing deployment to Version 23',async()=>{
  const f=await activeOperatorFixture();try{
-  const r=f.run('--snapshot');assert.equal(r.status,0,r.stderr);
-  assert.match(r.stdout,/ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED/);
-  assert.ok(f.calls().every(c=>!['push','create-version','update-deployment'].includes(c.args[0])));
-  assert.ok(f.calls().filter(c=>c.args[0]!=='--version').every(c=>c.project&&c.ignore===path.join(f.work,'snapshot.claspignore')));
-  const pulls=f.calls().filter(c=>c.args[0]==='pull');assert.equal(pulls.length,2);
-  assert.deepEqual(pulls[1].args,['pull','--versionNumber','22']);
-  const backup=fs.readdirSync(path.join(f.work,'immutable-prior'));
-  assert.equal(backup.length,36);assert.equal(backup.includes(PLANS),false); // 34 F02 files, manifest, .clasp.json
-  const prep=f.run('--prepare');assert.equal(prep.status,0,prep.stderr);assert.match(prep.stdout,/SOURCE_FILES=35/);
-  const deploy=f.run('--deploy');assert.equal(deploy.status,0,deploy.stderr);
-  assert.match(deploy.stdout,/DEPLOYMENT_VERSION=23/);
-  const selected=JSON.parse(fs.readFileSync(path.join(f.work,'f02-release-attempt/selected-files.json'))).filesToPush;
-  assert.equal(selected.length,36);
-  for(const name of [PLANS,READER,'appsscript.json'])assert.ok(selected.includes('f02-stage/'+name),name);
-  assert.equal(f.calls().filter(c=>c.args[0]==='push').length,1);
-  const updates=f.calls().filter(c=>c.args[0]==='update-deployment');assert.equal(updates.length,1);
-  assert.equal(updates[0].args[1],DEPLOY);assert.equal(updates[0].args[updates[0].args.indexOf('--versionNumber')+1],'23');
-  assert.doesNotMatch(r.stdout+prep.stdout+deploy.stdout,new RegExp(SCRIPT+'|'+DEPLOY+'|'+DB));
+  const r=f.run('--snapshot');
+  assert.doesNotMatch(r.stdout,/LIVE_REATTESTATION/);
+  deploysFromVersion22(f,r);
  }finally{f.cleanup();}
+});
+test('F03 DEV S3 live re-attestation backs up Version 22 without its release workspace and the candidate deploys to Version 23',async()=>{
+ const f=await activeOperatorFixture({evidence:'live'});try{
+  const r=f.run('--snapshot');assert.equal(r.status,0,r.stderr);
+  assert.match(r.stdout,/ACTIVE_PREVIOUS_PACKAGE_BACKUP_VERIFIED; PREVIOUS_EVIDENCE=LIVE_REATTESTATION/);
+  const archive=path.join(f.work,'rollback-source-and-metadata.tgz');
+  const member=name=>JSON.parse(spawnSync('tar',['-xOzf',archive,'--',name],{encoding:'utf8'}).stdout);
+  assert.deepEqual(member('previous-profile.json'),profile({sourceSha:V22_SHA,priorVersion:21}));
+  assert.equal(member('previous-manifest.json').runtimeVersion,'V8');
+  assert.equal(member('previous-seal.json').evidence,'LIVE_REATTESTATION');
+  deploysFromVersion22(f,r);
+ }finally{f.cleanup();}
+});
+test('F03 DEV S3 live re-attestation refuses a live Version 22 that differs from the Git rebuild, writing no evidence',async()=>{
+ const OTHER_DB='SYNTHETIC_OTHER_WORKBOOK_012345678';
+ for(const [reason,options,more={}] of [
+  ['profile workbook differs from the deployed bytes',{evidence:'live',candidate:{spreadsheetId:OTHER_DB}},
+   {SMART_SRRT_F02_SPREADSHEET_ID:OTHER_DB}],
+  ['profile policy revision differs from the deployed bytes',{evidence:'live',candidate:{policyRevision:'SYNTHETIC_F02_DEV_OTHER_V1'}}],
+  ['drifted live source',{evidence:'live'},{F02_TEST_FAILURE:'prior-source-drift'}],
+  ['immutable Version 22 differs',{evidence:'live'},{F02_TEST_FAILURE:'prior-immutable-drift'}],
+  ['live manifest differs from immutable',{evidence:'live'},{F02_TEST_FAILURE:'prior-manifest-drift'}],
+  ['manifest is not V8',{evidence:'live',manifest:Buffer.from('{"runtimeVersion":"STABLE"}\n')}],
+  ['deployment not at Version 22',{evidence:'live',created:23}],
+  ['inventory changes between reads',{evidence:'live'},{F02_TEST_FAILURE:'snapshot-inventory-drift'}]]){
+  const f=await activeOperatorFixture(options);try{
+   const r=f.run('--snapshot',more);assert.notEqual(r.status,0,reason);
+   assert.match(r.stderr,/ACTIVE_SNAPSHOT_INVALID_NO_WRITE/,reason);
+   assert.ok(f.calls().some(c=>c.args[0]==='pull'),reason); // refused after the read-only pulls
+   assert.ok(f.calls().every(c=>!['push','create-version','update-deployment'].includes(c.args[0])),reason);
+   for(const name of ['previous-manifest.json','previous-seal.json','rollback-source-and-metadata.tgz'])
+    assert.equal(fs.existsSync(path.join(f.work,name)),false,reason+': '+name);
+  }finally{f.cleanup();}
+ }
+});
+test('F03 DEV S1 live re-attestation needs a clean opt-in and refuses before any cloud read otherwise',async()=>{
+ for(const [reason,options,more=()=>({}),setup=()=>{}] of [
+  // A valid Version 22 workspace is present, so only the opt-in rules can refuse these two.
+  ['opt-in together with a previous workspace',{},()=>({SMART_SRRT_F02_PREVIOUS_EVIDENCE:'LIVE_REATTESTATION'})],
+  ['unknown evidence value',{},()=>({SMART_SRRT_F02_PREVIOUS_EVIDENCE:'LIVE'})],
+  ['candidate prior version other than 22',{evidence:'live',created:23,candidate:{priorVersion:23}}],
+  ['non-empty backup directory',{evidence:'live'},undefined,f=>fs.writeFileSync(path.join(f.work,'stray.txt'),'x',{mode:0o600})],
+  ['non-synthetic profile',{evidence:'live',candidate:{dataClass:'REAL_DATA'}}]]){
+  const f=await activeOperatorFixture(options);try{
+   setup(f);
+   const r=f.run('--snapshot',more(f));assert.notEqual(r.status,0,reason);
+   assert.match(r.stderr,/PRIOR_RELEASE_EVIDENCE_INVALID_NO_CLOUD_READ/,reason);
+   assert.ok(f.calls().every(c=>c.args[0]==='--version'),reason);
+   assert.equal(fs.existsSync(path.join(f.work,'previous-profile.json')),false,reason);
+  }finally{f.cleanup();}
+ }
 });
 test('F03 DEV S1 snapshot accepts only Version 22 from 17975ff and refuses other prior evidence before any cloud read',async()=>{
  for(const [reason,wrong] of Object.entries({
