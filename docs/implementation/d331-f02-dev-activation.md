@@ -1,7 +1,7 @@
 # F02 synthetic-only Development activation
 
 Date: 30 October 2026. Source baseline: `main@7c6b7618ae45f22b6a6ffa45c76d726dad89d088`.
-Status: **original synthetic DEV is Version22, deployed from `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`; bounded synthetic-only browser UAT PASS on 4 November 2026.** The Version21 FAIL record and the Version21 update procedure below are historical. Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238).
+Status: **original synthetic DEV is Version22, deployed from `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`; bounded synthetic-only browser UAT PASS on 4 November 2026.** The Version21 FAIL record and the Version21 update procedure below are historical. Canonical tracker: [Issue #238](https://github.com/9GotStory/smart-srrt/issues/238). The same tooling now builds the F03 Plans candidate from the Version22 frontier; see the [F03 Plans round](#f03-plans-round--12-november-2026). It is not deployed.
 
 The PO requested enabling F02 in the existing Development environment, confirmed that all Event/health content is synthetic, and approved the eight-path implementation scope and S1–S3. This authorizes pursuing a bounded synthetic DEV exercise; it is not real-patient privacy/clinical approval. Source Merge remains a separate PO gate. Do not ask again whether the settled target is Production or whether the agreed data is synthetic.
 
@@ -97,3 +97,81 @@ The bounded Playwright retest, completed as recorded below, followed exact-HEAD 
 **Browser-invoked backend negatives:** stale Case/Event revisions and expired/revoked grants were denied with no ledger row; the UI then cleared its private list and hid write controls.
 
 Final data: one synthetic Case at CaseRevision3, three COMMITTED ledger requests, zero PENDING. The final grant state in the receipt is ACTIVE at revision 4, with expiry 2026-11-05T07:32:41Z (14:32:41 +07:00); no later state was observed. The full redacted receipt is at the top of [#238](https://github.com/9GotStory/smart-srrt/issues/238). F03 is not part of this package, and real-data and clinical decisions remain HOLD.
+
+## F03 Plans round — 12 November 2026
+
+Status: **source and offline tests only**, under [Issue #273](https://github.com/9GotStory/smart-srrt/issues/273). DEV still runs Version22 (F02 only). The sections above describe the F02 rounds. Where they give 34 source files, 35 staged files or the `6257851` frontier, this section replaces them for current source.
+
+The PO approved the plan, its four change areas and test seams S1–S3 on 12 November 2026. After Merge, four separate PO approvals are needed, in this order: a read-only backup of the live Version22, the deploy, synthetic accounts and grants in the DEV workbook, then the Playwright Browser UAT. A merged PR or green CI authorizes none of them. If the agent's permission checks block the deploy or a workbook write, the operator runs the prepared commands.
+
+### Package
+
+The builder appends the F03 Plan workflow (`src/dengue/16-f03-plan-workflow.gs`) after the Case reader in server push order. The candidate has **17 GS + 17 HTML partials + Index = 35 source files**, all 17 GS files in push order. The private stage holds 36 files, including the byte-identical original `appsscript.json`. Every F02 substitution stays. Three more declarations switch on in this package only. Each is an exact one-occurrence substitution that fails closed:
+
+| File | Declarations switched on |
+| --- | --- |
+| `16-f03-plan-workflow.gs` | `D331_F03_ENABLED_`, `D331_F03_SCOPE_APPROVED_` |
+| `03h-client-event-records.html` | `D331_F03_PLANS_AVAILABLE_` |
+
+The package adds no public server declaration. The four Plan RPCs (`listDenguePlansForEvent`, `listAssignableDenguePlanOwners`, `saveDenguePlan`, `getDenguePlanWriteStatus`) already exist in canonical core and fail closed while F03 is absent or OFF. Canonical Native26 and Native33 keep F03 OFF and unregistered. Prepare reports `SOURCE_FILES=35`, and clasp must select all 36 staged files before push.
+
+### Prior release frontier
+
+The snapshot accepts exactly one previous release: source `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, whose profile has `priorVersion=21` and whose release created and deployed Version22. The candidate profile must have `priorVersion=22`. The older `6257851296e949e88777c4a8e86aa83c9d22a399` (Version21) frontier is no longer accepted. The tool rebuilds Version22 from that local Git object with the F02-only activation (34 files, 16 in push order), kept apart from the candidate activation. It keeps the native compiler and vendor drift check; those tool files are unchanged between `17975ff` and the baseline.
+
+The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace.
+
+Use only this active Version22 snapshot as the baseline for the F03 candidate. The older P0-11 snapshot path still exists for an OFF Native24–Native33 deployment, but it is not a valid baseline for this round. The tool checks the Version22 frontier only on the active snapshot path, so it does not enforce this.
+
+The wrapper is unchanged. Set the private values as before, with `SMART_SRRT_F02_PREVIOUS_WORK` pointing at the retained Version22 release workspace, a new empty backup directory, the candidate input profile, `SMART_SRRT_F02_PRIOR_VERSION=22` and the exact merged SHA. Then run each step under its approval:
+
+```bash
+# Backup approval: read-only snapshot of the live Version22.
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --snapshot
+# Private local stage; no Apps Script access.
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --prepare
+SMART_SRRT_F02_READONLY_APPROVED=YES bash tools/deploy-d331-f02-dev.sh --verify
+# Deploy approval; SMART_SRRT_F02_DEV_APPROVED_SHA set privately.
+bash tools/deploy-d331-f02-dev.sh --deploy
+```
+
+Deploy moves only the existing DEV deployment to the next immutable version, expected to be Version23, so the URL stays the same. The version and deployment descriptions still read "F02 synthetic DEV" plus the source SHA; the SHA identifies the content. An uncertain push, version or update stops for manual reconciliation without retry or rollback. Version22 stays immutable and backed up. Pointing the deployment back to it is a manual operator action that needs its own PO approval.
+
+### Accounts and grants
+
+This operator step sits outside the tooling, which issues no grants, accounts or rows. After the deploy, under its own approval:
+
+- Reuse the existing synthetic Event, Area and Case. Add no Event or Case.
+- Check that the `DenguePlans` sheet exists with the exact v2 headers. If it does not, stop: workbook changes need their own approval.
+- Give each tester `dengue.case.read`, `dengue.plan.read` and `dengue.plan.write` for that Event/Area, with the Version22 synthetic policy revision and an explicit expiry 24 hours after issue. Give no Case write and no other D331 capability. The Version22 Case grants expired on 5 November 2026, so fresh grants are needed.
+- Keep the existing synthetic Admin unchanged as the Plan creator. Assignment needs core `assign`, so add one clearly identified synthetic Manager account (PO decision, 12 November 2026).
+- Record whether an active user without Plan grants exists for the assignee absence check.
+
+### Browser UAT checklist
+
+Run with Playwright CLI and Chrome after the UAT approval. The PO types passwords into the Playwright browser window, never into chat or logs.
+
+1. Log in as the Admin tester → Records → the existing synthetic Event and Case → Plans shows the empty state.
+2. Create Plan A with an ordinary key. Fresh read: OPEN, Revision 1, responsible user = creator.
+3. Create Plan B (`2026-11-08`) and Plan C (`12345`). Fresh read shows both keys exactly as typed.
+4. Create Plan D with an ordinary key. Fresh read lists A–D.
+5. Cancel a create form. No new Plan appears.
+6. Close A, reopen A, void D. Fresh reads show A go CLOSED then OPEN, and D VOID with no further actions; revisions rise.
+7. Log in as the Manager tester. The assignee list for A shows only eligible users; an active user without Plan grants is absent (Not Verified if DEV has no such user).
+8. Reassign A to an eligible user. Fresh read shows the new responsible user.
+9. Dashboard, Records, report and library navigation work, and no Gemini generation runs.
+10. Log out. Old-session requests are refused.
+
+Record these browser-invoked backend checks separately: a duplicate EpisodeKey (C's key, and D's key on a VOID Plan), a stale Plan revision, and a request after the operator expires or revokes one Plan grant. Each must be refused and add no ledger row. Data result: the ledger rows added during the UAT equal the successful Plan writes (8 in this sequence), all COMMITTED, with no PENDING.
+
+Any failure stops with a report. Do not retry, roll back or edit rows by hand; the fix goes through a new PR. DEV does not exercise `SYSTEM_STATUS` closure, induced interrupted writes or voiding the shared Case; offline tests cover them.
+
+### Evidence and limits
+
+The [activation tests](../../tests/d331-f02-dev-activation.test.mjs) hold the offline evidence at test seams S1–S3, which are not the S1/S2 policy gates:
+
+- **S1** checks the actual package, profile, stage and frontier.
+- **S2** loads the prepared stage's server files in push order with synthetic Google services and calls the four Plan RPCs. It models Sheets turning date-like and numeric text into values.
+- **S3** runs the actual wrapper with synthetic git, clasp and filesystem, from a Version22 fixture to the Version23 update.
+
+EpisodeKey text storage on real Sheets, F03 deployed behavior and Observed in Deployed UI stay **Not Verified** until an operator receipt exists. The redacted receipt goes on #273, separates Browser UI from browser-invoked backend checks and names tool versions. Restricted identifiers stay in #189. Real data, F04–F08, the D2/P1/P2/S1/S2/C1/C2 policy gates and clinical assessment (`NOT_EVALUATED`) are out of scope.
