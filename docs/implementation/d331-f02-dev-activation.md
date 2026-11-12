@@ -119,7 +119,7 @@ The package adds no public server declaration. The four Plan RPCs (`listDenguePl
 
 The snapshot accepts exactly one previous release: source `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, whose profile has `priorVersion=21` and whose release created and deployed Version22. The candidate profile must have `priorVersion=22`. The older `6257851296e949e88777c4a8e86aa83c9d22a399` (Version21) frontier is no longer accepted. The tool rebuilds Version22 from that local Git object with the F02-only activation (34 files, 16 in push order), kept apart from the candidate activation. It keeps the native compiler and vendor drift check; those tool files are unchanged between `17975ff` and the baseline.
 
-The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace.
+The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace, unless the operator opts in to live re-attestation (below).
 
 Use only this active Version22 snapshot as the baseline for the F03 candidate. The older P0-11 snapshot path still exists for an OFF Native24–Native33 deployment, but it is not a valid baseline for this round. The tool checks the Version22 frontier only on the active snapshot path, so it does not enforce this.
 
@@ -153,11 +153,11 @@ Before any cloud read, the tool requires an empty backup directory and a candida
 
 After the usual read-only pulls, and before writing any evidence, these must all hold:
 
-- The live source and the immutable Version22 equal, byte for byte, the F02-only rebuild of `17975ff` from the local Git object. The workbook ID, policy revision, disease label and Case fields are embedded in those bytes, so a wrong profile value fails here.
+- The live source and the immutable Version22 equal, byte for byte, the F02-only rebuild of `17975ff` from the local Git object. The workbook ID and policy revision are embedded in those bytes, so a wrong value fails here. A wrong disease label or Case fields is refused earlier, when the profile is checked.
 - Both copies carry the same V8 manifest.
 - The deployment is at Version22, and the inventories do not change between reads.
 
-Any mismatch stops with no evidence, archive or later step. On success, output and the archived seal say `PREVIOUS_EVIDENCE=LIVE_REATTESTATION`. Prepare, verify and deploy then run as above. The receipt must say that the baseline was re-attested from the live deployment against Git, not taken from the 4 November record. That release run itself is no longer verifiable.
+Any mismatch stops with no evidence, archive or later step. On success, the output says `PREVIOUS_EVIDENCE=LIVE_REATTESTATION`, and the archived seal records `"evidence":"LIVE_REATTESTATION"`. Prepare, verify and deploy then run as above. The receipt must say that the baseline was re-attested from the live deployment against Git, not taken from the 4 November record. That release run itself is no longer verifiable.
 
 ### Accounts and grants
 
