@@ -14,9 +14,9 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const no=()=>{throw Error('D331_F02_DEV_HOLD');};
 const exact=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const FIELDS=['CaseID','CaseRevision','CaseStatus'];
-// The previously reviewed and actually deployed F02 source. This recovery
-// frontier is intentionally bounded, not an arbitrary historical-code loader.
-const PREVIOUS_F02_SHA='6257851296e949e88777c4a8e86aa83c9d22a399';
+// The previously reviewed and actually deployed F02 source (Version 22, from Version 21).
+// This recovery frontier is intentionally bounded, not an arbitrary historical-code loader.
+const PREVIOUS_F02_SHA='17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946';
 const PROFILE_KEYS=['version','environment','dataClass','sourceSha','scriptId','deploymentId',
  'spreadsheetId','priorVersion','diseaseLabels','policyRevision','caseFields'].sort();
 function validateProfile(p){
@@ -36,16 +36,18 @@ export function inspectF02DevPackage(profile){
   const entries=new Map(base.entries);
   const reader='15-p0-22b2-case-read-integration.gs';
   entries.set(reader,fs.readFileSync(path.join(ROOT,'src/dengue',reader)));
-  return activateF02Package(p,entries,base.serverPushOrder);
+  return activateF03Package(activateF02Package(p,entries,base.serverPushOrder));
  }catch{no();}
+}
+// Exact one-occurrence declaration substitution; any drift fails closed.
+function substitute(entries,name,before,after){
+ const text=entries.get(name)?.toString('utf8');
+ if(typeof text!=='string'||text.split(before).length!==2)no();
+ entries.set(name,Buffer.from(text.replace(before,after),'utf8'));
 }
 function activateF02Package(p,entries,baseOrder){
   const reader='15-p0-22b2-case-read-integration.gs';
-  function replace(name,before,after){
-   const text=entries.get(name)?.toString('utf8');
-   if(typeof text!=='string'||text.split(before).length!==2)no();
-   entries.set(name,Buffer.from(text.replace(before,after),'utf8'));
-  }
+  const replace=(name,before,after)=>substitute(entries,name,before,after);
   replace('00-g1a-foundation.gs','var D331_G1A_ENABLED = false;','var D331_G1A_ENABLED = true;');
   const adapter='09-p0-03b-dev-readonly-adapter.gs';
   replace(adapter,'var D331_P003B_ENABLED_ = false;','var D331_P003B_ENABLED_ = true;');
@@ -63,6 +65,19 @@ function activateF02Package(p,entries,baseOrder){
   const serverPushOrder=Object.freeze([...baseOrder,reader]);
   if(entries.size!==34||serverPushOrder.length!==16)no();
   return {entries,serverPushOrder,profile:p};
+}
+// The candidate adds F03 on top of the F02 activation. The deployed Version 22
+// reconstruction below stays F02-only.
+function activateF03Package({entries,serverPushOrder,profile}){
+ const plans='16-f03-plan-workflow.gs';
+ entries.set(plans,fs.readFileSync(path.join(ROOT,'src/dengue',plans)));
+ substitute(entries,plans,'var D331_F03_ENABLED_ = false;','var D331_F03_ENABLED_ = true;');
+ substitute(entries,plans,'var D331_F03_SCOPE_APPROVED_ = false;','var D331_F03_SCOPE_APPROVED_ = true;');
+ substitute(entries,'03h-client-event-records.html',
+  'var D331_F03_PLANS_AVAILABLE_ = false;','var D331_F03_PLANS_AVAILABLE_ = true;');
+ const order=Object.freeze([...serverPushOrder,plans]);
+ if(entries.size!==35||order.length!==17)no();
+ return {entries,serverPushOrder:order,profile};
 }
 
 function priorF02Package(p){
@@ -109,7 +124,7 @@ function boundProfile(profile,expected){
 function priorMetadata(work,p,metadata){
  const read=name=>metadata?metadata[name]:privateFile(path.join(work,name));
  const previous=validateProfile(JSON.parse(read('previous-profile.json')));
- if(previous.sourceSha!==PREVIOUS_F02_SHA||previous.priorVersion!==20||p.priorVersion!==21||
+ if(previous.sourceSha!==PREVIOUS_F02_SHA||previous.priorVersion!==21||p.priorVersion!==22||
     ['scriptId','deploymentId','spreadsheetId','policyRevision','diseaseLabels','caseFields']
      .some(k=>!exact(previous[k],p[k])))no();
  const {entries}=priorF02Package(previous);
@@ -249,7 +264,7 @@ export function verifyF02DevStage({work,expected}={}){
    const actual=privateFile(path.join(stage,name));
    if(!actual.equals(bytes)||digest(actual)!==sealed.files[name])no();
   }
-  return Object.freeze({package:'F02_SYNTHETIC_DEV_EXACT_STAGE_PASS',sourceFiles:34,manifestPreserved:true});
+  return Object.freeze({package:'F02_SYNTHETIC_DEV_EXACT_STAGE_PASS',sourceFiles:35,manifestPreserved:true});
  }catch{no();}
 }
 
@@ -303,7 +318,7 @@ function cli(){
  if(mode==='--prepare'){
   const profile=JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE));
   prepareF02DevStage({work,profile,expected});
-  console.log('F02_DEV=PRIVATE_STAGE_PREPARED; SOURCE_FILES=34; REMOTE_WRITES=NO');return;
+  console.log('F02_DEV=PRIVATE_STAGE_PREPARED; SOURCE_FILES=35; REMOTE_WRITES=NO');return;
  }
  verifyF02DevStage({work,expected});
  const profile=JSON.parse(privateFile(path.join(work,'f02-profile.json')));
