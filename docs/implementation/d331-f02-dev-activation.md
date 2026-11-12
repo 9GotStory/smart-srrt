@@ -102,7 +102,7 @@ Final data: one synthetic Case at CaseRevision3, three COMMITTED ledger requests
 
 Status: **source and offline tests only**, under [Issue #273](https://github.com/9GotStory/smart-srrt/issues/273). DEV still runs Version22 (F02 only). The sections above describe the F02 rounds. Where they give 34 source files, 35 staged files or the `6257851` frontier, this section replaces them for current source.
 
-The PO approved the plan, its four change areas and seams S1–S3 on 12 November 2026. After Merge, four separate PO approvals are needed, in this order: a read-only backup of the live Version22, the deploy, synthetic accounts and grants in the DEV workbook, then the Playwright Browser UAT. A merged PR or green CI authorizes none of them. If the agent's permission checks block the deploy or a workbook write, the operator runs the prepared commands.
+The PO approved the plan, its four change areas and test seams S1–S3 on 12 November 2026. After Merge, four separate PO approvals are needed, in this order: a read-only backup of the live Version22, the deploy, synthetic accounts and grants in the DEV workbook, then the Playwright Browser UAT. A merged PR or green CI authorizes none of them. If the agent's permission checks block the deploy or a workbook write, the operator runs the prepared commands.
 
 ### Package
 
@@ -120,6 +120,8 @@ The package adds no public server declaration. The four Plan RPCs (`listDenguePl
 The snapshot accepts exactly one previous release: source `17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946`, whose profile has `priorVersion=21` and whose release created and deployed Version22. The candidate profile must have `priorVersion=22`. The older `6257851296e949e88777c4a8e86aa83c9d22a399` (Version21) frontier is no longer accepted. The tool rebuilds Version22 from that local Git object with the F02-only activation (34 files, 16 in push order), kept apart from the candidate activation. It keeps the native compiler and vendor drift check; those tool files are unchanged between `17975ff` and the baseline.
 
 The candidate profile keeps the same keys and synthetic-only constraints. Its target, workbook, disease label, Case fields and policy revision must equal the Version22 profile; only `sourceSha` and `priorVersion` change. Each of these stops the snapshot before any cloud read: another previous SHA, a previous prior version other than 21, a candidate prior version other than 22, a change to any of those values, or a missing, altered or unverified Version22 release workspace.
+
+Use only this active Version22 snapshot as the baseline for the F03 candidate. The older P0-11 snapshot path still exists for an OFF Native24–Native33 deployment, but it is not a valid baseline for this round. The tool checks the Version22 frontier only on the active snapshot path, so it does not enforce this.
 
 The wrapper is unchanged. Set the private values as before, with `SMART_SRRT_F02_PREVIOUS_WORK` pointing at the retained Version22 release workspace, a new empty backup directory, the candidate input profile, `SMART_SRRT_F02_PRIOR_VERSION=22` and the exact merged SHA. Then run each step under its approval:
 
@@ -166,7 +168,7 @@ Any failure stops with a report. Do not retry, roll back or edit rows by hand; t
 
 ### Evidence and limits
 
-The [activation tests](../../tests/d331-f02-dev-activation.test.mjs) hold the offline evidence:
+The [activation tests](../../tests/d331-f02-dev-activation.test.mjs) hold the offline evidence at test seams S1–S3, which are not the S1/S2 policy gates:
 
 - **S1** checks the actual package, profile, stage and frontier.
 - **S2** loads the prepared stage's server files in push order with synthetic Google services and calls the four Plan RPCs. It models Sheets turning date-like and numeric text into values.

@@ -14,9 +14,9 @@ const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const no=()=>{throw Error('D331_F02_DEV_HOLD');};
 const exact=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const FIELDS=['CaseID','CaseRevision','CaseStatus'];
-// The previously reviewed and actually deployed F02 source (Version 22, from Version 21).
+// The previously reviewed and actually deployed F02 release: Version 22, created from Version 21.
 // This recovery frontier is intentionally bounded, not an arbitrary historical-code loader.
-const PREVIOUS_F02_SHA='17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946';
+const PREVIOUS_F02=Object.freeze({sourceSha:'17975ff3b0a3e863dfcd8e29c3f5a70a0fe13946',priorVersion:21,version:22});
 const PROFILE_KEYS=['version','environment','dataClass','sourceSha','scriptId','deploymentId',
  'spreadsheetId','priorVersion','diseaseLabels','policyRevision','caseFields'].sort();
 function validateProfile(p){
@@ -81,9 +81,9 @@ function activateF03Package({entries,serverPushOrder,profile}){
 }
 
 function priorF02Package(p){
- if(p.sourceSha!==PREVIOUS_F02_SHA)no();
+ if(p.sourceSha!==PREVIOUS_F02.sourceSha)no();
  function blob(name){
-  const r=spawnSync('git',['show',PREVIOUS_F02_SHA+':'+name],
+  const r=spawnSync('git',['show',PREVIOUS_F02.sourceSha+':'+name],
    {cwd:ROOT,timeout:10000,maxBuffer:2*1024*1024});
   if(r.error||r.status!==0)no();return r.stdout;
  }
@@ -124,7 +124,8 @@ function boundProfile(profile,expected){
 function priorMetadata(work,p,metadata){
  const read=name=>metadata?metadata[name]:privateFile(path.join(work,name));
  const previous=validateProfile(JSON.parse(read('previous-profile.json')));
- if(previous.sourceSha!==PREVIOUS_F02_SHA||previous.priorVersion!==21||p.priorVersion!==22||
+ if(previous.sourceSha!==PREVIOUS_F02.sourceSha||previous.priorVersion!==PREVIOUS_F02.priorVersion||
+    p.priorVersion!==PREVIOUS_F02.version||
     ['scriptId','deploymentId','spreadsheetId','policyRevision','diseaseLabels','caseFields']
      .some(k=>!exact(previous[k],p[k])))no();
  const {entries}=priorF02Package(previous);
@@ -248,7 +249,7 @@ export function verifyF02DevStage({work,expected}={}){
  try{
   privateDirectory(work);
   const p=boundProfile(JSON.parse(privateFile(path.join(work,'f02-profile.json'))),expected);verifyBackup(work,p);
-  const {entries,serverPushOrder}=inspectF02DevPackage(p);
+  const {entries,serverPushOrder}=inspectF02DevPackage(p),sourceFiles=entries.size;
   if(privateFile(path.join(work,'f02.claspignore')).length!==0)no();
   const stage=privateDirectory(path.join(work,'f02-stage'));
   const names=[...entries.keys(),'appsscript.json'].sort();
@@ -264,7 +265,7 @@ export function verifyF02DevStage({work,expected}={}){
    const actual=privateFile(path.join(stage,name));
    if(!actual.equals(bytes)||digest(actual)!==sealed.files[name])no();
   }
-  return Object.freeze({package:'F02_SYNTHETIC_DEV_EXACT_STAGE_PASS',sourceFiles:35,manifestPreserved:true});
+  return Object.freeze({package:'F02_SYNTHETIC_DEV_EXACT_STAGE_PASS',sourceFiles,manifestPreserved:true});
  }catch{no();}
 }
 
@@ -317,8 +318,8 @@ function cli(){
  }
  if(mode==='--prepare'){
   const profile=JSON.parse(privateFile(env.SMART_SRRT_F02_PROFILE));
-  prepareF02DevStage({work,profile,expected});
-  console.log('F02_DEV=PRIVATE_STAGE_PREPARED; SOURCE_FILES=35; REMOTE_WRITES=NO');return;
+  const {sourceFiles}=prepareF02DevStage({work,profile,expected});
+  console.log('F02_DEV=PRIVATE_STAGE_PREPARED; SOURCE_FILES='+sourceFiles+'; REMOTE_WRITES=NO');return;
  }
  verifyF02DevStage({work,expected});
  const profile=JSON.parse(privateFile(path.join(work,'f02-profile.json')));

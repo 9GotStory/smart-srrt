@@ -27,9 +27,13 @@ const READER='15-p0-22b2-case-read-integration.gs',PLANS='16-f03-plan-workflow.g
 const PLAN_RPCS=['listDenguePlansForEvent','listAssignableDenguePlanOwners','saveDenguePlan','getDenguePlanWriteStatus'];
 const CLIENT_FLAGS=['D331_F02_CASE_READ_AVAILABLE_','D331_F02_CASE_WRITE_AVAILABLE_','D331_F03_PLANS_AVAILABLE_'];
 const plain=value=>JSON.parse(JSON.stringify(value));
+function loadServer(files){
+ const ctx=vm.createContext({});
+ for(const [file,code] of files)vm.runInContext(code,ctx,{filename:file});
+ return ctx;
+}
 function evaluated(entries,order){
- const server=vm.createContext({}),client=vm.createContext({});
- for(const n of order)vm.runInContext(entries.get(n).toString(),server,{filename:n});
+ const server=loadServer(order.map(n=>[n,entries.get(n).toString()])),client=vm.createContext({});
  for(const [,code] of entries.get(RECORDS).toString().matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi))
   vm.runInContext(code,client,{filename:RECORDS});
  return {server,client};
@@ -95,7 +99,7 @@ function snapshot(){
  fs.writeFileSync(path.join(work,archive+'.sha256'),hash+'  '+archive+'\n',{mode:0o600});
  return {work,remote,cleanup:()=>fs.rmSync(work,{recursive:true,force:true})};
 }
-test('F03 DEV fresh private stage binds exact profile/SHA/backup and preserves original manifest',async()=>{
+test('F03 DEV S1 fresh private stage binds exact profile/SHA/backup and preserves original manifest',async()=>{
  const {prepareF02DevStage,verifyF02DevStage}=await import(MODULE),f=snapshot(),p=profile();
  try{
   assert.equal(prepareF02DevStage({work:f.work,profile:p,expected:expected(p)}).sourceFiles,35);
@@ -110,7 +114,7 @@ test('F03 DEV fresh private stage binds exact profile/SHA/backup and preserves o
  }finally{f.cleanup();}
 });
 
-test('F02 DEV stage rejects changed target/SHA/version, source/manifest/config drift and unsafe files',async()=>{
+test('F03 DEV S1 stage rejects changed target/SHA/version, source/manifest/config drift and unsafe files',async()=>{
  const {prepareF02DevStage,verifyF02DevStage}=await import(MODULE);
  const changes=[
   f=>fs.appendFileSync(path.join(f.work,'f02-stage/03-events-and-dashboard.gs'),'//tamper'),
@@ -149,11 +153,6 @@ async function stagedServerFiles(){
   }finally{f.cleanup();}
  }
  return stagedServer;
-}
-function loadServer(files){
- const ctx=vm.createContext({});
- for(const [file,code] of files)vm.runInContext(code,ctx,{filename:file});
- return ctx;
 }
 function syntheticGoogle(ctx){
  const trace={opens:0};let uuids=0,grants=0;
@@ -431,24 +430,21 @@ test('F02 DEV S3 exact authorization, source SHA and prior version are required 
 });
 
 
-test('F03 DEV S1 adds no public server declarations and keeps unrelated bytes canonical',async()=>{
+test('F03 DEV S1 adds no public server declarations and changes canonical bytes only by the declared substitutions',async()=>{
  const {inspectF02DevPackage}=await import(MODULE),p=inspectF02DevPackage(profile()),base=inspectNative33Candidate();
  const publicNames=entries=>[...entries].filter(([n])=>n.endsWith('.gs')).flatMap(([,b])=>
   [...b.toString().matchAll(/^function\s+(\w+)\s*\(/gm)].map(m=>m[1]).filter(n=>!n.endsWith('_'))).sort();
  assert.deepEqual(publicNames(p.entries),publicNames(base.entries));
- const changed=new Set(['00-g1a-foundation.gs','09-p0-03b-dev-readonly-adapter.gs',
-  '12-p0-07-guarded-dev-crud.gs',RECORDS]);
- for(const [name,bytes] of base.entries)if(!changed.has(name))assert.deepEqual(p.entries.get(name),bytes,name);
- // The Plan module changes only its two declarations.
- assert.equal(p.entries.get(PLANS).toString(),fs.readFileSync(path.join(ROOT,'src/dengue',PLANS),'utf8')
+ // Every file: the F02-only Version 22 bytes, plus the Plan module with its two declarations
+ // and the client's third availability declaration.
+ const want=version22Entries(profile());
+ want.set(PLANS,Buffer.from(fs.readFileSync(path.join(ROOT,'src/dengue',PLANS),'utf8')
   .replace('var D331_F03_ENABLED_ = false;','var D331_F03_ENABLED_ = true;')
-  .replace('var D331_F03_SCOPE_APPROVED_ = false;','var D331_F03_SCOPE_APPROVED_ = true;'));
- const client=p.entries.get(RECORDS).toString();
- const canonical=base.entries.get(RECORDS).toString()
-  .replace('var D331_F02_CASE_READ_AVAILABLE_ = false;','var D331_F02_CASE_READ_AVAILABLE_ = true;')
-  .replace('var D331_F02_CASE_WRITE_AVAILABLE_ = false;','var D331_F02_CASE_WRITE_AVAILABLE_ = true;')
-  .replace('var D331_F03_PLANS_AVAILABLE_ = false;','var D331_F03_PLANS_AVAILABLE_ = true;');
- assert.equal(client,canonical); // only the three approved availability declarations change
+  .replace('var D331_F03_SCOPE_APPROVED_ = false;','var D331_F03_SCOPE_APPROVED_ = true;')));
+ want.set(RECORDS,Buffer.from(want.get(RECORDS).toString()
+  .replace('var D331_F03_PLANS_AVAILABLE_ = false;','var D331_F03_PLANS_AVAILABLE_ = true;')));
+ assert.deepEqual([...p.entries.keys()].sort(),[...want.keys()].sort());
+ for(const [name,bytes] of want)assert.deepEqual(p.entries.get(name),bytes,name);
 });
 
 
@@ -589,7 +585,7 @@ test('F03 DEV S1 snapshot accepts only Version 22 from 17975ff and refuses other
   }finally{f.cleanup();}
  }
 });
-test('F03 DEV active snapshot refuses wrong prior evidence, live/immutable drift and later archive tampering without cloud mutation',async()=>{
+test('F03 DEV S3 active snapshot refuses wrong prior evidence, live/immutable drift and later archive tampering without cloud mutation',async()=>{
  for(const failure of ['prior-profile','prior-seal','prior-source-drift','prior-immutable-drift','snapshot-inventory-drift','archive-drift']){
   const f=await activeOperatorFixture();try{
    if(failure==='prior-profile'){
