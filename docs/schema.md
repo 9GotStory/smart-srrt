@@ -80,13 +80,16 @@ settings, sessions, audit_log
 | คอลัมน์ | ความหมาย |
 |---|---|
 | `user_id` | UUID |
-| `email` | อีเมล Google ตัวพิมพ์เล็ก ไม่ซ้ำกัน |
-| `google_sub` | รหัสบัญชีที่ Google ให้ ระบบบันทึกเมื่อล็อกอินครั้งแรก หลังจากนั้นใช้ค่านี้ยืนยันตัวตน |
+| `email` | อีเมล Google ตัวพิมพ์เล็ก ไม่ซ้ำกัน สำหรับที่อยู่ `gmail.com` การเทียบและการตรวจซ้ำไม่นับจุดในชื่อ เพราะ Google ถือเป็นบัญชีเดียวกัน |
+| `google_sub` | รหัสบัญชีที่ Google ให้ ระบบบันทึกเมื่อล็อกอินครั้งแรก หลังจากนั้นใช้ค่านี้ยืนยันตัวตน การแก้ `email` ล้างค่านี้ |
 | `display_name` | ชื่อที่แสดง |
 | `role` | `admin`, `unit` หรือ `viewer` |
 | `unit_id` | บังคับเมื่อ `role` เป็น `unit` |
-| `status` | `active` หรือ `suspended` |
+| `status` | `active` หรือ `suspended` แถวของผู้ใช้ไม่ถูกลบ |
+| `last_login_at` | เวลาที่ล็อกอินสำเร็จครั้งล่าสุด ว่างเมื่อยังไม่เคยเข้า |
 | `revision` | |
+
+เมื่อตารางนี้ว่าง ระบบสร้างผู้ดูแลคนแรกจากอีเมลใน Script Property `BOOTSTRAP_ADMIN_EMAIL`
 
 ### `sessions` — การเข้าสู่ระบบ
 
@@ -227,7 +230,7 @@ settings, sessions, audit_log
 | `log_id` | UUID |
 | `logged_at` | เวลาที่ระบบบันทึก |
 | `user_id` | ผู้กระทำ ว่างได้เมื่อยังไม่รู้ตัวตน เช่น การล็อกอินที่ถูกปฏิเสธ |
-| `action` | เช่น `login`, `login_denied`, `user_created`, `user_suspended`, `sessions_revoked`, `export`, `setting_changed`, `access_denied` |
+| `action` | เช่น `login`, `login_denied`, `user_created`, `user_updated`, `user_suspended`, `user_reactivated`, `sessions_revoked`, `export`, `setting_changed`, `access_denied` |
 | `target_type`, `target_id` | |
 | `detail` | ข้อมูลประกอบที่ไม่มีชื่อผู้ป่วย ข้อความบรรยายเหตุการณ์ หรือ token |
 
@@ -313,7 +316,7 @@ server อ่านทั้งแท็บในแต่ละคำขอ ว
 | ที่เก็บ | เก็บอะไร |
 |---|---|
 | Google Drive โฟลเดอร์ส่วนตัวของระบบ | รูปถ่าย โลโก้หน่วยงาน และชุดสำรองของไฟล์ฐานข้อมูล |
-| Script Properties ของ Apps Script | ID ของไฟล์ฐานข้อมูลและโฟลเดอร์ และ OAuth client ID |
+| Script Properties ของ Apps Script | ID ของไฟล์ฐานข้อมูลและโฟลเดอร์ OAuth client ID และอีเมลของผู้ดูแลคนแรก (`BOOTSTRAP_ADMIN_EMAIL`) |
 | เบราว์เซอร์ของผู้ใช้ | session token |
 
 ID ลิงก์ และกุญแจทั้งหมดอยู่นอก repository เพราะ repository นี้เป็นสาธารณะ
