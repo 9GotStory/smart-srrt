@@ -1,13 +1,11 @@
-# Generated Apps Script multi-file release candidate; do not commit runtime package
-/dist/apps-script/
-
-# Never commit Apps Script project identifiers or local OAuth session credentials
+# Apps Script project identifiers and local OAuth session credentials
 .clasp.json
 .clasprc.json
 
-# Local frontend build dependencies and npm cache
-/node_modules/
-/.npm/
+# Local environment files
+.env
+.env.*
 
-# Reproducible pinned Chart.js 4 UMD artifact; never commit generated vendor files
-/dist/vendor/
+# Dependencies and build output
+node_modules/
+dist/
