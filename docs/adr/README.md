@@ -14,6 +14,7 @@
 | [0006](0006-patient-data-and-public-disclosure.md) | ข้อมูลผู้ป่วย และการเปิดเผยต่อสาธารณะ |
 | [0007](0007-line-messages-are-prepared-not-sent.md) | ระบบเตรียมข้อความ LINE ผู้ใช้ส่งเอง |
 | [0008](0008-delivery-process-and-gates.md) | วิธีส่งมอบ และจุดที่ต้องขออนุมัติ |
+| [0009](0009-ai-drafts-the-investigation-report.md) | AI ช่วยร่างรายงานสอบสวน โดยระบบเติมข้อเท็จจริงและส่งข้อมูลให้น้อยที่สุด |
 
 ## เมื่อไรควรเพิ่ม ADR
 
