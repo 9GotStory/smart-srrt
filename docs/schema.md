@@ -11,7 +11,7 @@
 4. **ทุกเซลล์เป็นข้อความ** ทุกแท็บตั้งรูปแบบเป็น plain text เพื่อไม่ให้ Sheets แปลงค่าเอง เช่น บ้านเลขที่ `12/3` กลายเป็นวันที่ หรือรหัสที่ขึ้นต้นด้วยศูนย์เสียเลขศูนย์ ค่าจริงเท็จเก็บเป็น `true` หรือ `false`
 5. **เวลา** เก็บเป็น ISO 8601 UTC เช่น `2026-11-16T04:30:00.000Z` คอลัมน์ลงท้ายด้วย `_at` วันที่ที่ไม่มีเวลาเก็บเป็น `YYYY-MM-DD` คอลัมน์ลงท้ายด้วย `_date` หน้าจอแสดงเป็นเวลาไทย
 6. **เวลาสองแบบ** คอลัมน์ `_at` ของขั้นตอน เช่น `received_at`, `verified_at`, `first_alerted_at`, `notified_at`, `followed_up_at` และ `performed_at` เก็บ**เวลาที่ทำจริง**ซึ่งผู้ใช้กรอก **เวลาที่บันทึก**ของการกระทำเดียวกันอยู่ใน `timeline.recorded_at` หรือ `task_results.recorded_at` ซึ่งระบบใส่ การเทียบกำหนดเสร็จและเป้าเวลาใช้เวลาที่ทำจริง คอลัมน์ `created_at`, `updated_at`, `uploaded_at` และ `logged_at` เป็นเวลาที่ระบบใส่
-7. **ไม่ลบแถว** การยกเลิกเปลี่ยน `status` หรือ `stage` และเก็บแถวไว้ `timeline` และ `audit_log` เพิ่มได้อย่างเดียว ข้อยกเว้นมีสองตาราง: `sessions` ซึ่งลบแถวที่หมดอายุแล้วได้ และ `public_snapshot` ซึ่งถูกเขียนทับทั้งตารางทุกรอบเผยแพร่ เพราะคำนวณใหม่จากตารางอื่นได้เสมอ ข้อยกเว้นอีกอย่างหนึ่งเกิดครั้งเดียว คือคำสั่งเริ่มใช้ข้อมูลจริง ซึ่งล้างข้อมูลสมมติตาม[ข้อ 9](#9-การเริ่มใช้ข้อมูลจริง)
+7. **ไม่ลบแถว** การยกเลิกเปลี่ยน `status` หรือ `stage` และเก็บแถวไว้ `timeline` และ `audit_log` เพิ่มได้อย่างเดียว ข้อยกเว้นมีสามตาราง: `sessions` ซึ่งลบแถวที่หมดอายุแล้วได้ `public_snapshot` ซึ่งถูกเขียนทับทั้งตารางทุกรอบเผยแพร่ เพราะคำนวณใหม่จากตารางอื่นได้เสมอ และ `report_drafts` ซึ่งการร่างใหม่เขียนทับข้อความที่ AI ร่างครั้งก่อน เพราะร่างสร้างใหม่ได้จากข้อมูลของเหตุการณ์ ข้อยกเว้นอีกอย่างหนึ่งเกิดครั้งเดียว คือคำสั่งเริ่มใช้ข้อมูลจริง ซึ่งล้างข้อมูลสมมติตาม[ข้อ 9](#9-การเริ่มใช้ข้อมูลจริง)
 8. **แก้ไขต้องตรวจ revision** ตารางที่แก้ไขได้มีคอลัมน์ `revision` การเขียนทำภายใต้ lock ตรวจว่า revision ที่ผู้ใช้ถืออยู่ตรงกับในตาราง แล้วเพิ่มค่าขึ้นหนึ่ง
 9. **กันการส่งซ้ำ** ทุกคำขอสร้างข้อมูลมี `request_id` ที่ฝั่งหน้าเว็บสร้าง ถ้า `request_id` ซ้ำ server คืนแถวเดิมและไม่สร้างใหม่
 10. **การกระทำหนึ่งครั้งต้องครบ** Google Sheets ไม่มี transaction การกระทำที่เขียนหลายตาราง เช่น สร้างงานพร้อมแถวไทม์ไลน์ จึงเขียนทั้งหมดภายใต้ lock เดียว และทุกแถวที่เกิดจากคำขอเดียวกันเก็บ `request_id` เดียวกัน ถ้าการเขียนหยุดกลางทาง คำขอเดิมที่ส่งซ้ำจะเติมแถวที่ขาดให้ครบแล้วคืนผลเดิม
@@ -33,6 +33,8 @@ units ──< users
           │         │
           │         └──< timeline
           └──< task_results ──< attachments
+
+events ── report_drafts (ไม่เกินหนึ่งแถวต่อเหตุการณ์)
 
 diseases ── events.disease_code
 settings, sessions, audit_log
@@ -237,6 +239,27 @@ public_snapshot (คำนวณจาก events, patients, villages และ d
 | `status` | `active` หรือ `removed` ไฟล์ใน Drive ไม่ถูกลบ งานหนึ่งมีรูปที่ `active` ได้ไม่เกิน 6 รูป |
 | `request_id` | |
 
+### `report_drafts` — ร่างรายงานสอบสวน
+
+หนึ่งเหตุการณ์มีได้หนึ่งแถว แถวถูกสร้างเมื่อผู้ดูแลบันทึกบันทึกการสอบสวนหรือร่างด้วย AI ครั้งแรก การร่างใหม่เขียนทับคอลัมน์ของร่างในแถวเดิม ระบบไม่เก็บร่างรุ่นก่อน ไม่เก็บข้อความที่ส่งให้ AI และไม่เก็บไฟล์ Word ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน))
+
+| คอลัมน์ | ความหมาย |
+|---|---|
+| `draft_id` | UUID |
+| `event_id` | ไม่ซ้ำกันในตารางนี้ |
+| `revision` | |
+| `notes` | บันทึกการสอบสวน ข้อความอิสระที่ผู้ดูแลพิมพ์ ห้ามมีชื่อผู้ป่วย ว่างได้ |
+| `sections_json` | ข้อความที่ AI ตอบของการร่างครั้งล่าสุด หนึ่งข้อความต่อหนึ่งหัวข้อของรายงาน พร้อมเครื่องหมายของย่อหน้าที่มีตัวเลขซึ่งไม่อยู่ในข้อความที่ส่ง ชื่อสถานที่และหน่วยงานยังเป็นคำแทน ว่างเมื่อยังไม่เคยร่างด้วย AI |
+| `excluded_json` | รายการข้อความอิสระที่ผู้ดูแลเลือกไม่ส่งในการร่างครั้งล่าสุด เก็บเป็นชื่อช่องต้นทาง เช่น `events.summary` และสำหรับข้อความของผลการทำงาน เก็บเป็น `task_id` คู่กับชื่อช่อง ไม่ใช้ `result_id` เพราะการแก้ผลสร้างแถวใหม่ ไม่เก็บตัวข้อความ ใช้ประกอบข้อความชุดเดียวกันเมื่อเทียบ `input_hash` และใช้เลือกรายการเดิมให้ก่อนในการร่างครั้งถัดไป |
+| `placeholder_json` | คำแทนที่ใช้ในการร่างครั้งล่าสุด คู่กับชนิดและ ID ของแถวที่คำนั้นแทน เช่น `[หมู่บ้าน 1]` กับ `village_id` คำแทนของค่าที่ไม่มี ID ชี้ไปที่คอลัมน์ต้นทาง เช่น `events.verified_with` คอลัมน์นี้ไม่เก็บชื่อ หน้าเว็บเติมชื่อปัจจุบันตอนแสดงและตอนสร้างไฟล์ |
+| `input_hash` | ค่า hash ของข้อความที่ส่งให้ AI ในการร่างครั้งล่าสุด รวมกับ `placeholder_json` ของครั้งนั้น ใช้บอกว่าข้อมูลของเหตุการณ์เปลี่ยนหลังร่าง โดยเทียบกับค่าที่คำนวณจากข้อมูลปัจจุบันและ `excluded_json` การตรวจว่าข้อความที่ส่งตรงกับที่ผู้ดูแลตรวจใช้ค่า hash ที่คำขอยืนยันส่งมา ไม่ใช้ค่าในคอลัมน์นี้ |
+| `model`, `prompt_version` | ชื่อรุ่นของ AI และรุ่นของคำสั่งที่ใช้ในการร่างครั้งล่าสุด |
+| `drafted_at`, `drafted_by` | เวลาและผู้สั่งการร่างด้วย AI ครั้งล่าสุด |
+| `updated_at`, `updated_by` | |
+| `request_id` | ข้อ 1.9 |
+
+ไฟล์ Word ไม่ได้สร้างจากตารางนี้เพียงตารางเดียว หน้าเว็บสร้างไฟล์จาก `events`, `patients`, `tasks`, ผลที่ใช้งานอยู่ใน `task_results`, `timeline` ของการแจ้งเตือนข่าว, `villages`, `population`, `units`, `diseases`, `settings` และแถวของตารางนี้ ชื่อผู้รายงานท้ายไฟล์มาจาก `users.display_name` ของ `recorded_by` ในแถวแรกสุดของ `task_results` ของงานสอบสวนโรคที่ออกสอบสวนเร็วที่สุด ซึ่งรวมแถวที่ `status` เป็น `void` และเว้นว่างเมื่อ `on_behalf` ของแถวนั้นเป็น `true`
+
 ### `timeline` — ประวัติของเหตุการณ์
 
 เพิ่มได้อย่างเดียว เป็นสิ่งที่ผู้ใช้เห็นในหน้าเหตุการณ์
@@ -245,7 +268,7 @@ public_snapshot (คำนวณจาก events, patients, villages และ d
 |---|---|
 | `entry_id` | UUID |
 | `event_id` | |
-| `action` | เช่น `received`, `verified`, `not_confirmed`, `verification_corrected`, `assessed`, `patient_added`, `patient_edited`, `patient_voided`, `patient_reviewed`, `task_assigned`, `task_notified`, `task_followed_up`, `task_edited`, `task_accepted`, `task_cancelled`, `result_recorded`, `result_corrected`, `result_reviewed`, `closed`, `reopened`, `voided`, `event_edited`, `alerted`, `note` |
+| `action` | เช่น `received`, `verified`, `not_confirmed`, `verification_corrected`, `assessed`, `patient_added`, `patient_edited`, `patient_voided`, `patient_reviewed`, `task_assigned`, `task_notified`, `task_followed_up`, `task_edited`, `task_accepted`, `task_cancelled`, `result_recorded`, `result_corrected`, `result_reviewed`, `report_drafted`, `closed`, `reopened`, `voided`, `event_edited`, `alerted`, `note` |
 | `performed_at` | เวลาที่ทำจริง |
 | `recorded_at`, `recorded_by` | เวลาที่บันทึก และผู้ทำ |
 | `ref_type`, `ref_id` | แถวที่เกี่ยวข้อง เช่น `task` กับ `task_id` |
@@ -257,12 +280,14 @@ public_snapshot (คำนวณจาก events, patients, villages และ d
 
 | คอลัมน์ | ความหมาย |
 |---|---|
-| `key` | เช่น `schema_version`, `org_name`, `org_province`, `org_district`, `org_contact`, `backup.last_success_at`, `storage.used_percent`, `storage.checked_at`, `public_dashboard.enabled`, `public_dashboard.published_at`, `synthetic_data`, `pack.aedes.enabled`, `pack.aedes.target.home_visit_hours`, `pack.aedes.round.day_7.offset_days` |
+| `key` | เช่น `schema_version`, `org_name`, `org_province`, `org_district`, `org_contact`, `backup.last_success_at`, `storage.used_percent`, `storage.checked_at`, `public_dashboard.enabled`, `public_dashboard.published_at`, `ai_report.enabled`, `synthetic_data`, `pack.aedes.enabled`, `pack.aedes.target.home_visit_hours`, `pack.aedes.round.day_7.offset_days` |
 | `value` | |
 | `revision` | |
 | `updated_at`, `updated_by` | |
 
 `public_dashboard.enabled` เป็น `true` หรือ `false` ผู้ดูแลแก้ในหน้าตั้งค่า เมื่อเป็น `false` server ไม่ส่งตัวเลขรวมสาธารณะ ([spec ข้อ 7](spec.md#การเปิดและปิด)) `public_dashboard.published_at` คือเวลาของรอบเผยแพร่ล่าสุด ซึ่งระบบใส่เมื่อเขียน `public_snapshot` เสร็จ
+
+`ai_report.enabled` เป็น `true` หรือ `false` ผู้ดูแลแก้ในหน้าตั้งค่า เมื่อเป็น `false` หรือเมื่อ Script Properties ไม่มี `GEMINI_API_KEY` server ปฏิเสธคำขอร่างด้วย AI ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน))
 
 `synthetic_data` เป็น `true` ตลอดช่วงที่ระบบใช้ข้อมูลสมมติ และทำให้ทุกหน้ามีแถบข้อมูลสมมติ ([spec ข้อ 8](spec.md#8-ข้อกำหนดทั่วไป)) ค่านี้ไม่อยู่ในหน้าตั้งค่า คำสั่งเริ่มใช้ข้อมูลจริงเปลี่ยนค่าของชุดใช้งานจริงเป็น `false` ([ข้อ 9](#9-การเริ่มใช้ข้อมูลจริง)) และชุดทดสอบเป็น `true` เสมอ
 
@@ -297,11 +322,13 @@ public_snapshot (คำนวณจาก events, patients, villages และ d
 | `log_id` | UUID |
 | `logged_at` | เวลาที่ระบบบันทึก |
 | `user_id` | ผู้กระทำ ว่างได้เมื่อยังไม่รู้ตัวตน เช่น การล็อกอินที่ถูกปฏิเสธ |
-| `action` | เช่น `login`, `login_denied`, `user_created`, `user_updated`, `user_suspended`, `user_reactivated`, `sessions_revoked`, `export`, `setting_changed`, `access_denied`, `database_restored`, `real_data_started` |
+| `action` | เช่น `login`, `login_denied`, `user_created`, `user_updated`, `user_suspended`, `user_reactivated`, `sessions_revoked`, `export`, `ai_request`, `report_downloaded`, `setting_changed`, `access_denied`, `database_restored`, `real_data_started` |
 | `target_type`, `target_id` | |
 | `detail` | ข้อมูลประกอบที่ไม่มีชื่อผู้ป่วย ข้อความบรรยายเหตุการณ์ หรือ token |
 
 แถว `export` เก็บใน `detail`: ชนิดของไฟล์ ช่วงวันที่ ตัวกรอง จำนวนแถว และการรวมชื่อกับบ้านเลขที่ ([spec ข้อ 6](spec.md#การส่งออก))
+
+แถว `ai_request` ถูกเพิ่มหนึ่งแถวต่อคำขอร่างที่ผู้ดูแลยืนยันหนึ่งครั้ง ทั้งที่สำเร็จและไม่สำเร็จ การลองใหม่เองของ server อยู่ในแถวเดียวกัน และเก็บใน `detail`: ชื่อรุ่น รุ่นของคำสั่ง จำนวนตัวอักษรที่ส่งและที่ได้รับ จำนวนข้อความอิสระที่ผู้ดูแลเลือกไม่ส่ง และผลหรือรหัสข้อผิดพลาด โดย `target_id` คือ `event_id` เพดานต่อวันของการส่งข้อความให้ AI นับจากแถวนี้ แถว `report_downloaded` เก็บว่าไฟล์มีข้อความของ AI หรือเป็นไฟล์ตั้งต้น ทั้งสองแถวไม่มีข้อความที่ส่ง ข้อความที่ AI ตอบ และข้อความในไฟล์ ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน))
 
 แถว `database_restored` ถูกเพิ่มหลังการกู้คืน และเก็บใน `detail`: เวลาของชุดสำรองที่ใช้ กับจำนวนแถวของแต่ละแท็บ แถว `real_data_started` เป็นแถวแรกของตารางนี้ในชุดใช้งานจริง ([spec ข้อ 8](spec.md#กู้คืน))
 
@@ -393,6 +420,8 @@ server ตรวจทุกคำขอตามตารางนี้ คำ
 | ผู้ป่วย รวม `full_name`, `house_no` และ `address_note` | ทั้งหมด อ่าน เพิ่ม แก้ รับทราบ และยกเลิก | อ่านเฉพาะผู้ป่วยที่ผูกกับงานของหน่วยตน และผู้ป่วยที่หน่วยตนเพิ่ม เพิ่มได้ตอนแจ้งเหตุการณ์ และในเหตุการณ์ที่มีงานของหน่วยตนซึ่งไม่ถูกยกเลิก แก้ไม่ได้ | ทั้งหมด อ่านอย่างเดียว | ไม่ได้ |
 | งาน | ทั้งหมด สร้าง แก้ ยกเลิก | เฉพาะงานของหน่วยตน รับงานและบันทึกผล | ทั้งหมด อ่านอย่างเดียว | ไม่ได้ |
 | ผลการทำงานและรูป | ทั้งหมด บันทึกแทนหน่วยบริการได้ แก้ผลและเพิ่มรูปได้จนกว่าจะปิดเหตุการณ์ เอารูปออกได้ทุกเมื่อ | เฉพาะของงานของหน่วยตน แก้ผล เพิ่มรูป และเอารูปออกได้จนกว่าผู้ดูแลจะรับผล | ทั้งหมด อ่านอย่างเดียว | ไม่ได้ |
+| หน้าร่างรายงานสอบสวน คือ `report_drafts` และรายการข้อมูลที่ระบบมีของแต่ละหัวข้อ ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน)) | ทั้งหมด อ่าน แก้บันทึกการสอบสวน และร่างด้วย AI | ไม่ได้ แม้เป็นเหตุการณ์ที่มีงานของหน่วยตน | ทั้งหมด อ่านอย่างเดียว | ไม่ได้ |
+| ข้อมูลสำหรับสร้างไฟล์รายงานสอบสวน | ทั้งหมด | ไม่ได้ | ไม่ได้ | ไม่ได้ |
 | ไทม์ไลน์ | ทั้งหมด | รายการของงานของหน่วยตน และรายการเปลี่ยนสถานะของเหตุการณ์ | ทั้งหมด | ไม่ได้ |
 | รายชื่อหน่วยงาน หมู่บ้าน ประชากร และโรค | จัดการ | อ่าน | อ่าน | ไม่ได้ |
 | ผู้ใช้ และค่าตั้งระบบ | จัดการ | ไม่ได้ | ไม่ได้ | ไม่ได้ |
@@ -443,8 +472,9 @@ server อ่านทั้งแท็บในแต่ละคำขอ ว
 |---|---|
 | Google Drive โฟลเดอร์ส่วนตัวของระบบ | ไฟล์ฐานข้อมูล รูปถ่าย โลโก้หน่วยงาน และโฟลเดอร์ย่อยของชุดสำรอง ซึ่งมี 8 ชุดล่าสุด บัญชีสำรองได้สิทธิ์อ่านโฟลเดอร์นี้ |
 | Google Drive ของบัญชีสำรอง | สำเนาของชุดสำรอง 8 ชุดล่าสุด ซึ่งสคริปต์คัดลอกของบัญชีนั้นสร้าง ([spec ข้อ 8](spec.md#บัญชีสำรอง)) |
-| Script Properties ของ Apps Script | ID ของไฟล์ฐานข้อมูลและโฟลเดอร์ OAuth client ID อีเมลของผู้ดูแลคนแรก (`BOOTSTRAP_ADMIN_EMAIL`) อีเมลของบัญชีสำรอง (`BACKUP_ACCOUNT_EMAIL`) และโหมดปิดปรับปรุง (`MAINTENANCE`) แต่ละชุดมีค่าของตัวเอง |
-| เบราว์เซอร์ของผู้ใช้ | session token |
+| Script Properties ของ Apps Script | ID ของไฟล์ฐานข้อมูลและโฟลเดอร์ OAuth client ID อีเมลของผู้ดูแลคนแรก (`BOOTSTRAP_ADMIN_EMAIL`) อีเมลของบัญชีสำรอง (`BACKUP_ACCOUNT_EMAIL`) โหมดปิดปรับปรุง (`MAINTENANCE`) กุญแจของ Gemini API (`GEMINI_API_KEY`) และชื่อรุ่นของ Gemini (`GEMINI_MODEL`) แต่ละชุดมีค่าของตัวเอง ชุดใช้งานจริงใช้กุญแจของระดับชำระเงิน ชุดทดสอบใช้กุญแจของระดับที่ไม่เสียค่าใช้จ่าย ซึ่ง PO ตั้งตอนสร้างชุด และตั้งใหม่หลังการซ้อมคำสั่งเริ่มใช้ข้อมูลจริง เพราะคำสั่งนั้นลบกุญแจ |
+| เบราว์เซอร์ของผู้ใช้ | session token และไฟล์ Word ของรายงานสอบสวนที่ผู้ใช้ดาวน์โหลด ซึ่งหน้าเว็บสร้างเองและ server ไม่เก็บ |
+| บริการ Gemini ของ Google | ข้อความที่ส่งเพื่อร่างรายงานสอบสวนและคำตอบ ซึ่ง Google เก็บ 55 วันเพื่อตรวจการใช้ผิดนโยบาย PO ปิดการเก็บ Logs ของ AI Studio ในโปรเจกต์ของกุญแจ เพื่อไม่ให้มีสำเนาอีกชุดหนึ่ง ข้อความนี้ไม่มีชื่อ บ้านเลขที่ และชื่อสถานที่ ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน)) |
 
 ID ลิงก์ และกุญแจทั้งหมดอยู่นอก repository เพราะ repository นี้เป็นสาธารณะ
 
@@ -458,10 +488,11 @@ ID ลิงก์ และกุญแจทั้งหมดอยู่น�
 
 | การกระทำ | ตาราง |
 |---|---|
-| ล้างทุกแถว เหลือแถวชื่อคอลัมน์ | `events`, `patients`, `tasks`, `task_results`, `attachments`, `timeline`, `public_snapshot`, `sessions`, `audit_log` และ `users` |
+| ล้างทุกแถว เหลือแถวชื่อคอลัมน์ | `events`, `patients`, `tasks`, `task_results`, `attachments`, `report_drafts`, `timeline`, `public_snapshot`, `sessions`, `audit_log` และ `users` |
 | เก็บไว้ | `units`, `villages`, `population`, `diseases` และ `settings` |
 
-- ใน `settings` คำสั่งเปลี่ยน `synthetic_data` เป็น `false` เปลี่ยน `public_dashboard.enabled` เป็น `false` และล้าง `public_dashboard.published_at` ค่าอื่นไม่เปลี่ยน
+- ใน `settings` คำสั่งเปลี่ยน `synthetic_data` เป็น `false` เปลี่ยน `public_dashboard.enabled` และ `ai_report.enabled` เป็น `false` และล้าง `public_dashboard.published_at` ค่าอื่นไม่เปลี่ยน
+- คำสั่งลบ `GEMINI_API_KEY` ออกจาก Script Properties ของชุดแรก เพราะกุญแจของช่วงพัฒนาเป็นของระดับที่ไม่เสียค่าใช้จ่าย ซึ่งใช้กับข้อมูลจริงไม่ได้ คำสั่งตรวจว่าไม่มีกุญแจเหลืออยู่ และบันทึกผลการตรวจใน `detail` ของแถว `real_data_started` PO ตั้งกุญแจของระดับชำระเงินเองเมื่ออนุมัติการเปิดการร่างด้วย AI ([spec ข้อ 4](spec.md#ร่างรายงานสอบสวน))
 - ไฟล์รูปที่แถวของ `attachments` อ้างถึงถูกย้ายลงถังขยะของ Google Drive ก่อนล้างตาราง
 - เมื่อ `users` ว่าง ผู้ดูแลคนแรกถูกสร้างจาก `BOOTSTRAP_ADMIN_EMAIL` เมื่อล็อกอินครั้งแรก
 - `events` ว่าง เลขที่เหตุการณ์จึงเริ่มที่ลำดับ 1 ของปีนั้น
